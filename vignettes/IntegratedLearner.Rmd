@@ -1,0 +1,291 @@
+---
+title: "Using IntegratedLearner for multi-omics prediction and classification"
+author: "Himel Mallick"
+date: "2021-03-24" # "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{IntegratedLearner}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+This vignette highlights some example workflows for performing multi-omics prediction and classification using the `IntegratedLearner` workflow. 
+
+## Install and load packages
+
+Currently, `IntegratedLearner` is available as a standalone R script which can be simply loaded (along with the required packages) as follows:
+
+```{r, warning=FALSE, message = FALSE}
+# Load the SuperLearner package
+library(SuperLearner)
+
+# Load other essential packages
+library(tidyverse)
+library(caret)
+library(glmnetUtils)
+library(devtools)
+
+# Load IntegratedLearner source code (directly from GitHub)
+devtools::source_url("https://github.com/himelmallick/IntegratedLearner/blob/master/scripts/IntegratedLearner_CV.R?raw=TRUE")
+
+```
+
+The above will load the **`run_integrated_learner_CV`** function which is the primary function we will use in this tutorial to train our multi-omics machine learning models. 
+
+## The Input
+
+**`IntegratedLearner`** requires three tab-delimited input files: (i) concatenated multi-omics profiles (`feature_table`), sample-specific metadata (`sample_metadata`), and (iii) feature-specific metadata (`feature_metadata`). The rows of the `feature_table` should correspond to concatenated features (e.g. microbial species, genes, metabolites, etc.) and the columns should correspond to samples. 
+
+The columns of the `sample_metadata` must correspond to sample-specific covariates (e.g. disease status or the outcome of interest) with the rows corresponding to samples. Row names of `sample_metadata` must match the column names of `feature_table`. Furthermore, `sample_metadata` should have a column named **`subjectID`** describing per-subject unique identifiers. For longitudinal designs, this variable is expected to have non-unique values. Additionally, a column named **`Y`** must be present which is the outcome of interest (can be binary or continuous). 
+
+`feature_metadata` is expected to be a data frame containing feature-specific metadata with a column named **`featureID`** describing per-feature unique identifiers and **`featureType`** describing the corresponding source layers  (e.g. metagenomics, metabolomics, etc.). Row names of `feature_metadata` must match that of `feature_table`.
+
+For the purpose of this vignette, it is assumed that these three input data have already been quality-controlled with necessary preprocessing steps. For the classification example, we will be using a cleaned version of the PRISM multi-omics dataset ([Franzosa et al., 2019](https://www.nature.com/articles/s41564-018-0306-4)) which can be downloaded from [here](https://github.com/himelmallick/IntegratedLearner/blob/master/data/PRISM.RData). 
+
+### Example 1 - Prediction of Binary IBD Disease Status from Multi-omics Profiles
+
+We first use the PRISM dataset ([Franzosa et al., 2019](https://www.nature.com/articles/s41564-018-0306-4)) which is a gut microbiome multi-omics dataset consisting of $9171$ quality-controlled features from 2 layers (i.e. microbiome taxonomic profiles and metabolites). In this study, stool samples were collected from a cross-sectional cohort of individuals enrolled in the Prospective Registry in IBD Study at MGH (PRISM) in order to characterize the gut metabolic profile and microbiome composition in Inflammatory Bowel Diseases (IBD). 
+
+This cohort included 155 subjects: 68 with Crohn’s disease (CD), 53 with ulcerative colitis (UC), jointly grouped as IBD, and 34 non-IBD controls. Each stool sample was subjected to metagenomic sequencing followed by profiling of microbial community taxonomic composition and functional potential. In addition, each sample was analyzed by four liquid chromatography tandem mass spectrometry (LC-MS) methods measuring polar metabolites, lipids, free fatty acids, and bile acids, respectively. 
+
+In addition to carrying out a holistic investigation of the microbiome–metabolome interface, one of the primary objectives of this study was to assess the power of the  metabolomic and microbial layers in classifying IBD status.
+
+Let us first examine the characteristics of the PRISM data by loading the [**`PRISM.RData`**](https://github.com/himelmallick/IntegratedLearner/blob/master/data/PRISM.RData) object which contains a list of three data frames: `feature_table`, `sample_metadata` and `feature_metadata`. Note that, the `feature_table` contains negative values. This is because both species and metabolite data have been residualized to remove the effect of potential confounders.
+
+```{r}
+
+# Load dataset 
+load(url("https://github.com/himelmallick/IntegratedLearner/blob/master/data/PRISM.RData?raw=true"))
+  
+# Extract individual components 
+feature_table<-pcl$feature_table
+sample_metadata<-pcl$sample_metadata
+feature_metadata<-pcl$feature_metadata
+  
+# Explore data dimensions
+head(feature_table[1:5, 1:5])
+head(sample_metadata[1:5, ])
+head(feature_metadata[1:5, ])
+  
+# How many layers and how many features per layer?
+table(feature_metadata$featureType)
+  
+# Distribution of outcome (1: IBD, 0: nonIBD)
+table(sample_metadata$Y)
+  
+# Sanity check
+all(rownames(feature_table)==rownames(feature_metadata)) # TRUE
+all(colnames(feature_table)==rownames(sample_metadata)) # TRUE
+
+# Subset to a few rows to save computing time 
+top_n<-50
+subsetIDs<-c(1:top_n, (nrow(feature_table)-top_n+1):nrow(feature_table))
+feature_table<-feature_table[subsetIDs,]
+feature_metadata<-feature_metadata[subsetIDs,]
+
+```
+
+As an example, we would like to build a random forest classifier based on these data to classify IBD patients. By default, `IntegratedLearner` uses a 5-fold CV to train the model; however, to save compute time, we will use a 2-fold CV on the subset of the data (for the full dataset, it takes about ~12 minutes using a single core of a system with an Intel Core i9 processor (2.3 GHz) and 16 GB of RAM - adjust your expectations accordingly!).
+
+```{r, warning=FALSE}
+
+fit<-run_integrated_learner_CV(feature_table = feature_table,
+                               sample_metadata = sample_metadata, 
+                               feature_metadata = feature_metadata,
+                               folds = 2,
+                               base_learner = 'SL.randomForest',
+                               meta_learner = 'SL.randomForest')
+
+```
+
+Let's look at the classification performance by constructing layer-wise ROC curves:
+
+```{r, warning=FALSE}
+
+# Load relevant libraries
+library(ROCR)
+library(ggplot2)
+
+# Extract layers 
+num_layers<-length(fit$SL_fit_layers)
+SL_fit_layers_list<-list(fit$SL_fit_stacked, fit$SL_fit_concat)
+for (j in 1:num_layers){
+  SL_fit_layers_list<-append(SL_fit_layers_list, list(fit$SL_fit_layers[[j]]))
+  }
+names(SL_fit_layers_list)<-c('stacked', 'concat', names(fit $SL_fit_layers))
+  
+# Extract ROC plot data 
+list.ROC<-vector("list", length = length(SL_fit_layers_list))
+names(list.ROC)<-names(SL_fit_layers_list)
+
+# Loop over layers 
+for(k in 1:length(SL_fit_layers_list)){
+  preds<-SL_fit_layers_list[[k]]$Z
+  y<-SL_fit_layers_list[[k]]$Y
+  pred = ROCR::prediction(preds, y)
+  AUC = round(ROCR::performance(pred, "auc")@y.values[[1]], 2)
+  perf = ROCR::performance(pred, "sens", "spec") 
+  list.ROC[[k]] <- data.frame(sensitivity = methods::slot(perf, "y.values")[[1]],
+                              specificity = 1 - methods::slot(perf, "x.values")[[1]],
+                              AUC = AUC,
+                              layer = names(SL_fit_layers_list)[k],
+                              method = 'RF')
+}
+
+# Combine
+ROC_table_PRISM<-do.call('rbind', list.ROC)
+
+# Prepare data for plotting
+plot_data<-ROC_table_PRISM
+plot_data$displayItem<-paste(plot_data$layer, " AUC = ", plot_data$AUC, sep="")
+plot_data$displayItem<-factor(plot_data$displayItem,
+                              levels = unique(plot_data$displayItem))
+
+# ROC curves
+p<-ggplot(plot_data,
+                aes(x=specificity,
+                    y=sensitivity,
+                    group=displayItem)) + 
+  geom_line(aes(x=specificity,y=sensitivity,color=displayItem)) +
+  theme(legend.position="bottom", 
+        legend.background=element_blank(),
+        legend.box.background=element_rect(colour="black")) + 
+  theme_bw() +
+  xlab("False Positive Rate") +
+  ylab("True Positive Rate") +
+  theme(legend.position = "right", legend.direction = "vertical") +
+  labs(color='') 
+  
+
+```
+
+For this particular multi-omics dataset, species data is more predictive than metabolites in classifiying IBD patients and the integrated model achieves an almost perfect AUC which is closely followed by the concatenated model, indicating that the multi-omics classifier leads to a better cross-validated classification accuracy than its single-omics counterparts.
+
+```{r fig.asp = 0.8, fig.width = 7}
+p 
+```
+
+### Example 2 - Prediction of Continuous Gestational Age from Multi-omics Profiles
+
+The second dataset is a longitudinal multi-omics data from pregnant women in a cohort study at Stanford University ([Ghaemi et al., 2019](https://academic.oup.com/bioinformatics/article/35/1/95/5047759)) that aimed to prospectively examine environmental and biological factors associated with normal and pathological pregnancies. Women were eligible if they were at least 18 years of age and in their first trimester of a singleton pregnancy. Unlike the PRISM dataset, the outcome variable in this study (gestational age) is a continuous outcome, which was determined by best obstetrical estimate as recommended by the American College of Obstetricians and Gynecologists \citep{ghaemi2019multiomics}. 
+
+In 17 women, three samples were collected during pregnancy and a fourth one after delivery. The time points were chosen such that a peripheral blood sample (CyTOF analysis), a plasma sample (proteomic, cell-free transcriptomics, metabolomics analyses), a serum sample (luminex analyses) and a series of culture swabs (microbiome analysis) were simultaneously collected from each woman during the first (7–14 weeks), second (15–20 weeks) and third (24–32 weeks) trimester of pregnancy and 6-week postpartum. 
+
+In order to assess performance of various machine learning modules available in `IntegratedLearner`, we calculate the coefficient of determination ($R^2$) based on the observed and cross-validated out-of-sample predicted values of the gestational age. As before, cross-validation folds are synchronized between the individual base models from each dataset and the integrated model to leave out the same set of data points at all levels of the analysis.
+
+As before, let's now examine the characteristics of the pregnancy data by loading the [**`pregnancy.RData`**](https://github.com/himelmallick/IntegratedLearner/blob/master/data/pregnancy.RData) object which again contains a list of three data frames: `feature_table`, `sample_metadata` and `feature_metadata`. Unlike the PRISM study, this dataset contains repeated measures during pregnancy that allowed assessing important biological adaptations occurring continuously from the early phases of fetal development (first trimester) to the late phases of gestation (third trimester). Considering both the small sample size and the repeated measures aspects of this study, we employ a one-subject-leave-out cross-validation to build prediction models, following the original study.
+
+
+```{r}
+
+# Load dataset 
+load(url("https://github.com/himelmallick/IntegratedLearner/blob/master/data/pregnancy.RData?raw=true"))
+
+# Extract individual components 
+feature_table<-pcl$feature_table
+sample_metadata<-pcl$sample_metadata
+feature_metadata<-pcl$feature_metadata
+  
+# Explore data dimensions
+head(feature_table[1:5, 1:5])
+head(sample_metadata[1:5, ])
+head(feature_metadata[1:5, ])
+  
+# How many layers and how many features per layer?
+table(feature_metadata$featureType)
+  
+# Number of subjects
+length(unique(sample_metadata$subjectID))
+  
+# Sanity check
+all(rownames(feature_table)==rownames(feature_metadata)) # TRUE
+all(colnames(feature_table)==rownames(sample_metadata)) # TRUE
+
+# Subset to a few rows to save computing time 
+top_n<-50
+subsetIDs<-c(1:top_n, (nrow(feature_table)-top_n+1):nrow(feature_table))
+feature_table<-feature_table[subsetIDs,]
+feature_metadata<-feature_metadata[subsetIDs,]
+
+```
+
+As an example, we would like to build an elastic net model based on these data to predict gestational age. As before, for the full dataset, the computation time is expected to be much higher. 
+
+```{r, warning=FALSE}
+
+fit<-run_integrated_learner_CV(feature_table = feature_table,
+                               sample_metadata = sample_metadata, 
+                               feature_metadata = feature_metadata,
+                               folds = 17,
+                               base_learner = 'SL.glmnet',
+                               meta_learner = 'SL.glmnet')
+
+```
+
+```{r}
+
+# Extract layers 
+num_layers<-length(fit$SL_fit_layers)
+SL_fit_layers_list<-list(fit$SL_fit_stacked, fit$SL_fit_concat)
+for (j in 1:num_layers){
+  SL_fit_layers_list<-append(SL_fit_layers_list, list(fit$SL_fit_layers[[j]]))
+  }
+names(SL_fit_layers_list)<-c('stacked', 'concat', names(fit$SL_fit_layers))
+  
+# Extract R2 plot data 
+list.R2<-vector("list", length = length(SL_fit_layers_list))
+names(list.R2)<-names(SL_fit_layers_list)
+  
+# Loop over layers 
+for(k in 1:length(SL_fit_layers_list)){
+  preds<-SL_fit_layers_list[[k]]$Z
+  y<-SL_fit_layers_list[[k]]$Y
+  R2<- as.vector(cor(preds, y)^2)
+  list.R2[[k]] <- data.frame(R2 = R2,
+                             layer = names(SL_fit_layers_list)[k],
+                             method = 'ENET')
+  }
+  
+  # Combine 
+  R2_table_pregnancy<-do.call('rbind', list.R2)
+  
+  # Plot
+  p<-ggplot(R2_table_pregnancy, aes(x = method, y = R2)) +
+  geom_bar(position="dodge", stat="identity", aes(fill=layer)) +
+  xlab("") + 
+  ylab(expression(paste("Prediction accuracy (", R^2, ")"))) +
+  scale_fill_discrete(name="") + 
+  theme(legend.position="bottom", 
+        legend.background=element_blank(),
+        legend.box.background=element_rect(colour="black")) + 
+  theme_bw() +
+  guides(fill=guide_legend(title="")) +
+  theme(legend.position = "right", legend.direction = "vertical",
+        strip.background = element_blank()) +
+  labs(fill='') 
+
+```
+As before, the multi-omics prediction model leads to a better cross-validated accuracy than its single-omics counterparts.
+
+```{r fig.asp = 0.8, fig.width = 7}
+p 
+```
+
+## Session information
+
+```{r}
+sessionInfo()
+```
+
+## References
+
+Franzosa EA et al. (2019). [Gut microbiome structure and metabolic activity in inflammatory bowel disease](https://www.ncbi.nlm.nih.gov/pubmed/30531976). *Nature Microbiology* 4(2):293–305.
+
+Ghaemi MS et al. (2019). [Multiomics modeling of the immunome, transcriptome, microbiome, proteome and metabolome adaptations during human pregnancy](https://pubmed.ncbi.nlm.nih.gov/30561547/). *Bioinformatics* 35(1):95-103.
