@@ -670,6 +670,99 @@ get_cvm <- function(model) {
   model$cvm[index]
 }
 
+########################################################
+# Non-negative least squares or rank loss minimization #
+########################################################
+
+
+
+#' Title Meta level Objective function: NNLS for gaussian; Rank loss for binary observations
+#'
+#' @param b weights vector
+#' @param X covariate / predictor dataframe
+#' @param Y Outcome variable
+#' @param family "gaussian" for regression, "binomial" for binary
+#'   classification. Untested options: "multinomial" for multiple classification
+#'   or "mgaussian" for multiple response, "poisson" for non-negative outcome
+#'   with proportional mean and variance, "cox".
+#' @param obsWeights Optional observation-level weights
+#'
+#' @return
+#' @export
+#'
+#' @examples
+nnls.auc.obj <- function(b,X,Y,family=family,obsWeights){
+  if(family$family=="gaussian"){
+    return((sum(obsWeights*(Y-X%*% b)^2)))
+  }else if(family$family=="binomial"){
+    #Doesn't use observation weights in this part right now
+    wavg <- X%*% b
+    pred = ROCR::prediction(wavg, Y)
+    AUC = ROCR::performance(pred, "auc")@y.values[[1]]
+    return((1-AUC))
+    
+    #return(-(sum(obsWeights*Y*log(X%*% b)+obsWeights*(1-Y)*log(1-X%*% b))))
+  }
+}
+
+equal <- function(b,X, Y,family=family,obsWeights){
+  sum(b)
+}
+
+
+#' Title Meta level Learner: NNLS for gaussian; Rank loss for binary observations
+#'
+#' @param X covariate / predictor dataframe
+#' @param Y Outcome variable
+#' @param newX Dataframe to predict the outcome
+#' @param family "gaussian" for regression, "binomial" for binary
+#'   classification. Untested options: "multinomial" for multiple classification
+#'   or "mgaussian" for multiple response, "poisson" for non-negative outcome
+#'   with proportional mean and variance, "cox".
+#' @param obsWeights Optional observation-level weights
+#'
+#' @return
+#' @export
+#'
+#' @examples
+SL.nnls.auc <- function(Y, X, newX, family, obsWeights, ...) {
+  #.SL.require("Rsolnp")
+  nmethods = ncol(X)
+  lower_bounds = rep(0, ncol(X))
+  upper_bounds = rep(1, ncol(X))
+  
+  fit.solnp <- Rsolnp::solnp(rep(1/nmethods,nmethods),nnls.auc.obj, eqfun = equal, eqB = 1, 
+                             LB=lower_bounds, UB=upper_bounds,X=as.matrix(X), Y=Y, 
+                             family=family,obsWeights=obsWeights)
+  initCoef <- fit.solnp$pars
+  initCoef[is.na(initCoef)] <- 0
+  if (sum(initCoef) > 0) {
+    coef <- initCoef/sum(initCoef)
+  } else {
+    warning("All algorithms have zero weight", call. = FALSE)
+    coef <- initCoef
+  }
+  pred <- crossprod(t(as.matrix(newX)), coef)
+  fit <- list(object = fit.solnp)
+  class(fit) <- "SL.solnp"
+  out <- list(pred = pred, fit = fit)
+  return(out)
+}
+
+
+predict.SL.solnp <- function(object, newdata, ...) {
+  initCoef <- object$object$pars
+  initCoef[is.na(initCoef)] <- 0
+  if (sum(initCoef) > 0) {
+    coef <- initCoef/sum(initCoef)
+  } else {
+    warning("All algorithms have zero weight", call. = FALSE)
+    coef <- initCoef
+  }
+  pred <- crossprod(t(as.matrix(newdata)), coef)
+  return(pred)
+}
+
 
 
 
