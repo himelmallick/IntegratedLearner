@@ -42,7 +42,8 @@ run_integrated_learner_CV<-function(feature_table,
                                     meta_learner = 'SL.BART', # Meta learner for stacked generalization.
                                     run_concat = TRUE, # Should vanilla concatenated base learner be run? Default is TRUE.
                                     run_stacked = TRUE, # Should stacked model be run? Default is TRUE.
-                                    verbose = TRUE # Should detailed message be printed? Default is TRUE.
+                                    verbose = TRUE, # Should detailed message be printed? Default is TRUE.
+                                    family=gaussian()
 ){ 
                                           
   
@@ -183,7 +184,8 @@ run_integrated_learner_CV<-function(feature_table,
                                                      X = X, 
                                                      cvControl = cvControl,    
                                                      verbose = verbose, 
-                                                     SL.library = base_learner) 
+                                                     SL.library = base_learner,
+                                                     family = family) 
     
     ###################################################
     # Append the corresponding y and X to the results #
@@ -199,7 +201,7 @@ run_integrated_learner_CV<-function(feature_table,
     ##############################################################
     
     rm(t_dat_slice); rm(dat_slice); rm(X)
-    SL_fit_predictions[[i]]<-SL_fit_layers[[i]]$SL.predict
+    SL_fit_predictions[[i]]<-SL_fit_layers[[i]]$Z
   
     ############################################################
     # Prepate single-omic validation data and save predictions #
@@ -241,7 +243,8 @@ run_integrated_learner_CV<-function(feature_table,
                                                 X = combo, 
                                                 cvControl = cvControl,    
                                                 verbose = verbose, 
-                                                SL.library = meta_learner) 
+                                                SL.library = meta_learner,
+                                                family=family) 
     
     
     ###################################################
@@ -288,7 +291,8 @@ run_integrated_learner_CV<-function(feature_table,
                                               X = fulldat, 
                                               cvControl = cvControl,    
                                               verbose = verbose, 
-                                              SL.library = base_learner) 
+                                              SL.library = base_learner,
+                                              family=family) 
     
     ###################################################
     # Append the corresponding y and X to the results #
@@ -388,7 +392,7 @@ SL.BART <- function(Y, X, newX, family, obsWeights, id,
                             num_trees = 50, num_burn_in = 250, verbose = F,
                             alpha = 0.95, beta = 2, k = 2, q = 0.9, nu = 3,
                             num_iterations_after_burn_in = 1000,
-                            serialize = TRUE,
+                            serialize = TRUE, seed=1234,
                             ...) {
   #.SL.require("bartMachine")
 
@@ -404,16 +408,23 @@ SL.BART <- function(Y, X, newX, family, obsWeights, id,
                                    num_burn_in = num_burn_in, verbose = verbose,
                                    alpha = alpha, beta = beta, k = k, q = q, nu = nu,
                                    num_iterations_after_burn_in = num_iterations_after_burn_in,
-                                   serialize = serialize)
+                                   serialize = serialize,seed=seed)
   # pred returns predicted responses (on the scale of the outcome)
   #pred <- bartMachine:::predict.bartMachine(model, newX)
   pred <- predict(model, newX)
 
   fit <- list(object = model)
-  class(fit) <- c("SL.bartMachine")
+  class(fit) <- c("SL.BART")
 
   out <- list(pred = pred, fit = fit)
   return(out)
+}
+
+
+predict.SL.BART <- function(object, newdata, family, X = NULL, Y = NULL,...) {
+  #.SL.require("bartMachine")
+  pred <- predict(object$object, newdata)
+  return(pred)
 }
 
 ##########################################
@@ -658,4 +669,7 @@ get_cvm <- function(model) {
   index <- match(model$lambda.1se, model$lambda)
   model$cvm[index]
 }
+
+
+
 
