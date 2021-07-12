@@ -392,7 +392,7 @@ SL.BART <- function(Y, X, newX, family, obsWeights, id,
                             num_trees = 50, num_burn_in = 250, verbose = F,
                             alpha = 0.95, beta = 2, k = 2, q = 0.9, nu = 3,
                             num_iterations_after_burn_in = 1000,
-                            serialize = TRUE, seed=1234,
+                            serialize = TRUE, seed=5678,
                             ...) {
   #.SL.require("bartMachine")
 
