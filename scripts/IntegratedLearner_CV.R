@@ -651,7 +651,7 @@ SL.glmnet3 <- function(Y, X, newX, family, obsWeights, id,
                              alpha = best_alpha,
                              nlambda = nlambda,
                              ...)
-  
+  fitCV$alpha <- best_alpha
   # If we predict with the cv.glmnet object we can specify lambda using a
   # string.
   pred <- predict(fitCV, newx = newX, type = "response",
