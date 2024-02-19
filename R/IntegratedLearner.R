@@ -257,9 +257,11 @@ IntegratedLearner<-function(feature_table,
       dat_slice_valid<-as.data.frame(t(t_dat_slice_valid))
       X_test_layers[[i]] <- dat_slice_valid
       layer_wise_prediction_valid[[i]]<-predict.SuperLearner(SL_fit_layers[[i]], newdata = dat_slice_valid)$pred
+      layer_wise_prediction_valid[[i]] <- matrix(layer_wise_prediction_valid[[i]], ncol = 1) # <- Change here
       rownames(layer_wise_prediction_valid[[i]])<-rownames(dat_slice_valid)
       SL_fit_layers[[i]]$validX<-dat_slice_valid
       SL_fit_layers[[i]]$validPrediction<-layer_wise_prediction_valid[[i]]
+      SL_fit_layers[[i]]$validPrediction <- matrix(SL_fit_layers[[i]]$validPrediction, ncol = 1) # <- Change here
       colnames(SL_fit_layers[[i]]$validPrediction)<-'validPrediction'
       rm(dat_slice_valid); rm(include_list)
     }
