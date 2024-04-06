@@ -87,7 +87,7 @@ Citation
 
 If you use `IntegratedLearner` in your work, please cite the following:
 
-Mallick H et al. (2023+). [An Integrated Bayesian Framework for Multi-omics Prediction and Classification](https://www.biorxiv.org/content/10.1101/2022.11.06.514786v1). *Statistics in Medicine* (In Submission).
+Mallick H et al. (2024). [An Integrated Bayesian Framework for Multi-omics Prediction and Classification](https://onlinelibrary.wiley.com/doi/10.1002/sim.9953). *Statistics in Medicine* 43(5):983–1002.
 
 Issues
 ------
