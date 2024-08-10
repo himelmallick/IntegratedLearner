@@ -1,0 +1,357 @@
+---
+title: "Using IntegratedLearner for multi-omics prediction and classification"
+author: "Himel Mallick and Anupreet Porwal"
+date: "2024-08-02" # "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{IntegratedLearner}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+This vignette highlights some example workflows for performing multi-omics prediction and classification using the `IntegratedLearner` R package. 
+
+`IntegratedLearner` provides an integrated machine learning framework to 1) consolidate predictions by borrowing information across several longitudinal and cross-sectional omics data layers, 2) decipher the mechanistic role of individual omics features that can potentially lead to new sets of testable hypotheses, and 3) quantify uncertainty of the integration process. Three types of integration paradigms are supported: early, late, and intermediate. The software includes multiple ML models based on the [SuperLearner R package](https://cran.r-project.org/web/packages/SuperLearner/index.html) as well as several data exploration capabilities and visualization modules in a unified estimation framework. 
+
+## Load Packages
+
+Once installed, **`IntegratedLearner`** can be simply loaded (along with the required packages) as follows:
+
+```{r, warning=FALSE, message = FALSE}
+# Load the IntegratedLearner package
+library(IntegratedLearner)
+options(java.parameters = "-Xmx5g") # This is needed for running BART
+
+# Load other essential packages for this tutorial
+library(tidyverse) 
+library(SuperLearner)
+library(caret)
+library(cowplot)
+library(mcmcplots)
+library(bartMachine)
+```
+
+## The Input
+
+**`IntegratedLearner`** requires three tab-delimited input files: (i) concatenated multi-omics profiles (`feature_table`), (ii) sample-specific metadata (`sample_metadata`), and (iii) feature-specific metadata (`feature_metadata`). The rows of the `feature_table` should correspond to the concatenated features (e.g., microbiome, gene expression, metabolites, etc.) and the columns should correspond to samples. 
+
+The columns of the `sample_metadata` must correspond to sample-specific covariates (e.g., disease status or the clinical outcome of interest) with the rows corresponding to samples. Row names of `sample_metadata` must match the column names of `feature_table`. Furthermore, `sample_metadata` should have a column named **`subjectID`** describing per-subject unique identifiers. For longitudinal designs, this variable is expected to have non-unique values. Additionally, a column named **`Y`** must be present which is the outcome of interest (can be binary or continuous). 
+
+`feature_metadata` is expected to be a data frame containing feature-specific metadata with a column named **`featureID`** describing per-feature unique identifiers and **`featureType`** describing the corresponding omics source layers  (e.g., metagenomics, metabolomics, etc.). Row names of `feature_metadata` must match that of `feature_table`.
+
+For the purpose of this vignette, it is assumed that these three input data have already been quality-controlled with necessary preprocessing steps. For the classification example, we will be using a cleaned version of the PRISM multi-omics dataset ([Franzosa et al., 2019](https://www.nature.com/articles/s41564-018-0306-4)) which can be downloaded from [here](https://github.com/himelmallick/IntegratedLearner/blob/master/data/PRISM.RData). 
+
+### Example 1 - Prediction of Binary IBD Disease Status from Multi-omics Profiles
+
+We first use the PRISM dataset ([Franzosa et al., 2019](https://www.nature.com/articles/s41564-018-0306-4)) which is a gut microbiome multi-omics dataset consisting of $9171$ quality-controlled features from 2 layers (i.e., microbiome taxonomic profiles and metabolites). In this study, stool samples were collected from a cross-sectional cohort of individuals enrolled in the Prospective Registry in IBD Study at MGH (PRISM) in order to characterize the gut metabolic profile and microbiome composition in Inflammatory Bowel Diseases (IBD). 
+
+This cohort included 155 subjects: 68 with Crohn’s disease (CD), 53 with ulcerative colitis (UC), jointly grouped as IBD, and 34 non-IBD controls. Each stool sample was subjected to metagenomic sequencing followed by profiling of microbial community taxonomic composition and functional potential. In addition, each sample was analyzed by four liquid chromatography tandem mass spectrometry (LC-MS) methods measuring polar metabolites, lipids, free fatty acids, and bile acids, respectively. 
+
+In addition to carrying out a holistic investigation of the microbiome–metabolome interface, one of the primary objectives of this study was to assess the power of the metabolomic and microbial layers in classifying IBD status.
+
+Let us first examine the characteristics of the PRISM data by loading the [**`PRISM.RData`**](https://github.com/himelmallick/IntegratedLearner/blob/master/data/PRISM.RData) object which contains a list of three data frames: `feature_table`, `sample_metadata` and `feature_metadata`. Note that, the `feature_table` contains negative values. This is because both species and metabolite data have been residualized to remove the effect of potential confounders.
+
+```{r}
+
+# Load dataset 
+load(url("https://github.com/himelmallick/IntegratedLearner/blob/master/data/PRISM.RData?raw=true"))
+  
+# Extract individual components 
+feature_table<-pcl$feature_table
+sample_metadata<-pcl$sample_metadata
+feature_metadata<-pcl$feature_metadata
+
+rm(pcl)
+  
+# Explore data dimensions
+head(feature_table[1:5, 1:5])
+head(sample_metadata[1:5, ])
+head(feature_metadata[1:5, ])
+  
+# How many layers and how many features per layer?
+table(feature_metadata$featureType)
+  
+# Distribution of outcome (1: IBD, 0: nonIBD)
+table(sample_metadata$Y)
+  
+# Sanity check
+all(rownames(feature_table)==rownames(feature_metadata)) # TRUE
+all(colnames(feature_table)==rownames(sample_metadata)) # TRUE
+
+# Load independent validation dataset
+load(url("https://github.com/himelmallick/IntegratedLearner/blob/master/data/NLIBD.RData?raw=true"))
+
+feature_table_valid<-pcl$feature_table
+sample_metadata_valid<-pcl$sample_metadata
+rm(pcl)
+
+
+# Sanity check to make sure test set has sample structure as training 
+all(rownames(feature_table)==rownames(feature_table_valid)) # TRUE
+all(colnames(feature_table_valid)==rownames(sample_metadata_valid)) # TRUE
+
+```
+
+`IntegratedLearner` late fusion algorithm proceeds by 1) fitting a machine learning algorithm per-layer to predict outcome (`base_learner`) and 2) combining the layer-wise cross-validated predictions using a meta model (`meta_learner`) to generate final predictions based on all available data points. As a default choice, we recommend `SL.nnls.auc` as the meta model algorithm. It fits a non-negative least squares (in case of continuous outcome) and rank loss minimization (in case of binary outcome) on layer-wise cross-validated predictions to generate the final predictions and quantify per-layer contribution in the final predictions. 
+As an example, we would like to build a random forest classifier based on these data to classify IBD patients. By default, `IntegratedLearner` uses a 5-fold CV to train the model (for the full dataset, it takes about ~5-6 minutes using a single core of a system with an Intel Core i5 processor (1.7 GHz) and 16 GB of RAM - adjust your expectations accordingly!).
+
+```{r, warning=FALSE}
+
+fit<-IntegratedLearner(feature_table = feature_table,
+                               sample_metadata = sample_metadata, 
+                               feature_metadata = feature_metadata,
+                               feature_table_valid = feature_table_valid,
+                               sample_metadata_valid = sample_metadata_valid,
+                               folds = 5,
+                               base_learner = 'SL.randomForest',
+                               meta_learner = 'SL.nnls.auc',
+                               verbose = TRUE,
+                               family=binomial())
+
+
+```
+`IntegratedLearner` offers easily accessible and interpretable summary outputs including 1) computation time, 2) per-layer AUC/ $R^2$ scores on training and/or test data (if `feature_table_valid` and `sample_metadata_valid` are provided), 3) AUC/ $R^2$ metrics for stacked and concatenated model if `run_stacked=TRUE` and `run_concat=TRUE` and 4) estimated per-layer weights from meta learner in stacked model. 
+
+We can visualize the classification performance by constructing layer-wise ROC curves for both train and test set using `plot.learner()` function that takes `IntegratedLearner` object as input:
+
+```{r, warning=FALSE, fig.height=10, fig.width=7}
+plot.obj <- IntegratedLearner:::plot.learner(fit)
+```
+
+For this particular multi-omics dataset, species data is more predictive than metabolites in classifying IBD patients and the stacked model achieves superior accuracy to individual layers and concatenation model in independent validation, indicating that the stacked multi-omics classifier leads to a competitive or superior cross-validated and independent validation classification accuracy than its single-omics counterparts.
+
+### Example 2 - Prediction of Continuous Gestational Age from Multi-omics Profiles
+
+The second dataset is a longitudinal multi-omics data from pregnant women in a cohort study at Stanford University ([Ghaemi et al., 2019](https://academic.oup.com/bioinformatics/article/35/1/95/5047759)) that aimed to prospectively examine environmental and biological factors associated with normal and pathological pregnancies. Women were eligible if they were at least 18 years of age and in their first trimester of a singleton pregnancy. Unlike the PRISM dataset, the outcome variable in this study (gestational age) is a continuous outcome, which was determined by best obstetrical estimate as recommended by the American College of Obstetricians and Gynecologists \citep{ghaemi2019multiomics}. 
+
+In 17 women, three samples were collected during pregnancy and a fourth one after delivery. The time points were chosen such that a peripheral blood sample (CyTOF analysis), a plasma sample (proteomic, cell-free transcriptomics, metabolomics analyses), a serum sample (luminex analyses) and a series of culture swabs (microbiome analysis) were simultaneously collected from each woman during the first (7–14 weeks), second (15–20 weeks) and third (24–32 weeks) trimester of pregnancy and 6-week postpartum. 
+
+In order to assess performance of various machine learning modules available in `IntegratedLearner`, we calculate the coefficient of determination ($R^2$) based on the observed and cross-validated out-of-sample predicted values of the gestational age. As before, cross-validation folds are synchronized between the individual base models from each dataset to leave out the same set of data points at all levels of the analysis.
+
+As before, let's now examine the characteristics of the pregnancy data by loading the [**`pregnancy.RData`**](https://github.com/himelmallick/IntegratedLearner/blob/master/data/pregnancy.RData) object which again contains a list of three data frames: `feature_table`, `sample_metadata` and `feature_metadata`. Unlike the PRISM study, this dataset contains repeated measures during pregnancy that allowed assessing important biological adaptations occurring continuously from the early phases of fetal development (first trimester) to the late phases of gestation (third trimester). Considering both the small sample size and the repeated measures aspects of this study, we employ a one-subject-leave-out cross-validation to build prediction models, following the original study.
+
+
+```{r}
+
+# Load dataset 
+load(url("https://github.com/himelmallick/IntegratedLearner/blob/master/data/pregnancy.RData?raw=true"))
+
+# Extract individual components 
+feature_table<-pcl$feature_table
+sample_metadata<-pcl$sample_metadata
+feature_metadata<-pcl$feature_metadata
+  
+# Explore data dimensions
+head(feature_table[1:5, 1:5])
+head(sample_metadata[1:5, ])
+head(feature_metadata[1:5, ])
+  
+# How many layers and how many features per layer?
+table(feature_metadata$featureType)
+  
+# Number of subjects
+length(unique(sample_metadata$subjectID))
+  
+# Sanity check
+all(rownames(feature_table)==rownames(feature_metadata)) # TRUE
+all(colnames(feature_table)==rownames(sample_metadata)) # TRUE
+
+# Subset to a few rows to save computing time
+# top_n<-50
+# subsetIDs<-c(1:top_n, (nrow(feature_table)-top_n+1):nrow(feature_table))
+# feature_table<-feature_table[subsetIDs,]
+# feature_metadata<-feature_metadata[subsetIDs,]
+
+```
+The default base model recommendation for `IntegratedLearner` is Bayesian additive regression trees or BART (`base_learner='SL.BART'`). Using BART as base-model yields uncertainty estimates (i.e. credible intervals) of the prediction  and model parameters in addition to reporting a small set of interpretable features for follow-up experiments (i.e. feature importance scores).  
+
+```{r, warning=FALSE}
+
+fit<-IntegratedLearner(feature_table = feature_table,
+                               sample_metadata = sample_metadata, 
+                               feature_metadata = feature_metadata,
+                               folds = 17,
+                               base_learner = 'SL.BART',
+                               meta_learner = 'SL.nnls.auc')
+
+```
+
+```{r fig.asp = 0.8, fig.width = 7}
+plot.obj <- IntegratedLearner:::plot.learner(fit)
+```
+As before, the multi-omics stacked prediction model leads to a better cross-validated accuracy than its single-omics counterparts and concatenation model.
+
+When `base_learner='SL.BART'`, in addition to point predictions, we can also generate 1) credible intervals for all observations, 2) estimated layer weights in the meta model and 3) feature importance scores. 
+
+
+```{r}
+
+weights <- fit$weights
+
+dataX <- fit$X_train_layers
+dataY <- fit$Y_train
+
+
+post.samples <- vector("list", length(weights))
+names(post.samples) <- names(dataX)
+
+for(i in seq_along(post.samples)){
+post.samples[[i]] <- bart_machine_get_posterior(fit$model_fits$model_layers[[i]],dataX[[i]])$y_hat_posterior_samples
+}
+
+weighted.post.samples <-Reduce('+', Map('*', post.samples, weights))
+rownames(weighted.post.samples) <- rownames(dataX[[1]])
+names(dataY) <- rownames(dataX[[1]])
+```
+
+```{r, fig.show='hide'}
+capture.output(temp <- caterplot(t(weighted.post.samples), add = FALSE))
+```
+
+We show below the 68\% and 95\% credible intervals obtained from stacked model for all 51 observations. The filled circle indicates the posterior median and empty circle indicates the true value of the observation.
+
+```{r fig.width=9,fig.height=7}
+temp<-caterplot(t(weighted.post.samples),
+          horizontal = FALSE, add = FALSE)
+points(dataY[temp])
+title(main ="", xlab = "Observations", ylab = "Gestational age (in months)",
+       line = NA, outer = FALSE)
+p3 <- recordPlot()
+
+```
+
+```{r}
+
+omicsEye_theme <- function() {
+# set default text format based on categorical and length
+  angle = 45
+  hjust = 1
+  size = 6
+  return (ggplot2::theme_bw() + ggplot2::theme(
+    axis.text.x = ggplot2::element_text(size = 8, vjust = 1, hjust = hjust, angle = angle),
+    axis.text.y = ggplot2::element_text(size = 8, hjust = 1),
+    axis.title = ggplot2::element_text(size = 10),
+    plot.title = ggplot2::element_text(size = 10),
+    plot.subtitle = ggplot2::element_text(size = 8),
+    legend.title = ggplot2::element_text(size = 6, face = 'bold'),
+    legend.text = ggplot2::element_text(size = 7),
+    axis.line = ggplot2::element_line(colour = 'black', size = .25),
+    ggplot2::element_line(colour = 'black', size = .25),
+    axis.line.x = ggplot2::element_line(colour = 'black', size = .25),
+    axis.line.y = ggplot2::element_line(colour = 'black', size = .25),
+    panel.border = ggplot2::element_blank(),
+    panel.grid.major = ggplot2::element_blank(),
+    panel.grid.minor = ggplot2::element_blank())
+  )
+}
+
+myColtmp<-c("cornflowerblue","darkcyan","orchid4",
+            "brown","goldenrod4","mistyrose4","darkgreen","purple")
+
+
+VIMP_stack<- cbind.data.frame(fit$weights)
+colnames(VIMP_stack)<-c('mean')
+VIMP_stack$sd <- NA
+VIMP_stack$type<-'stack'
+
+###############
+# Microbiome #
+###############
+
+qq<-bartMachine::investigate_var_importance(fit$model_fits$model_layers$Microbiome,plot = FALSE)
+VIMP_microbiome<-cbind.data.frame(qq$avg_var_props, qq$sd_var_props)
+colnames(VIMP_microbiome)<-c('mean', 'sd')
+VIMP_microbiome$type<-'Microbiome'
+
+###############
+# Plasma Somalogic #
+###############
+
+qq<-bartMachine::investigate_var_importance(fit$model_fits$model_layers$PlasmaSomalogic,plot = FALSE)
+VIMP_PlasmaSomalogic<-cbind.data.frame(qq$avg_var_props, qq$sd_var_props)
+colnames(VIMP_PlasmaSomalogic)<-c('mean', 'sd')
+VIMP_PlasmaSomalogic$type<-'PlasmaSomalogic'
+
+
+VIMP<-as.data.frame(rbind.data.frame(VIMP_stack,
+                                     VIMP_microbiome[1:20,],
+                                     VIMP_PlasmaSomalogic[1:20,]))
+
+
+VIMP<-rownames_to_column(VIMP, 'ID')
+
+p4<-VIMP %>%
+  filter(type == 'stack') %>%
+  arrange(desc(mean))  %>%
+  ggplot(aes(y = mean, x = reorder(ID,-mean))) +
+  geom_bar(stat = "identity", fill = 'darkseagreen') +
+  theme_bw() +
+  #coord_flip() +
+  omicsEye_theme() +
+  ylab('Layer Weights') +
+  xlab('')
+
+
+p5<-VIMP %>%
+  filter(type %in% c('Microbiome', 'PlasmaSomalogic')) %>%
+  arrange(mean) %>%
+  mutate(ID = str_replace_all(ID, fixed("_"), " ")) %>%
+  mutate(type = factor(type,
+                       levels = c('Microbiome', 'PlasmaSomalogic'),
+                       labels = c('Microbiome', 'PlasmaSomalogic'))) %>%
+  ggplot(aes(reorder(ID, -mean), mean, fill = type)) +
+  facet_wrap(.~ type, scale = 'free') +
+  geom_bar(stat = "identity", fill = "lightsalmon") +
+  geom_errorbar(aes(ymin=ifelse(mean-sd>0,mean-sd,0), ymax=mean+sd), width=.2, position=position_dodge(.9)) +
+  theme_bw() +
+  coord_flip() +
+  omicsEye_theme() +
+  theme (strip.background = element_blank()) +
+  ylab('Inclusion proportion') +
+  xlab('')
+
+
+
+```
+
+We also illustrate the estimated IntegratedLearner layer weights. We observe that the layers with highest single-omics predictive accuracy: microbiome, metabolomics and PlasmaSomalogic are given the most weight in the stacked model. Furthermore, we highlight the feature importance scores of top 20 features of microbiome  and PlasmaSomalogic layer which highlights several features that agree with known biology. 
+
+```{r fig.width = 7,fig.height=4}
+plot_grid(p4,
+             ncol = 1,
+             labels = c('Estimated IntegratedLearner layer weights'),
+             label_size = 8, vjust = 0.1)+
+  theme(plot.margin = unit(c(0.5,0.5,0.5,0.5), "cm"))
+```
+
+```{r fig.width=9, fig.height=7}
+plot_grid(p5,
+             ncol = 1,
+             labels = c('Top 20 features of Microbiome and PlasamaSomalogic layer'),
+             label_size = 8, vjust = 0.1)+
+  theme(plot.margin = unit(c(0.5,0.5,0.5,0.5), "cm"))
+
+```
+
+## Session information
+
+```{r}
+sessionInfo()
+```
+
+## References
+
+Franzosa EA et al. (2019). [Gut microbiome structure and metabolic activity in inflammatory bowel disease](https://www.ncbi.nlm.nih.gov/pubmed/30531976). *Nature Microbiology* 4(2):293–305.
+
+Ghaemi MS et al. (2019). [Multiomics modeling of the immunome, transcriptome, microbiome, proteome and metabolome adaptations during human pregnancy](https://pubmed.ncbi.nlm.nih.gov/30561547/). *Bioinformatics* 35(1):95-103.
+
+## Citation
+
+Mallick et al. (2024). [An integrated Bayesian framework for multi-omics prediction and classification](https://pubmed.ncbi.nlm.nih.gov/38146838/). *Statistics in Medicine* 43(5):983–1002.
