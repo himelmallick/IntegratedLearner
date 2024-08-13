@@ -47,18 +47,31 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
+      - name: Get package metadata
+        id: info
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          Pkgname=$(grep -m1 -E '^Package: +' DESCRIPTION | sed -E 's/.*: +//')
+          echo Pkgname=${Pkgname} >> "${GITHUB_ENV}"
+          pkgname=${Pkgname,,}
+          echo pkgname=${pkgname} >> "${GITHUB_ENV}"
+          owner=${OWNER,,}
+          echo owner=${owner} >> "${GITHUB_ENV}"
+          echo pkgversion=$(grep -m1 -E '^Version: +' DESCRIPTION | sed -E 's/.*: +//') >> "${GITHUB_ENV}"
+
       - name: Log in to the Github Container registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
+          username: ${{ env.owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Get metadata for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.actor }}/${{ env.pkgname }}
+          images: ghcr.io/${{ env.owner }}/${{ env.pkgname }}
           tags: |
             ${{ github.ref_name }}
             ${{ env.pkgversion }}
