@@ -1,3 +1,8 @@
+
+
+wget -qO - https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg \
+    | gpg --dearmor \
+    | sudo dd of=/usr/share/keyrings/vscodium-archive-keyring.gpg
 # Fetch base image for R version 4.4.1
 FROM rocker/rstudio:4.4.1
 
@@ -13,7 +18,7 @@ RUN apt-get update && \
 RUN R CMD javareconf
 
 # Install devtools
- RUN Rscript -e 'install.packages("devtools")'
+RUN Rscript -e 'install.packages("devtools")'
 
 # Install IntegratedLearner
 RUN R -e 'devtools::install(pkg = "/opt/pkg", dependencies = TRUE, upgrade = "always")'
