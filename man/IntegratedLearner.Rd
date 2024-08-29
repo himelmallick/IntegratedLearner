@@ -20,7 +20,8 @@ IntegratedLearner(
   verbose = FALSE,
   print_learner = TRUE,
   refit.stack = FALSE,
-  family = gaussian()
+  family = gaussian(),
+  ...
 )
 }
 \arguments{
@@ -68,6 +69,8 @@ Check out the \href{https://cran.r-project.org/web/packages/SuperLearner/vignett
 \item{refit.stack}{logical; For late fusion, post-refit predictions on the entire data is returned if specified. Default is FALSE.}
 
 \item{family}{Currently allows \code{`gaussian()`} for continuous or \code{`binomial()`} for binary outcomes.}
+
+\item{...}{Additional arguments. Not used currently.}
 }
 \value{
 A \code{SuperLearner} object containing the trained model fits.

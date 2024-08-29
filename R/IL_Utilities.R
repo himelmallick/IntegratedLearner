@@ -1475,3 +1475,11 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
 #   }
 # }
 
+# Borrowed from mia package
+.require_package <- function(pkg){
+  if(!requireNamespace(pkg, quietly = TRUE)){
+    stop("'",pkg,"' package not found. Please install the '", pkg,
+         "' package to use this function.", call. = FALSE)
+  }
+  return(NULL)
+}
