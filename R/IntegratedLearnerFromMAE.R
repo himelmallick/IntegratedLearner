@@ -30,7 +30,7 @@
 #' 
 #' @export
 
-IntegrdatedLearnerFromMAE <- function(
+IntegratedLearnerFromMAE <- function(
         mae, experiment, assay.type, outcome.col, valid.col = NULL, ...){
     ############################### INPUT CHECK ################################
     # MultiAssayExperiment and mia are required to run this function. However,

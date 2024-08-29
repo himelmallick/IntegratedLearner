@@ -4,7 +4,7 @@
 \alias{update.learner}
 \title{Update IntegratedLearner fit object based on layers available in the test set}
 \usage{
-update.learner(
+\method{update}{learner}(
   fit,
   feature_table_valid,
   sample_metadata_valid = NULL,
