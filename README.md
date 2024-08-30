@@ -26,7 +26,7 @@ IntegratedLearner can be run in a containerized environment using either Docker 
 
 Refer to the installation instructions for your operating system for [Docker](https://docs.docker.com/engine/install/) or [Podman](https://podman.io/docs/installation). Then, in the terminal, run
 
-```
+```bash
 # Pull the container image from the registry
 docker pull ghcr.io/himelmallick/integratedlearner:master
 
@@ -34,24 +34,28 @@ docker pull ghcr.io/himelmallick/integratedlearner:master
 docker run --port 8787:8787 --name IntegratedLearner integratedlearner:master
 ```
 
-In the browser, navigate to `localhost:8787` and log in with `rstudio` username and the password output in the terminal.
+In the browser, navigate to `localhost:8787` and log in with `rstudio` username and the password that was displayed in the terminal.
 
 In the R console, write `setwd("/opt/pkg")`. You can now open any file in the IntegratedLearner repository.
 
-Podman is compatible with Docker commands, therefore `docker` command can be substituted with `podman`. **NOTE**: if
-running rootless Podman, the correct username *might be* `root` instead of `rstudio`.
+Podman is compatible with Docker commands, therefore `docker` command can be substituted with `podman`.
+
+**NOTE**: if running rootless Podman, the correct username *might be* `root` instead of `rstudio`.
 
 #### Map local directory to container directory
 
-If you would like to make any of the code, you need to *map* the local directory to a directory inside the container.
+If you would like to make changes to the code, you need to *map* the local directory to a directory inside the container.
 Otherwise, the modifications will be discarded when the container is stopped. To do so, we need to specify a volume option:
 
+```bash
 docker run -p 8787:8787 -v .:/IntegratedLearner --name IntegratedLearner integratedlearner:master
-In this command, we *map* the current directory (container, for example, IntegratedLearner repository) to the `/IntegratedLearner`
-directory inside the container. In the RStudio console, write `setwd("/IntegratedLearner")` and modify the files.
+```
+
+In this command, we *map* the current directory (for example, IntegratedLearner repository) to the `/IntegratedLearner`
+directory inside the container. After logging in RStudio Server, in the console, write `setwd("/IntegratedLearner")` and modify the files.
 The modifications made *inside* the container will be persistently saved in the current directory of the host system.
 
-**NOTE**: if you are using SELinux (often enabled by default on Fedora), and you received *Permission denied* errors when
+**NOTE**: if you are using SELinux (often enabled by default on Fedora), and you receive *Permission denied* errors when
 accessing files inside the container, add a `:Z` flag to the volume option: `.:/IntegratedLearner:Z`.
 
 ## Features
