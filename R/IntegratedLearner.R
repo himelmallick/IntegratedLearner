@@ -34,6 +34,7 @@
 #' @param print_learner logical; Should a detailed summary be printed? Default is TRUE.
 #' @param refit.stack logical; For late fusion, post-refit predictions on the entire data is returned if specified. Default is FALSE.
 #' @param family Currently allows \code{`gaussian()`} for continuous or \code{`binomial()`} for binary outcomes.
+#' @param ... Additional arguments. Not used currently.
 #' 
 #' @return A \code{SuperLearner} object containing the trained model fits.
 #'
@@ -56,7 +57,7 @@ IntegratedLearner<-function(feature_table,
                             verbose = FALSE, 
                             print_learner = TRUE, 
                             refit.stack = FALSE, 
-                            family=gaussian())
+                            family=gaussian(), ...)
 { 
   
   ##############
