@@ -4,8 +4,9 @@ Version: 0.0.1
 Date: 2023-08-02
 Authors@R: c(
     person("Himel", "Mallick", email = "him4004@med.cornell.edu", role = c("aut", "cre"), comment = c(affiliation = "Cornell University")),
-    person("Anupreet", "Porwal", email = "porwaa@uw.edu", role = "aut", comment = c(affiliation = "Google"))
-)
+    person("Anupreet", "Porwal", email = "porwaa@uw.edu", role = "aut", comment = c(affiliation = "Google")),
+    person("Tuomas", "Borman", role = "ctb", comment = c(ORCID = "0000-0002-8563-8884"))
+    )
 Description: IntegratedLearner provides an integrated machine learning framework to 1) consolidate predictions by borrowing information across several longitudinal and cross-sectional omics data layers, 2) decipher the mechanistic role of individual omics features that can potentially lead to new sets of testable hypotheses, and 3) quantify uncertainty of the integration process. Three types of integration paradigms are supported: early, late, and intermediate. The software includes multiple ML models based on the SuperLearner R package as well as several data exploration capabilities and visualization modules in a unified estimation framework.
 Depends: R (>= 3.6)
 Imports:
