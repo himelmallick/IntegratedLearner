@@ -14,7 +14,7 @@ Imports:
     caret,
     cowplot,
     glmnetUtils,
-    mcmcplots,
+    bayesplot,
     nloptr,
     quadprog,
     ROCR,

@@ -34,7 +34,7 @@ library(tidyverse)
 library(SuperLearner)
 library(caret)
 library(cowplot)
-library(mcmcplots)
+library(bayesplot)
 library(bartMachine)
 ```
 
@@ -211,20 +211,21 @@ rownames(weighted.post.samples) <- rownames(dataX[[1]])
 names(dataY) <- rownames(dataX[[1]])
 ```
 
-```{r, fig.show='hide'}
-capture.output(temp <- caterplot(t(weighted.post.samples), add = FALSE))
-```
-
 We show below the 68\% and 95\% credible intervals obtained from stacked model for all 51 observations. The filled circle indicates the posterior median and empty circle indicates the true value of the observation.
 
 ```{r fig.width=9,fig.height=7}
-temp<-caterplot(t(weighted.post.samples),
-          horizontal = FALSE, add = FALSE)
-points(dataY[temp])
-title(main ="", xlab = "Observations", ylab = "Gestational age (in months)",
-       line = NA, outer = FALSE)
-p3 <- recordPlot()
+ord_names <- names(sort(rowMeans(weighted.post.samples), decreasing = TRUE))
 
+mcmc_intervals(t(weighted.post.samples), prob = 0.68, prob_outer = 0.95) +
+  scale_y_discrete(limits = ord_names) +
+  geom_point(aes(x = dataY[ord_names], y = ord_names), shape = 1, size = 3, color = "black") +
+  coord_flip() +
+  theme_bw() +
+  labs(
+    x = "Gestational age (in months)",
+    y = "Observations",
+  ) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
 
 ```{r}
