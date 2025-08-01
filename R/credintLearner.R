@@ -54,8 +54,13 @@ credint.learner <- function(fit,
     # Credible interval plot (bayesplot) #
     ######################################
 
-    # Order names by posterior mean
-    ord_names <- names(sort(rowMeans(weighted.post.samples), decreasing = TRUE))
+    # Order data by posterior mean
+    post_means <- rowMeans(weighted.post.samples)
+    ord_names <- names(sort(post_means, decreasing = FALSE))
+
+    # Reorder the data before plotting
+    weighted.post.samples <- weighted.post.samples[ord_names, ]
+    dataY <- dataY[ord_names]
 
     if (fit$family == "gaussian") {
       p <- mcmc_intervals(t(weighted.post.samples),
@@ -67,10 +72,9 @@ credint.learner <- function(fit,
           size = 3,
           color = "black"
         ) +
-        coord_flip() +
         labs(
           title = title,
-          x = ylab,
+          x = ylab, # coord_flip will swap x and y
           y = xlab
         ) +
         style +
@@ -80,7 +84,7 @@ credint.learner <- function(fit,
           axis.title = element_text(size = rel(size.lab)),
           axis.text = element_text(size = rel(size.axis))
         ) +
-        scale_y_discrete(limits = ord_names)
+        coord_flip() # for horizontal layout
     } else if (fit$family == "binomial") {
       p <- mcmc_intervals(t(weighted.post.samples),
         prob = prob_inner,
@@ -91,10 +95,9 @@ credint.learner <- function(fit,
           size = 3,
           color = "black"
         ) +
-        coord_flip() +
         labs(
           title = title,
-          x = ylab,
+          x = ylab, # coord_flip will swap x and y
           y = xlab
         ) +
         style +
@@ -104,7 +107,7 @@ credint.learner <- function(fit,
           axis.title = element_text(size = rel(size.lab)),
           axis.text = element_text(size = rel(size.axis))
         ) +
-        scale_y_discrete(limits = ord_names)
+        coord_flip() # for horizontal layout
     }
 
     return(p)
