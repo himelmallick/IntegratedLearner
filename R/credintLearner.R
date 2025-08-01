@@ -1,9 +1,5 @@
-#' @import BartMachine
-#' @import bayesplot
-#' @import ggplot2
 # This is a basic utility function to plot the credible intervals based on BART posterior samples.
 # Depends on the library bayesplot.
-
 credint.learner <- function(fit,
                             test = FALSE,
                             title = NULL,
