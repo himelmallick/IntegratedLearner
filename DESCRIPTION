@@ -23,6 +23,13 @@ Description: IntegratedLearner provides an integrated machine learning
     ML models based on the SuperLearner R package as well as several data
     exploration capabilities and visualization modules in a unified
     estimation framework.
+biocViews:
+    Software,
+    Classification,
+    Visualization
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: false
 Depends: R (>= 4.1.0)
 Imports:
     bartMachine,
@@ -43,8 +50,8 @@ Suggests:
     knitr,
     mia,
     MultiAssayExperiment
-License: MIT + file LICENSE
-LazyData: TRUE
+URL: https://github.com/himelmallick/IntegratedLearner
+BugReports: https://github.com/himelmallick/IntegratedLearner/issues
+Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
 VignetteBuilder: knitr
-Encoding: UTF-8
