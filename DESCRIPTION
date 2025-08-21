@@ -34,7 +34,6 @@ Depends: R (>= 4.1.0)
 Imports:
     bartMachine,
     bayesreg,
-    checkmate,
     cowplot,
     dplyr,
     glmnet,
