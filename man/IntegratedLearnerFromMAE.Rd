@@ -31,8 +31,8 @@ validation set. The variable must be \code{logical}. (Default: \code{NULL})}
 
 \item{...}{additional arguments passed to \code{IntegratedLearner()}
 \itemize{
-  \item \code{na.rm}: \code{Logical scalar}. Should features with missing
-  values be dropped? (Default: \code{FALSE})
+\item \code{na.rm}: \code{Logical scalar}. Should features with missing
+values be dropped? (Default: \code{FALSE})
 }}
 }
 \value{

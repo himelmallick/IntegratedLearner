@@ -33,23 +33,37 @@ LazyData: false
 Depends: R (>= 4.1.0)
 Imports:
     bartMachine,
-    bayesplot,
     bayesreg,
-    caret,
+    checkmate,
     cowplot,
+    dplyr,
     glmnet,
-    glmnetUtils,
-    mxBART,
+    graphics,
+    grDevices,
+    methods,
+    MultiAssayExperiment,
     nloptr,
+    performance,
+    prediction,
     quadprog,
     ROCR,
+    stats,
+    stringr,
+    SummarizedExperiment,
     SuperLearner,
-    tidyverse
+    tibble,
+    tidyr,
+    utils
 Suggests:
-    data.table,
+    arm,
+    bayesplot,
+    caret,
+    glmnetUtils,
     knitr,
-    mia,
-    MultiAssayExperiment
+    mbart,
+    nnls,
+    rmarkdown,
+    testthat (>= 3.0.0)
 URL: https://github.com/himelmallick/IntegratedLearner
 BugReports: https://github.com/himelmallick/IntegratedLearner/issues
 Roxygen: list(markdown = TRUE)
