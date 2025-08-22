@@ -1,4 +1,26 @@
- ###############################
+############################# Imports ##########################################
+#' @importFrom ggplot2 ggplot aes geom_point geom_line geom_bar coord_flip
+#' @importFrom ggplot2 theme theme_bw element_text element_blank element_rect labs
+#' @importFrom ggplot2 xlab ylab facet_wrap guides guide_legend scale_fill_discrete position_dodge rel
+#' @importFrom bayesplot mcmc_intervals
+#' @importFrom bartMachine bart_machine_get_posterior bartMachine
+#' @importFrom SuperLearner SuperLearner predict.SuperLearner  
+#' @importFrom caret createFolds
+#' @importFrom stringr str_remove_all str_replace_all
+#' @importFrom dplyr mutate arrange
+#' @importFrom tidyr pivot_wider
+#' @importFrom glmnet cv.glmnet
+#' @importFrom glmnetUtils cva.glmnet
+#' @importFrom mbart mxbart
+#' @importFrom nloptr nloptr
+#' @importFrom performance performance
+#' @importFrom prediction prediction
+#' @importFrom quadprog solve.QP
+#' @importFrom cowplot plot_grid
+#' @importFrom tibble rownames_to_column
+NULL
+
+###############################
 #### Print learner summary ####
 ###############################
 
