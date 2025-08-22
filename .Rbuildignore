@@ -1,3 +1,11 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
+.github
+^\.github$
+pkgdown
+.RData
+.pdf
+inst/extras
+^doc$
+^Meta$
 ^LICENSE\.md$

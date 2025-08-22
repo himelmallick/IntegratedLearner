@@ -1,8 +1,9 @@
 # IntegratedLearner - Integrated machine learning for multi-omics prediction and classification
-
+## Introduction
 The repository houses the **`IntegratedLearner`** R package for multi-omics prediction and classification. Both binary and continuous outcomes are supported.
 
-## Dependencies
+## Getting started
+### Dependencies
 
 `IntegratedLearner` requires the following `R` package: `devtools` (for installation only). Please install it before installing `IntegratedLearner `, which can be done as follows (execute from within a fresh R session):
 
@@ -105,7 +106,7 @@ IntegratedLearner(feature_table, sample_metadata, feature_metadata, ...)
 
 #### The IntegratedLearner workflow
 
-![Flow Chart](/images/Flowchart.png)
+![Flow Chart](man/figures/images/Flowchart.png)
 
 #### Value
 
