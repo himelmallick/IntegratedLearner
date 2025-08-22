@@ -1,0 +1,68 @@
+url: https://himelmallick.github.io/IntegratedLearner
+title: IntegratedLearner
+description: >
+  An ensemble machine learning framework for integrated analysis 
+  of multi-omics data using SuperLearner and Bayesian methods.
+
+template:
+  bootstrap: 5
+  bslib:
+    primary: "#0C4C8A"
+    secondary: "#6BAED6"
+    success: "#41AB5D"
+    info: "#6BAED6"
+    warning: "#F16913"
+    danger: "#D53E4F"
+news:
+  file: "NEWS"
+articles:
+  - title: "IntegratedLearner"
+    contents: ["IntegratedLearner"]
+    description: "Using IntegratedLearner for multi-omics prediction and classification"
+navbar:
+  structure:
+    left: [reference, articles, news, tutorials]
+    right: [github]
+  components:
+    github:
+      icon: "fab fa-github"
+      href: "https://github.com/himelmallick/IntegratedLearner"
+      aria-label: "GitHub repository"
+
+reference:
+  - title: "Core functions"
+    desc: "Main functionality for integrated learning"
+    contents:
+      - IntegratedLearner
+      - IntegratedLearnerFromMAE
+      - predict.learner
+      - update.learner
+  - title: "SuperLearner algorithms"
+    desc: "Machine learning algorithms for ensemble modeling"
+    contents:
+      - SL.BART
+      - SL.LASSO
+      - SL.enet
+      - SL.glmnet2
+      - SL.horseshoe
+      - SL.nnls.auc
+      - predict.SL.BART
+      - predict.SL.nnls.auc
+  - title: "Utility functions"
+    desc: "Supporting functions and utilities"
+    contents:
+      - plot.learner
+      - NNLS
+      - auc.obj
+home:
+  strip_header: true
+  sidebars:
+    - license.html
+    - citation.html
+  structure:
+    introduction:
+      width: 12
+    getting-started:
+      width: 12
+    features:
+      width: 12
