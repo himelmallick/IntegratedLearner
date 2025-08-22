@@ -26,9 +26,9 @@ SL.horseshoe(
 \item{family}{"gaussian" for regression, "binomial" for binary
 classification. Untested options: "poisson" for for integer or count data}
 
-\item{prior}{prior for regression coefficients to use. "Horseshoe" by default. 
-Untested options: ridge regression (prior="rr" or prior="ridge"), 
-lasso regression (prior="lasso") and horseshoe+ regression (prior="hs+" 
+\item{prior}{prior for regression coefficients to use. "Horseshoe" by default.
+Untested options: ridge regression (prior="rr" or prior="ridge"),
+lasso regression (prior="lasso") and horseshoe+ regression (prior="hs+"
 or prior="horseshoe+")}
 
 \item{N}{Number of posterior samples to generate.}
