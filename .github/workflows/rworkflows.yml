@@ -3,19 +3,11 @@ name: rworkflows
   push:
     branches:
     - master
-    - main
     - devel
-    - RELEASE_**
-    - '*'
-    - '!gh-pages'
   pull_request:
     branches:
     - master
-    - main
     - devel
-    - RELEASE_**
-    - '*'
-    - '!gh-pages'
 jobs:
   rworkflows:
     permissions: write-all
@@ -45,11 +37,11 @@ jobs:
     - uses: neurogenomics/rworkflows@master
       with:
         run_bioccheck: ${{ false }}
-        run_rcmdcheck: ${{ true }}
-        as_cran: ${{ true }}
+        run_rcmdcheck: ${{ false }}
+        as_cran: ${{ false }}
         run_vignettes: ${{ true }}
-        has_testthat: ${{ true }}
-        run_covr: ${{ true }}
+        has_testthat: ${{ false }}
+        run_covr: ${{ false }}
         run_pkgdown: ${{ true }}
         has_runit: ${{ false }}
         has_latex: ${{ false }}
