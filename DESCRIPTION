@@ -1,7 +1,7 @@
 Package: IntegratedLearner
 Title: Integrated machine learning for multi-omics prediction and
     classification
-Version: 0.0.1
+Version: 0.0.2
 Date: 2023-08-02
 Authors@R: c(
     person("Himel", "Mallick", email = "him4004@med.cornell.edu", role =
