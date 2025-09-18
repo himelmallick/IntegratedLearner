@@ -60,6 +60,7 @@ Suggests:
     knitr,
     mia,
     rmarkdown,
+    tidyverse,
     testthat (>= 3.0.0)
 URL: https://github.com/himelmallick/IntegratedLearner
 BugReports: https://github.com/himelmallick/IntegratedLearner/issues
