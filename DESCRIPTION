@@ -58,7 +58,6 @@ Suggests:
     caret,
     glmnetUtils,
     knitr,
-    mbart,
     mia,
     rmarkdown,
     testthat (>= 3.0.0)
