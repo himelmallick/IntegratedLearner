@@ -27,7 +27,8 @@ Once installed, **`IntegratedLearner`** can be simply loaded (along with the req
 ```{r, warning=FALSE, message = FALSE}
 # Load the IntegratedLearner package
 library(IntegratedLearner)
-options(java.parameters = "-Xmx5g") # This is needed for running BART
+# This is needed for running BART
+options(java.parameters = "-Xmx8G")
 
 # Load other essential packages for this tutorial
 library(tidyverse) 
