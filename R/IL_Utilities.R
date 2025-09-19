@@ -11,7 +11,6 @@
 #' @importFrom tidyr pivot_wider
 #' @importFrom glmnet cv.glmnet
 #' @importFrom glmnetUtils cva.glmnet
-#' @importFrom mbart mxbart
 #' @importFrom nloptr nloptr
 #' @importFrom performance performance
 #' @importFrom prediction prediction
@@ -235,6 +234,8 @@ predict.SL.BART <- function(object, newdata, family, X = NULL, Y = NULL,...) {
 ##########################################
 # Mixed BART implementation using mxBART #
 ##########################################
+# TODO : Import functionality from bnptools
+# https://github.com/rsparapa/bnptools/tree/master/mxBART
 SL.mxBART <- function(Y, X, newX, family, obsWeights, id,
                       sparse=FALSE,ntree=50,
                       ndpost=1000,nskip=100,keepevery=10,

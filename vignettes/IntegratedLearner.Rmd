@@ -27,7 +27,8 @@ Once installed, **`IntegratedLearner`** can be simply loaded (along with the req
 ```{r, warning=FALSE, message = FALSE}
 # Load the IntegratedLearner package
 library(IntegratedLearner)
-options(java.parameters = "-Xmx5g") # This is needed for running BART
+# This is needed for running BART
+options(java.parameters = "-Xmx6G")
 
 # Load other essential packages for this tutorial
 library(tidyverse) 
@@ -265,7 +266,6 @@ VIMP_stack$type<-'stack'
 ###############
 # Microbiome #
 ###############
-
 qq<-bartMachine::investigate_var_importance(fit$model_fits$model_layers$Microbiome,plot = FALSE)
 VIMP_microbiome<-cbind.data.frame(qq$avg_var_props, qq$sd_var_props)
 colnames(VIMP_microbiome)<-c('mean', 'sd')
@@ -274,12 +274,10 @@ VIMP_microbiome$type<-'Microbiome'
 ###############
 # Plasma Somalogic #
 ###############
-
 qq<-bartMachine::investigate_var_importance(fit$model_fits$model_layers$PlasmaSomalogic,plot = FALSE)
 VIMP_PlasmaSomalogic<-cbind.data.frame(qq$avg_var_props, qq$sd_var_props)
 colnames(VIMP_PlasmaSomalogic)<-c('mean', 'sd')
 VIMP_PlasmaSomalogic$type<-'PlasmaSomalogic'
-
 
 VIMP<-as.data.frame(rbind.data.frame(VIMP_stack,
                                      VIMP_microbiome[1:20,],
