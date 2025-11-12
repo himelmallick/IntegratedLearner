@@ -263,25 +263,33 @@ colnames(VIMP_stack)<-c('mean')
 VIMP_stack$sd <- NA
 VIMP_stack$type<-'stack'
 
+safe_var_importance <- function(model, layer_label) {
+  tryCatch({
+    qq <- bartMachine::investigate_var_importance(model, plot = FALSE)
+    df <- cbind.data.frame(qq$avg_var_props, qq$sd_var_props)
+    colnames(df) <- c('mean', 'sd')
+    df$type <- layer_label
+    df
+  }, error = function(e) {
+    warning(sprintf("Skipping variable importance for %s: %s", layer_label, conditionMessage(e)))
+    # Returning an empty data frame keeps the downstream plotting code functional
+    data.frame(mean = numeric(), sd = numeric(), type = character())
+  })
+}
+
 ###############
 # Microbiome #
 ###############
-qq<-bartMachine::investigate_var_importance(fit$model_fits$model_layers$Microbiome,plot = FALSE)
-VIMP_microbiome<-cbind.data.frame(qq$avg_var_props, qq$sd_var_props)
-colnames(VIMP_microbiome)<-c('mean', 'sd')
-VIMP_microbiome$type<-'Microbiome'
+VIMP_microbiome <- safe_var_importance(fit$model_fits$model_layers$Microbiome, 'Microbiome')
 
 ###############
 # Plasma Somalogic #
 ###############
-qq<-bartMachine::investigate_var_importance(fit$model_fits$model_layers$PlasmaSomalogic,plot = FALSE)
-VIMP_PlasmaSomalogic<-cbind.data.frame(qq$avg_var_props, qq$sd_var_props)
-colnames(VIMP_PlasmaSomalogic)<-c('mean', 'sd')
-VIMP_PlasmaSomalogic$type<-'PlasmaSomalogic'
+VIMP_PlasmaSomalogic <- safe_var_importance(fit$model_fits$model_layers$PlasmaSomalogic, 'PlasmaSomalogic')
 
 VIMP<-as.data.frame(rbind.data.frame(VIMP_stack,
-                                     VIMP_microbiome[1:20,],
-                                     VIMP_PlasmaSomalogic[1:20,]))
+                                     head(VIMP_microbiome, 20),
+                                     head(VIMP_PlasmaSomalogic, 20)))
 
 
 VIMP<-rownames_to_column(VIMP, 'ID')
