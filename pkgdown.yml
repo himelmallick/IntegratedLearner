@@ -1,0 +1,6 @@
+pandoc: 3.8.2.1
+pkgdown: 2.2.0
+pkgdown_sha: ~
+articles:
+  IntegratedLearner: IntegratedLearner.html
+last_built: 2025-11-12T18:30Z

@@ -1,0 +1,25 @@
+<urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
+<url><loc>/404.html</loc></url>
+<url><loc>/LICENSE-text.html</loc></url>
+<url><loc>/articles/IntegratedLearner.html</loc></url>
+<url><loc>/articles/index.html</loc></url>
+<url><loc>/authors.html</loc></url>
+<url><loc>/index.html</loc></url>
+<url><loc>/reference/IntegratedLearner.html</loc></url>
+<url><loc>/reference/IntegratedLearnerFromMAE.html</loc></url>
+<url><loc>/reference/NNLS.html</loc></url>
+<url><loc>/reference/SL.BART.html</loc></url>
+<url><loc>/reference/SL.LASSO.html</loc></url>
+<url><loc>/reference/SL.enet.html</loc></url>
+<url><loc>/reference/SL.glmnet2.html</loc></url>
+<url><loc>/reference/SL.horseshoe.html</loc></url>
+<url><loc>/reference/SL.nnls.auc.html</loc></url>
+<url><loc>/reference/auc.obj.html</loc></url>
+<url><loc>/reference/index.html</loc></url>
+<url><loc>/reference/plot.learner.html</loc></url>
+<url><loc>/reference/predict.SL.BART.html</loc></url>
+<url><loc>/reference/predict.SL.nnls.auc.html</loc></url>
+<url><loc>/reference/predict.learner.html</loc></url>
+<url><loc>/reference/update.learner.html</loc></url>
+</urlset>
+
