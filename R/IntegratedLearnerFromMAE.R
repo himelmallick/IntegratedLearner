@@ -28,10 +28,11 @@
 #' 
 #' @return A \code{SuperLearner} object containing the trained model fits.
 #' 
+#' @rdname IntegratedLearnerFromMAE
 #' @export
 
 IntegratedLearnerFromMAE <- function(
-        mae, experiment, assay.type, outcome.col, valid.col = NULL, ...){
+                mae, experiment, assay.type, outcome.col, valid.col = NULL, ...){
     ############################### INPUT CHECK ################################
     # MultiAssayExperiment and mia are required to run this function. However,
     # they are not direct dependency of the package; they are only needed when
@@ -86,6 +87,24 @@ IntegratedLearnerFromMAE <- function(
     fit <- do.call(IntegratedLearner, data)
     return(fit)
 }
+
+#' @rdname IntegratedLearnerFromMAE
+#' @aliases IntegratedLearner,missing,MultiAssayExperiment-method
+#' @importClassesFrom MultiAssayExperiment MultiAssayExperiment
+#' @export
+setMethod(
+    "IntegratedLearner",
+    signature(feature_table = "missing", mae = "MultiAssayExperiment"),
+    function(feature_table, sample_metadata, feature_metadata,
+             mae, experiment, assay.type, outcome.col, valid.col = NULL, ...){
+        IntegratedLearnerFromMAE(mae = mae,
+                                                         experiment = experiment,
+                                                         assay.type = assay.type,
+                                                         outcome.col = outcome.col,
+                                                         valid.col = valid.col,
+                                                         ...)
+    }
+)
 
 ################################ HELP FUNCTIONS ################################
 

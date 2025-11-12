@@ -41,24 +41,36 @@
 #' @author Himel Mallick, \email{him4004@@med.cornell.edu}
 #' 
 #' @keywords microbiome, metagenomics, multiomics, scRNASeq, tweedie, singlecell
+#' @importFrom methods setMethod
+#' @rdname IntegratedLearner-method
+#' @aliases IntegratedLearner,data.frame,data.frame,data.frame-method
 #' @export
-IntegratedLearner<-function(feature_table,
-                            sample_metadata, 
-                            feature_metadata,
-                            feature_table_valid = NULL, 
-                            sample_metadata_valid = NULL, 
-                            folds = 5, 
-                            seed = 1234, 
-                            base_learner = 'SL.BART',
-                            base_screener = 'All', 
-                            meta_learner = 'SL.nnls.auc',
-                            run_concat = TRUE, 
-                            run_stacked = TRUE, 
-                            verbose = FALSE, 
-                            print_learner = TRUE, 
-                            refit.stack = FALSE, 
-                            family=gaussian(), ...)
-{ 
+setMethod(
+  "IntegratedLearner",
+  signature(
+    feature_table = "data.frame",
+    sample_metadata = "data.frame",
+    feature_metadata = "data.frame"
+  ),
+  function(feature_table,
+           sample_metadata,
+           feature_metadata,
+           feature_table_valid = NULL,
+           sample_metadata_valid = NULL,
+           folds = 5,
+           seed = 1234,
+           base_learner = 'SL.BART',
+           base_screener = 'All',
+           meta_learner = 'SL.nnls.auc',
+           run_concat = TRUE,
+           run_stacked = TRUE,
+           verbose = FALSE,
+           print_learner = TRUE,
+           refit.stack = FALSE,
+           family = gaussian(),
+           ...,
+           mae = methods::missingArg())
+  {
   
   ##############
   # Track time #
@@ -669,7 +681,11 @@ IntegratedLearner<-function(feature_table,
   # Return #
   ##########
 
-  if(print_learner==TRUE){print.learner(res)}
-  return(res)
-}  
+  class(res) <- c("learner", "list")
+  if (isTRUE(print_learner)) {
+    print.learner(res)
+  }
+  res
+  }
+)
 
