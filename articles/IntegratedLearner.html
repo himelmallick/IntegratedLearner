@@ -205,12 +205,12 @@ confounders.</p>
 <span><span class="co">#&gt; Actinomyces_massiliensis  -0.159240362</span></span>
 <span><span class="co">#&gt; Actinomyces_naeslundii    -0.139758576</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sample_metadata</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">5</span>, <span class="op">]</span><span class="op">)</span></span>
-<span><span class="co">#&gt;        Diagnosis Y subjectID</span></span>
-<span><span class="co">#&gt; G35127        CD 1    G35127</span></span>
-<span><span class="co">#&gt; G35128        CD 1    G35128</span></span>
-<span><span class="co">#&gt; G35152        CD 1    G35152</span></span>
-<span><span class="co">#&gt; G36347        CD 1    G36347</span></span>
-<span><span class="co">#&gt; G36348        CD 1    G36348</span></span>
+<span><span class="co">#&gt;        Diagnosis dysbiosis_score Y subjectID</span></span>
+<span><span class="co">#&gt; G35127        CD       0.9341207 1    G35127</span></span>
+<span><span class="co">#&gt; G35128        CD       0.5962602 1    G35128</span></span>
+<span><span class="co">#&gt; G35152        CD       0.9505732 1    G35152</span></span>
+<span><span class="co">#&gt; G36347        CD       0.9966957 1    G36347</span></span>
+<span><span class="co">#&gt; G36348        CD       0.8475403 1    G36348</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">feature_metadata</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">5</span>, <span class="op">]</span><span class="op">)</span></span>
 <span><span class="co">#&gt;                                           featureID featureType</span></span>
 <span><span class="co">#&gt; Granulicella_unclassified Granulicella_unclassified     species</span></span>
@@ -330,7 +330,7 @@ a single core of a system with an Intel Core i5 processor (1.7 GHz) and
 <span><span class="co">#&gt; CV SL.randomForest_All</span></span>
 <span><span class="co">#&gt; Non-Negative least squares convergence: TRUE</span></span>
 <span><span class="co">#&gt; full SL.randomForest_All</span></span>
-<span><span class="co">#&gt; Time for model fit : 3.816 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 3.643 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Model fit for individual layers: SL.randomForest </span></span>
 <span><span class="co">#&gt; Model fit for stacked layer: SL.nnls.auc </span></span>
@@ -651,7 +651,7 @@ importance scores).</p>
 <span><span class="co">#&gt; serializing in order to be saved for future R sessions...done</span></span>
 <span><span class="co">#&gt; serializing in order to be saved for future R sessions...done</span></span>
 <span><span class="co">#&gt; serializing in order to be saved for future R sessions...done</span></span>
-<span><span class="co">#&gt; Time for model fit : 4.895 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 4.633 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Model fit for individual layers: SL.BART </span></span>
 <span><span class="co">#&gt; Model fit for stacked layer: SL.nnls.auc </span></span>
@@ -853,7 +853,7 @@ highlights several features that agree with known biology.</p>
 </h2>
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="co">#&gt; R Under development (unstable) (2025-11-06 r88990)</span></span>
+<span><span class="co">#&gt; R Under development (unstable) (2025-11-18 r89035)</span></span>
 <span><span class="co">#&gt; Platform: x86_64-pc-linux-gnu</span></span>
 <span><span class="co">#&gt; Running under: Ubuntu 24.04.3 LTS</span></span>
 <span><span class="co">#&gt; </span></span>
@@ -883,8 +883,8 @@ highlights several features that agree with known biology.</p>
 <span><span class="co">#&gt; [10] SuperLearner_2.0-29     gam_1.22-6              foreach_1.5.2          </span></span>
 <span><span class="co">#&gt; [13] nnls_1.6                lubridate_1.9.4         forcats_1.0.1          </span></span>
 <span><span class="co">#&gt; [16] stringr_1.6.0           dplyr_1.1.4             purrr_1.2.0            </span></span>
-<span><span class="co">#&gt; [19] readr_2.1.5             tidyr_1.3.1             tibble_3.3.0           </span></span>
-<span><span class="co">#&gt; [22] ggplot2_4.0.0           tidyverse_2.0.0         IntegratedLearner_0.0.2</span></span>
+<span><span class="co">#&gt; [19] readr_2.1.6             tidyr_1.3.1             tibble_3.3.0           </span></span>
+<span><span class="co">#&gt; [22] ggplot2_4.0.1           tidyverse_2.0.0         IntegratedLearner_0.0.2</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; loaded via a namespace (and not attached):</span></span>
 <span><span class="co">#&gt;  [1] Rdpack_2.6.4         pROC_1.19.0.1        rlang_1.1.6         </span></span>
@@ -904,9 +904,9 @@ highlights several features that agree with known biology.</p>
 <span><span class="co">#&gt; [43] nnet_7.3-20          timechange_0.3.0     tidyselect_1.2.1    </span></span>
 <span><span class="co">#&gt; [46] abind_1.4-8          yaml_2.3.10          timeDate_4051.111   </span></span>
 <span><span class="co">#&gt; [49] codetools_0.2-20     listenv_0.10.0       doRNG_1.8.6.2       </span></span>
-<span><span class="co">#&gt; [52] plyr_1.8.9           withr_3.0.2          S7_0.2.0            </span></span>
+<span><span class="co">#&gt; [52] plyr_1.8.9           withr_3.0.2          S7_0.2.1            </span></span>
 <span><span class="co">#&gt; [55] posterior_1.6.1      ROCR_1.0-11          evaluate_1.0.5      </span></span>
-<span><span class="co">#&gt; [58] future_1.67.0        desc_1.4.3           survival_3.8-3      </span></span>
+<span><span class="co">#&gt; [58] future_1.68.0        desc_1.4.3           survival_3.8-3      </span></span>
 <span><span class="co">#&gt; [61] pillar_1.11.1        tensorA_0.36.2.1     rngtools_1.5.2      </span></span>
 <span><span class="co">#&gt; [64] checkmate_2.3.3      stats4_4.6.0         insight_1.4.2       </span></span>
 <span><span class="co">#&gt; [67] distributional_0.5.0 generics_0.1.4       hms_1.1.4           </span></span>
@@ -916,7 +916,7 @@ highlights several features that agree with known biology.</p>
 <span><span class="co">#&gt; [79] grid_4.6.0           rbibutils_2.4        ipred_0.9-15        </span></span>
 <span><span class="co">#&gt; [82] nlme_3.1-168         performance_0.15.2   cli_3.6.5           </span></span>
 <span><span class="co">#&gt; [85] textshaping_1.0.4    lava_1.8.2           gtable_0.3.6        </span></span>
-<span><span class="co">#&gt; [88] sass_0.4.10          digest_0.6.38        htmlwidgets_1.6.4   </span></span>
+<span><span class="co">#&gt; [88] sass_0.4.10          digest_0.6.39        htmlwidgets_1.6.4   </span></span>
 <span><span class="co">#&gt; [91] farver_2.1.2         htmltools_0.5.8.1    pkgdown_2.2.0       </span></span>
 <span><span class="co">#&gt; [94] lifecycle_1.0.4      hardhat_1.4.2        MASS_7.3-65</span></span></code></pre></div>
 </div>
