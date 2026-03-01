@@ -661,10 +661,11 @@ IntegratedLearner<-function(feature_table,
   }    
   res$folds <- folds
   res$cvControl <- cvControl
-  res$id <- id
+  # res$id <- id
   stop.time<-Sys.time()
   time <- as.numeric(round(difftime(stop.time, start.time, units="min"), 3), units = "mins")
   res$time <- time
+                              
   ##########
   # Return #
   ##########
