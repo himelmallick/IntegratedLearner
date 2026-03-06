@@ -1,0 +1,47 @@
+Package: IntegratedLearner
+Type: Package
+Title: Integrated Multi-Omics Learner for Survival and Non-Survival Outcomes
+Version: 0.1.0
+Authors@R: person("Himel", "Mallick", email = "nalina@example.com", role = c("aut", "cre"))
+Description: IntegratedLearner provides a unified interface for multi-omics prediction
+    using late/early fusion for continuous, binary, and survival outcomes.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Depends: R (>= 4.2.0)
+Imports:
+    SuperLearner,
+    data.table,
+    mlr3,
+    mlr3proba,
+    survival,
+    glmnet,
+    ranger,
+    MultiAssayExperiment,
+    SummarizedExperiment,
+    dplyr,
+    stringr,
+    tibble,
+    tidyr,
+    methods,
+    stats,
+    caret,
+    ROCR
+Suggests:
+    bartMachine,
+    bayesplot,
+    cowplot,
+    ggplot2,
+    timeROC,
+    glmnetUtils,
+    nloptr,
+    prediction,
+    quadprog,
+    testthat,
+    knitr,
+    rmarkdown,
+    curatedMetagenomicData,
+    mlbench,
+    bayesreg
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
