@@ -9,7 +9,6 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 Depends: R (>= 4.2.0)
-Additional_repositories: https://mlr-org.r-universe.dev
 Imports:
     SuperLearner,
     data.table,
