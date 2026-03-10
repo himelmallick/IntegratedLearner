@@ -36,7 +36,7 @@ with proportional mean and variance, "cox".}
 \item{id}{Optional id to group observations from the same unit (not used
 currently).}
 
-\item{alpha}{Elastic net mixing parameter, range \link{0, 1}. 0 = ridge regression
+\item{alpha}{Elastic net mixing parameter, range 0 to 1. 0 = ridge regression
 and 1 = lasso.}
 
 \item{nfolds}{Number of folds for internal cross-validation to optimize lambda.}
@@ -61,22 +61,20 @@ See \code{vignette("glmnet_beta", package = "glmnet")} for a nice tutorial on
 glmnet.
 }
 \examples{
+if (requireNamespace("mlbench", quietly = TRUE)) {
+  data(PimaIndiansDiabetes2, package = "mlbench")
+  dat <- stats::na.omit(PimaIndiansDiabetes2)
+  Y <- as.numeric(dat$diabetes == "pos")
+  X <- subset(dat, select = -diabetes)
+}
+\dontrun{
+  sl <- SuperLearner::SuperLearner(
+    Y, X,
+    family = stats::binomial(),
+    SL.library = c("SL.mean", "SL.glm", "SL.glmnet")
+  )
+}
 
-# Load a test dataset.
-data(PimaIndiansDiabetes2, package = "mlbench")
-data = PimaIndiansDiabetes2
-
-# Omit observations with missing data.
-data = na.omit(data)
-
-Y = as.numeric(data$diabetes == "pos")
-X = subset(data, select = -diabetes)
-
-set.seed(1, "L'Ecuyer-CMRG")
-
-sl = SuperLearner(Y, X, family = binomial(),
-                  SL.library = c("SL.mean", "SL.glm", "SL.glmnet"))
-sl
 
 }
 \references{
@@ -95,6 +93,6 @@ elastic net. Journal of the Royal Statistical Society: Series B (Statistical
 Methodology), 67(2), 301-320.
 }
 \seealso{
-\code{\link{predict.SL.glmnet}} \code{\link[glmnet]{cv.glmnet}}
+\code{predict.SL.glmnet} \code{\link[glmnet]{cv.glmnet}}
 \code{\link[glmnet]{glmnet}}
 }

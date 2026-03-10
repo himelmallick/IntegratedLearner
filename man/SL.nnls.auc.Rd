@@ -7,9 +7,19 @@
 SL.nnls.auc(Y, X, newX, family, obsWeights, bounds = c(0, Inf), ...)
 }
 \arguments{
-\item{Y}{Y}
+\item{Y}{Outcome matrix from metalearner}
 
-\item{X}{X}
+\item{X}{Layer-level predictions used to train the metalearner}
+
+\item{newX}{Layer-level predictions for validation data}
+
+\item{family}{Family object}
+
+\item{obsWeights}{Observation weights}
+
+\item{bounds}{Lower/upper bounds for weights (binomial case)}
+
+\item{...}{Additional arguments passed through}
 }
 \value{
 Estimated meta-learner coefficients and predictions

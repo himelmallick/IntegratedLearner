@@ -1,29 +1,20 @@
 ############################# Imports ##########################################
-#' @importFrom ggplot2 ggplot aes geom_point geom_line geom_bar coord_flip
-#' @importFrom ggplot2 theme theme_bw element_text element_blank element_rect labs
-#' @importFrom ggplot2 xlab ylab facet_wrap guides guide_legend scale_fill_discrete position_dodge rel
-#' @importFrom bayesplot mcmc_intervals
-#' @importFrom bartMachine bart_machine_get_posterior bartMachine
-#' @importFrom SuperLearner SuperLearner predict.SuperLearner  
-#' @importFrom caret createFolds
-#' @importFrom stringr str_remove_all str_replace_all
-#' @importFrom dplyr mutate arrange
-#' @importFrom tidyr pivot_wider
-#' @importFrom glmnet cv.glmnet
-#' @importFrom glmnetUtils cva.glmnet
-#' @importFrom nloptr nloptr
-#' @importFrom performance performance
-#' @importFrom prediction prediction
-#' @importFrom quadprog solve.QP
-#' @importFrom cowplot plot_grid
-#' @importFrom tibble rownames_to_column
+
+NULL
+utils::globalVariables(c(
+  '.', '.N', '.BY', 'featureID', 'featureType', 'id', 'layer', 'type', 'ID',
+  'displayItem', 'sd', 'specificity', 'sensitivity', 'e'
+))
 NULL
 
 ###############################
 #### Print learner summary ####
 ###############################
 
-print.learner <- function(res,...){
+#' @export
+#' @export
+print.learner <- function(x,...){
+  res <- x
   num_layers <- length(res$X_train_layers)
   
   cat("Time for model fit :",res$time,"minutes \n")
@@ -165,7 +156,7 @@ expit <- function(x){
 #' @param beta Power hyperparameter in tree prior for whether a node is
 #'   nonterminal or not.
 #' @param k For regression, k determines the prior probability that E(Y|X) is
-#'   contained in the interval (y_{min}, y_{max}), based on a normal
+#'   contained in the interval \eqn{(y_{min}, y_{max})}, based on a normal
 #'   distribution. For example, when k=2, the prior probability is 95\%. For
 #'   classification, k determines the prior probability that E(Y|X) is between
 #'   (-3,3). Note that a larger value of k results in more shrinkage and a more
@@ -180,8 +171,9 @@ expit <- function(x){
 #'   screen.
 #' @param serialize If TRUE, bartMachine results can be saved to a file, but
 #'   will require additional RAM.
+#' @param seed Seed for reproducibility passed to bartMachine.
 #' @param ... Additional arguments (not used)
-#'
+#' 
 #' @encoding utf-8
 #' @export
 SL.BART <- function(Y, X, newX, family, obsWeights, id,
@@ -207,7 +199,7 @@ SL.BART <- function(Y, X, newX, family, obsWeights, id,
                                    serialize = serialize,seed=seed)
   # pred returns predicted responses (on the scale of the outcome)
   #pred <- bartMachine:::predict.bartMachine(model, newX)
-  pred <- predict(model, newX)
+  pred <- stats::predict(model, newX)
   
   fit <- list(object = model)
   class(fit) <- c("SL.BART")
@@ -218,89 +210,121 @@ SL.BART <- function(Y, X, newX, family, obsWeights, id,
 
 #' Predict function for SL.BART
 #'
-#' @param object object
-#' @param newdata newdata
-#'
+#' @param object Fitted SL.BART model object
+#' @param newdata Data frame for prediction
+#' @param family Family object passed through (unused)
+#' @param X Training design matrix (unused)
+#' @param Y Training outcome (unused)
+#' @param ... Additional arguments (unused)
+#' 
 #' @return Prediction from the SL.BART
 #' @export
 predict.SL.BART <- function(object, newdata, family, X = NULL, Y = NULL,...) {
   #.SL.require("bartMachine")
-  pred <- predict(object$object, newdata)
+  pred <- stats::predict(object$object, newdata)
   return(pred)
 }
 
 
 
-##########################################
-# Mixed BART implementation using mxBART #
-##########################################
-# TODO : Import functionality from bnptools
-# https://github.com/rsparapa/bnptools/tree/master/mxBART
+#' mxBART SuperLearner wrapper
+#'
+#' SuperLearner wrapper for mixed-effects BART using the \pkg{mxBART} package.
+#' This learner is optional and requires \pkg{mxBART} to be installed.
+#'
+#' @param Y Outcome variable.
+#' @param X Covariate data frame (training).
+#' @param newX Covariate data frame (prediction).
+#' @param family A \code{\link[stats]{family}} object; typically \code{gaussian()} or \code{binomial()}.
+#' @param obsWeights Optional observation weights (currently unused).
+#' @param id Optional grouping id for mixed-effects BART.
+#' @param sparse Logical; passed to \code{mxBART::mxbart}.
+#' @param ntree Number of trees.
+#' @param ndpost Number of posterior draws.
+#' @param nskip Number of burn-in draws.
+#' @param keepevery Thinning interval.
+#' @param mxps Prior specification list passed to \code{mxBART::mxbart}.
+#' @param ... Additional arguments passed to \code{mxBART::mxbart}.
+#'
+#' @return A list with elements \code{pred} and \code{fit} (SuperLearner convention).
+#' @export
 SL.mxBART <- function(Y, X, newX, family, obsWeights, id,
-                      sparse=FALSE,ntree=50,
-                      ndpost=1000,nskip=100,keepevery=10,
-                      mxps=list(list(prior=1,df=3,scale=1)),
+                      sparse = FALSE, ntree = 50,
+                      ndpost = 1000, nskip = 100, keepevery = 10,
+                      mxps = list(list(prior = 1, df = 3, scale = 1)),
                       ...) {
-  #.SL.require("mxBART")
+  mxpkg <- try(getNamespace("mxBART"), silent = TRUE)
+  if (inherits(mxpkg, "try-error")) {
+    stop("Package 'mxBART' is required for SL.mxBART.", call. = FALSE)
+  }
+  mxbart_fn <- get("mxbart", envir = mxpkg)
   
-  if(family$famil=="gaussian"){
-    type='wbart'
-  }else if(family$family=="binomial"){
-    type='pbart'
+  if (family$family == "gaussian") {
+    type <- "wbart"
+  } else if (family$family == "binomial") {
+    type <- "pbart"
+  } else {
+    stop("Unsupported family for SL.mxBART: ", family$family, call. = FALSE)
   }
   
-  model = mxBART::mxbart(y.train=Y,
-                         x.train=X,
-                         x.test = newX,
-                         id.train=list(id),
-                         sparse=FALSE,ntree=ntree,type=type,
-                         ndpost=ndpost,nskip=nskip,keepevery=keepevery,
-                         mxps = mxps)
+  model <- mxbart_fn(
+    y.train = Y,
+    x.train = X,
+    x.test  = newX,
+    id.train = list(id),
+    sparse = sparse, ntree = ntree, type = type,
+    ndpost = ndpost, nskip = nskip, keepevery = keepevery,
+    mxps = mxps,
+    ...
+  )
   
-  # pred returns predicted responses (on the scale of the outcome)
-  if(family$family=="gaussian"){
-    pred <- model$fhat.test.mean
-    
-  }else if(family$family=="binomial"){
-    pred <- model$prob.test.mean
-  }
+  pred <- if (family$family == "gaussian") model$fhat.test.mean else model$prob.test.mean
   
   fit <- list(object = model)
-  class(fit) <- c("SL.mxBART")
+  class(fit) <- "SL.mxBART"
   
-  out <- list(pred = pred, fit = fit)
-  return(out)
+  list(pred = pred, fit = fit)
 }
-
-
+#' @export
 predict.SL.mxBART <- function(object, newdata,family=family, X=X, Y=Y,
                               obsWeights, id,
                               sparse=FALSE,ntree=50,
                               ndpost=1000,nskip=100,keepevery=10,
                               mxps=list(list(prior=1,df=3,scale=1)),
                               ...) {
-  #.SL.require("mxbart")
-  if(family$famil=="gaussian"){
-    type='wbart'
-  }else if(family$family=="binomial"){
-    type='pbart'
+  mxpkg <- try(getNamespace("mxBART"), silent = TRUE)
+  if (inherits(mxpkg, "try-error")) {
+    stop("Package 'mxBART' is required for predict.SL.mxBART.", call. = FALSE)
+  }
+  mxbart_fn <- get("mxbart", envir = mxpkg)
+  
+  if (family$family == "gaussian") {
+    type <- "wbart"
+  } else if (family$family == "binomial") {
+    type <- "pbart"
+  } else {
+    stop("Unsupported family for SL.mxBART: ", family$family, call. = FALSE)
   }
   
-  model = mxBART::mxbart(y.train=Y,
-                         x.train=X,
-                         x.test = newdata,
-                         id.train=list(id),
-                         sparse=FALSE,ntree=ntree,type=type,
-                         ndpost=ndpost,nskip=nskip,keepevery=keepevery,
-                         mxps = mxps)
+  model <- mxbart_fn(
+    y.train = Y,
+    x.train = X,
+    x.test = newdata,
+    id.train = list(id),
+    sparse = sparse,
+    ntree = ntree,
+    type = type,
+    ndpost = ndpost,
+    nskip = nskip,
+    keepevery = keepevery,
+    mxps = mxps
+  )
   
-  if(family$family=="gaussian"){
+  if (family$family == "gaussian") {
     pred <- model$fhat.test.mean
-    
-  }else if(family$family=="binomial"){
+  } else {
     pred <- model$prob.test.mean
   }
-  
   
   return(pred)
 }
@@ -331,7 +355,7 @@ predict.SL.mxBART <- function(object, newdata,family=family, X=X, Y=Y,
 #'   classification. Untested options: "multinomial" for multiple classification
 #'   or "mgaussian" for multiple response, "poisson" for non-negative outcome
 #'   with proportional mean and variance, "cox".
-#' @param alpha Elastic net mixing parameter, range [0, 1]. 0 = ridge regression
+#' @param alpha Elastic net mixing parameter, range 0 to 1. 0 = ridge regression
 #'   and 1 = lasso.
 #' @param nfolds Number of folds for internal cross-validation to optimize lambda.
 #' @param nlambda Number of lambda values to check, recommended to be 100 or more.
@@ -344,22 +368,20 @@ predict.SL.mxBART <- function(object, newdata,family=family, X=X, Y=Y,
 #' @param ... Any additional arguments are passed through to cv.glmnet.
 #'
 #' @examples
-#'
-#' # Load a test dataset.
-#' data(PimaIndiansDiabetes2, package = "mlbench")
-#' data = PimaIndiansDiabetes2
-#'
-#' # Omit observations with missing data.
-#' data = na.omit(data)
-#'
-#' Y = as.numeric(data$diabetes == "pos")
-#' X = subset(data, select = -diabetes)
-#'
-#' set.seed(1, "L'Ecuyer-CMRG")
-#'
-#' sl = SuperLearner(Y, X, family = binomial(),
-#'                   SL.library = c("SL.mean", "SL.glm", "SL.glmnet"))
-#' sl
+#' if (requireNamespace("mlbench", quietly = TRUE)) {
+#'   data(PimaIndiansDiabetes2, package = "mlbench")
+#'   dat <- stats::na.omit(PimaIndiansDiabetes2)
+#'   Y <- as.numeric(dat$diabetes == "pos")
+#'   X <- subset(dat, select = -diabetes)
+#' }
+#' \dontrun{
+#'   sl <- SuperLearner::SuperLearner(
+#'     Y, X,
+#'     family = stats::binomial(),
+#'     SL.library = c("SL.mean", "SL.glm", "SL.glmnet")
+#'   )
+#' }
+#' 
 #'
 #' @references
 #'
@@ -377,7 +399,7 @@ predict.SL.mxBART <- function(object, newdata,family=family, X=X, Y=Y,
 #' elastic net. Journal of the Royal Statistical Society: Series B (Statistical
 #' Methodology), 67(2), 301-320.
 #'
-#' @seealso \code{\link{predict.SL.glmnet}} \code{\link[glmnet]{cv.glmnet}}
+#' @seealso \code{predict.SL.glmnet} \code{\link[glmnet]{cv.glmnet}}
 #'   \code{\link[glmnet]{glmnet}}
 #'
 #' @export
@@ -390,8 +412,8 @@ SL.glmnet2 <- function(Y, X, newX, family, obsWeights, id,
   # X must be a matrix, should we use model.matrix or as.matrix
   # TODO: support sparse matrices.
   if (!is.matrix(X)) {
-    X <- model.matrix(~ -1 + ., X)
-    newX <- model.matrix(~ -1 + ., newX)
+    X <- stats::model.matrix(~ -1 + ., X)
+    newX <- stats::model.matrix(~ -1 + ., newX)
   }
   
   # Use CV to find optimal lambda.
@@ -407,7 +429,7 @@ SL.glmnet2 <- function(Y, X, newX, family, obsWeights, id,
   
   # If we predict with the cv.glmnet object we can specify lambda using a
   # string.
-  pred <- predict(fitCV, newx = newX, type = "response",
+  pred <- stats::predict(fitCV, newx = newX, type = "response",
                   s = ifelse(useMin, "lambda.min", "lambda.1se"))
   
   fit <- list(object = fitCV, useMin = useMin)
@@ -440,7 +462,7 @@ SL.glmnet2 <- function(Y, X, newX, family, obsWeights, id,
 #'   classification. Untested options: "multinomial" for multiple classification
 #'   or "mgaussian" for multiple response, "poisson" for non-negative outcome
 #'   with proportional mean and variance, "cox".
-#' @param alpha Elastic net mixing parameter, range [0, 1]. 0 = ridge regression
+#' @param alpha Elastic net mixing parameter, range 0 to 1. 0 = ridge regression
 #'   and 1 = lasso.
 #' @param nfolds Number of folds for internal cross-validation to optimize lambda.
 #' @param nlambda Number of lambda values to check, recommended to be 100 or more.
@@ -453,22 +475,19 @@ SL.glmnet2 <- function(Y, X, newX, family, obsWeights, id,
 #' @param ... Any additional arguments are passed through to cv.glmnet.
 #'
 #' @examples
-#'
-#' # Load a test dataset.
-#' data(PimaIndiansDiabetes2, package = "mlbench")
-#' data = PimaIndiansDiabetes2
-#'
-#' # Omit observations with missing data.
-#' data = na.omit(data)
-#'
-#' Y = as.numeric(data$diabetes == "pos")
-#' X = subset(data, select = -diabetes)
-#'
-#' set.seed(1, "L'Ecuyer-CMRG")
-#'
-#' sl = SuperLearner(Y, X, family = binomial(),
-#'                   SL.library = c("SL.mean", "SL.glm", "SL.glmnet"))
-#' sl
+#' if (requireNamespace("mlbench", quietly = TRUE)) {
+#'   data(PimaIndiansDiabetes2, package = "mlbench")
+#'   dat <- stats::na.omit(PimaIndiansDiabetes2)
+#'   Y <- as.numeric(dat$diabetes == "pos")
+#'   X <- subset(dat, select = -diabetes)
+#' }
+#' \dontrun{
+#'   sl <- SuperLearner::SuperLearner(
+#'     Y, X,
+#'     family = stats::binomial(),
+#'     SL.library = c("SL.mean", "SL.glm", "SL.glmnet")
+#'   )
+#' }
 #'
 #' @references
 #'
@@ -486,7 +505,7 @@ SL.glmnet2 <- function(Y, X, newX, family, obsWeights, id,
 #' elastic net. Journal of the Royal Statistical Society: Series B (Statistical
 #' Methodology), 67(2), 301-320.
 #'
-#' @seealso \code{\link{predict.SL.glmnet}} \code{\link[glmnet]{cv.glmnet}}
+#' @seealso \code{predict.SL.glmnet} \code{\link[glmnet]{cv.glmnet}}
 #'   \code{\link[glmnet]{glmnet}}
 #'
 #' @export
@@ -499,8 +518,8 @@ SL.LASSO <- function(Y, X, newX, family, obsWeights, id,
   # X must be a matrix, should we use model.matrix or as.matrix
   # TODO: support sparse matrices.
   if (!is.matrix(X)) {
-    X <- model.matrix(~ -1 + ., X)
-    newX <- model.matrix(~ -1 + ., newX)
+    X <- stats::model.matrix(~ -1 + ., X)
+    newX <- stats::model.matrix(~ -1 + ., newX)
   }
   
   # Use CV to find optimal lambda.
@@ -516,7 +535,7 @@ SL.LASSO <- function(Y, X, newX, family, obsWeights, id,
   
   # If we predict with the cv.glmnet object we can specify lambda using a
   # string.
-  pred <- predict(fitCV, newx = newX, type = "response",
+  pred <- stats::predict(fitCV, newx = newX, type = "response",
                   s = ifelse(useMin, "lambda.min", "lambda.1se"))
   
   fit <- list(object = fitCV, useMin = useMin)
@@ -552,7 +571,7 @@ SL.LASSO <- function(Y, X, newX, family, obsWeights, id,
 #'   classification. Untested options: "multinomial" for multiple classification
 #'   or "mgaussian" for multiple response, "poisson" for non-negative outcome
 #'   with proportional mean and variance, "cox".
-#' @param alpha Elastic net mixing parameter, range [0, 1]. 0 = ridge regression
+#' @param alpha Elastic net mixing parameter, range 0 to 1. 0 = ridge regression
 #'   and 1 = lasso.
 #' @param nfolds Number of folds for internal cross-validation to optimize lambda.
 #' @param nlambda Number of lambda values to check, recommended to be 100 or more.
@@ -565,22 +584,19 @@ SL.LASSO <- function(Y, X, newX, family, obsWeights, id,
 #' @param ... Any additional arguments are passed through to cv.glmnet.
 #'
 #' @examples
-#'
-#' # Load a test dataset.
-#' data(PimaIndiansDiabetes2, package = "mlbench")
-#' data = PimaIndiansDiabetes2
-#'
-#' # Omit observations with missing data.
-#' data = na.omit(data)
-#'
-#' Y = as.numeric(data$diabetes == "pos")
-#' X = subset(data, select = -diabetes)
-#'
-#' set.seed(1, "L'Ecuyer-CMRG")
-#'
-#' sl = SuperLearner(Y, X, family = binomial(),
-#'                   SL.library = c("SL.mean", "SL.glm", "SL.glmnet"))
-#' sl
+#' if (requireNamespace("mlbench", quietly = TRUE)) {
+#'   data(PimaIndiansDiabetes2, package = "mlbench")
+#'   dat <- stats::na.omit(PimaIndiansDiabetes2)
+#'   Y <- as.numeric(dat$diabetes == "pos")
+#'   X <- subset(dat, select = -diabetes)
+#' }
+#' \dontrun{
+#'   sl <- SuperLearner::SuperLearner(
+#'     Y, X,
+#'     family = stats::binomial(),
+#'     SL.library = c("SL.mean", "SL.glm", "SL.glmnet")
+#'   )
+#' }
 #'
 #' @references
 #'
@@ -598,7 +614,7 @@ SL.LASSO <- function(Y, X, newX, family, obsWeights, id,
 #' elastic net. Journal of the Royal Statistical Society: Series B (Statistical
 #' Methodology), 67(2), 301-320.
 #'
-#' @seealso \code{\link{predict.SL.glmnet}} \code{\link[glmnet]{cv.glmnet}}
+#' @seealso \code{predict.SL.glmnet} \code{\link[glmnet]{cv.glmnet}}
 #'   \code{\link[glmnet]{glmnet}}
 #'
 #' @export
@@ -611,8 +627,8 @@ SL.enet <- function(Y, X, newX, family, obsWeights, id,
   # X must be a matrix, should we use model.matrix or as.matrix
   # TODO: support sparse matrices.
   if (!is.matrix(X)) {
-    X <- model.matrix(~ -1 + ., X)
-    newX <- model.matrix(~ -1 + ., newX)
+    X <- stats::model.matrix(~ -1 + ., X)
+    newX <- stats::model.matrix(~ -1 + ., newX)
   }
   
   # Use CV to find optimal alpha.
@@ -648,7 +664,7 @@ SL.enet <- function(Y, X, newX, family, obsWeights, id,
   fitCV$alpha <- best_alpha
   # If we predict with the cv.glmnet object we can specify lambda using a
   # string.
-  pred <- predict(fitCV, newx = newX, type = "response",
+  pred <- stats::predict(fitCV, newx = newX, type = "response",
                   s = ifelse(useMin, "lambda.min", "lambda.1se"))
   
   fit <- list(object = fitCV, useMin = useMin)
@@ -684,8 +700,12 @@ get_cvm <- function(model) {
 #'
 #' @return SL object
 #' @export
+#' @export
 SL.horseshoe <- function(Y, X, newX, family, prior = "horseshoe", N = 20000L, burnin = 1000L,
                          thinning = 1L, ...){
+  if (!requireNamespace("bayesreg", quietly = TRUE)) {
+    stop("Package 'bayesreg' is required for SL.horseshoe.", call. = FALSE)
+  }
   if (family$family == "binomial") {
     # Need to convert Y to a factor, otherwise bartMachine does regression.
     # And importantly, bayesreg expects the second level to be the positive
@@ -695,14 +715,14 @@ SL.horseshoe <- function(Y, X, newX, family, prior = "horseshoe", N = 20000L, bu
   
   #.SL.require('bayesreg') 
   df <- data.frame(X,Y)
-  model.HS=bayesreg(Y~.,df,model = family$family,prior=prior,
+  model.HS=bayesreg::bayesreg(Y~.,df,model = family$family,prior=prior,
                     n.samples=N,burnin = burnin,thin = thinning)  
   newX <- as.matrix(newX)
   ynew.samp <- rep(1,nrow(newX)) %*% model.HS$beta0+ newX %*% model.HS$beta
   if(family$family=="binomial"){
     ynew.samp <- expit(ynew.samp)
   }
-  pred <- apply(ynew.samp, 1, median)
+  pred <- apply(ynew.samp, 1, stats::median)
   
   fit <- list(object = model.HS)
   class(fit) <- c("SL.horseshoe")
@@ -714,6 +734,7 @@ SL.horseshoe <- function(Y, X, newX, family, prior = "horseshoe", N = 20000L, bu
   
 }
 
+#' @export
 predict.SL.horseshoe <- function(object, newdata, family, X = NULL, Y = NULL,...) {
   #.SL.require("bayesreg")
   model.HS <- object$object
@@ -722,7 +743,7 @@ predict.SL.horseshoe <- function(object, newdata, family, X = NULL, Y = NULL,...
   if(family$family=="binomial"){
     ynew.samp <- expit(ynew.samp)
   }
-  pred <- apply(ynew.samp, 1, median)
+  pred <- apply(ynew.samp, 1, stats::median)
   
   return(pred)
 }
@@ -776,8 +797,13 @@ NNLS <- function(x, y, wt) {
 
 #' Combined SuperLearner function for both NNLS/AUC maximization
 #'
-#' @param Y Y
-#' @param X X
+#' @param Y Outcome matrix from metalearner
+#' @param X Layer-level predictions used to train the metalearner
+#' @param newX Layer-level predictions for validation data
+#' @param family Family object
+#' @param obsWeights Observation weights
+#' @param bounds Lower/upper bounds for weights (binomial case)
+#' @param ... Additional arguments passed through
 #'
 #' @return Estimated meta-learner coefficients and predictions
 #' @export
@@ -800,7 +826,7 @@ SL.nnls.auc <- function(Y, X, newX, family, obsWeights,bounds = c(0, Inf), ...) 
     
     
     nmethods = ncol(X)
-    coef_init <- runif(nmethods)
+    coef_init <- stats::runif(nmethods)
     coef_init <- coef_init/sum(coef_init)
     fit.rankloss <- nloptr::nloptr(x0=coef_init,
                                    eval_f = auc.obj,
@@ -834,9 +860,10 @@ SL.nnls.auc <- function(Y, X, newX, family, obsWeights,bounds = c(0, Inf), ...) 
 
 #' Predict function for SL.nnls.auc
 #'
-#' @param object object
-#' @param newdata newdata
-#'
+#' @param object Fitted SL.nnls.auc model
+#' @param newdata Validation layer-level predictions
+#' @param ... Additional arguments (unused)
+#' 
 #' @return Prediction from the meta-learner
 #' @export
 predict.SL.nnls.auc <- function(object, newdata, ...) {
@@ -1506,3 +1533,522 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
   }
   return(NULL)
 }
+
+
+########################
+# MAE Helper Utilities #
+########################
+
+.is_integer <- function(x) {
+  is.numeric(x) &&
+    all(!is.na(x)) &&
+    all(abs(x - round(x)) < .Machine$double.eps^0.5)
+}
+
+.is_a_string <- function(x) {
+  is.character(x) && length(x) == 1L && !is.na(x)
+}
+
+# If exactly one assay exists -> use it.
+# If multiple assays exist -> user MUST specify assay.type explicitly.
+.pick_default_assay <- function(se) {
+  an <- SummarizedExperiment::assayNames(se)
+  
+  if (length(an) == 1L) {
+    return(an)
+  }
+  
+  stop(
+    "Multiple assays found for an experiment (", paste(an, collapse = ", "), "). ",
+    "Please specify 'assay.type' explicitly for each experiment."
+  )
+}
+
+# Infer defaults for experiment and assay.type
+.infer_mae_defaults <- function(mae_train,
+                                mae_test   = NULL,
+                                experiment = NULL,
+                                assay.type = NULL,
+                                verbose    = FALSE) {
+  .require_package("MultiAssayExperiment")
+  .require_package("SummarizedExperiment")
+  
+  expts_train <- MultiAssayExperiment::experiments(mae_train)
+  
+  ## 1. Default experiment = all experiments in mae_train
+  if (is.null(experiment)) {
+    experiment <- names(expts_train)
+    if (verbose) {
+      message("IntegratedLearner: using all experiments in mae_train: ",
+              paste(experiment, collapse = ", "))
+    }
+  } else {
+    if (.is_integer(experiment)) {
+      if (any(experiment < 1L | experiment > length(expts_train))) {
+        stop("'experiment' indices are out of range for mae_train.", call. = FALSE)
+      }
+      experiment <- names(expts_train)[experiment]
+    } else if (is.character(experiment)) {
+      if (!all(experiment %in% names(expts_train))) {
+        stop("Some 'experiment' entries are not found in mae_train.", call. = FALSE)
+      }
+    } else {
+      stop("'experiment' must be NULL, numeric indices, or character names.",
+           call. = FALSE)
+    }
+  }
+  
+  ## 2. Default assay.type ONLY when each experiment has a single assay
+  if (is.null(assay.type)) {
+    assay.type <- vapply(
+      expts_train[experiment],
+      .pick_default_assay,
+      character(1)
+    )
+    if (verbose) {
+      msg <- paste(sprintf("%s -> %s", experiment, assay.type), collapse = ", ")
+      message("IntegratedLearner: default assay.type per experiment: ", msg)
+    }
+  } else {
+    if (!is.character(assay.type) || length(assay.type) != length(experiment)) {
+      stop("'assay.type' must be a character vector of the same length as 'experiment'.",
+           call. = FALSE)
+    }
+  }
+  
+  list(experiment = experiment, assay.type = assay.type)
+}
+
+# Extract long-form data from a MAE for the chosen experiments/assays
+.get_data_from_MAE <- function(mae, experiment, assay.type, outcome.col = "Y") {
+  .require_package("MultiAssayExperiment")
+  .require_package("SummarizedExperiment")
+  .require_package("tidyr")
+  
+  expts <- MultiAssayExperiment::experiments(mae)
+  
+  if (length(experiment) != length(assay.type)) {
+    stop("'experiment' and 'assay.type' must have the same length.")
+  }
+  
+  res_list <- vector("list", length(experiment))
+  
+  for (i in seq_along(experiment)) {
+    
+    exp_name   <- experiment[[i]]
+    assay_name <- assay.type[[i]]
+    
+    se <- expts[[exp_name]]
+    
+    # ---- assay check ----
+    if (!assay_name %in% SummarizedExperiment::assayNames(se)) {
+      stop("Assay '", assay_name, "' not found in experiment '", exp_name, "'.")
+    }
+    
+    mat <- SummarizedExperiment::assay(se, assay_name)
+    
+    # ---- NEW: Empty feature matrix check ----
+    if (nrow(mat) == 0 || ncol(mat) == 0) {
+      stop("Assay '", assay_name, "' in experiment '", exp_name,
+           "' is empty (0 rows or 0 columns). Please verify your MAE.")
+    }
+    
+    df <- as.data.frame(mat)
+    df$featureID <- rownames(df)
+    
+    df_long <- tidyr::pivot_longer(df,
+                                   cols = -featureID,
+                                   names_to = "sampleID",
+                                   values_to = "value")
+    
+    cd <- as.data.frame(SummarizedExperiment::colData(se))
+    cd$sampleID <- rownames(cd)
+    
+    if (!"subjectID" %in% colnames(cd)) {
+      stop("colData(se) must contain a 'subjectID' column.")
+    }
+    
+    if (!outcome.col %in% colnames(cd)) {
+      # Survival-friendly fallback: if time+event exist, construct Y = Surv(time, event)
+      if (all(c("time", "event") %in% colnames(cd))) {
+        cd[[outcome.col]] <- survival::Surv(as.numeric(cd$time), as.numeric(cd$event))
+      } else {
+        stop("Outcome column '", outcome.col, "' not found in colData.")
+      }
+    }
+    
+    extra_surv_cols <- intersect(c("time", "event"), colnames(cd))
+    keep_cols <- c("sampleID", "subjectID", outcome.col, extra_surv_cols)
+    
+    df_long <- merge(df_long,
+                     cd[, keep_cols, drop = FALSE],
+                     by = "sampleID",
+                     all.x = TRUE)
+    
+    df_long$experiment <- exp_name
+    res_list[[i]] <- df_long
+  }
+  
+  out <- do.call(rbind, res_list)
+  
+  # ---- NEW: final check ----
+  if (nrow(out) == 0) {
+    stop("No rows produced when merging MAE assays and colData - MAE may be empty or misaligned.")
+  }
+  
+  out
+}
+
+# Turn long-form data into:
+# - feature_table (features x samples)
+# - sample_metadata (Y in column "Y")
+# - feature_metadata (view in column "view")
+.wrangle_data <- function(long_data, outcome.col = "Y", na.rm = FALSE) {
+  .require_package("tidyr")
+  
+  if (nrow(long_data) == 0) {
+    stop(".wrangle_data(): long_data is empty - nothing to reshape.")
+  }
+  
+  # sample metadata
+  sample_metadata <- unique(long_data[, c("sampleID", "subjectID", outcome.col, intersect(c("time", "event"), colnames(long_data)))])
+  colnames(sample_metadata)[colnames(sample_metadata) == outcome.col] <- "Y"
+  rownames(sample_metadata) <- sample_metadata$sampleID
+  
+  if (inherits(sample_metadata$Y, "Surv")) {
+    surv_mat <- as.data.frame(as.matrix(sample_metadata$Y))
+    sample_metadata$time  <- as.numeric(surv_mat[[1]])
+    sample_metadata$event <- as.numeric(surv_mat[[2]])
+  } else if (is.matrix(sample_metadata$Y) && ncol(sample_metadata$Y) >= 2) {
+    sample_metadata$time  <- as.numeric(sample_metadata$Y[, 1])
+    sample_metadata$event <- as.numeric(sample_metadata$Y[, 2])
+  }
+  
+  # feature metadata
+  feature_metadata <- unique(long_data[, c("featureID", "experiment")])
+  colnames(feature_metadata)[2] <- "featureType"
+  rownames(feature_metadata) <- feature_metadata$featureID
+  
+  # pivot wider into feature_table
+  ft <- long_data[, c("featureID", "sampleID", "value")]
+  
+  ft_wide <- tidyr::pivot_wider(
+    ft,
+    names_from = "sampleID",
+    values_from = "value"
+  )
+  
+  ft_wide <- as.data.frame(ft_wide)
+  rownames(ft_wide) <- ft_wide$featureID
+  ft_wide$featureID <- NULL
+  
+  # ---- NEW: Empty matrix check ----
+  if (nrow(ft_wide) == 0 || ncol(ft_wide) == 0) {
+    stop("After wrangling, feature_table is empty (0 features or 0 samples).")
+  }
+  
+  if (na.rm) {
+    keep <- stats::complete.cases(ft_wide)
+    ft_wide <- ft_wide[keep, , drop = FALSE]
+    feature_metadata <- feature_metadata[keep, , drop = FALSE]
+    
+    if (nrow(ft_wide) == 0) {
+      stop("All features were removed due to NA filtering.")
+    }
+  }
+  
+  list(
+    feature_table    = ft_wide,
+    sample_metadata  = sample_metadata,
+    feature_metadata = feature_metadata
+  )
+}
+
+
+
+.prepare_from_MAE <- function(
+    mae_train,
+    mae_valid   = NULL,
+    experiment  = NULL,
+    assay.type  = NULL,
+    na.rm       = FALSE,
+    verbose     = FALSE
+) {
+  .require_package("MultiAssayExperiment")
+  .require_package("SummarizedExperiment")
+  .require_package("tidyr")
+  
+  defaults <- .infer_mae_defaults(
+    mae_train  = mae_train,
+    mae_test   = mae_valid,
+    experiment = experiment,
+    assay.type = assay.type,
+    verbose    = verbose
+  )
+  
+  experiment <- defaults$experiment
+  assay.type <- defaults$assay.type
+  outcome.col <- "Y"
+  
+  mae_train_sub <- mae_train[, , experiment, drop = FALSE]
+  
+  long_train <- .get_data_from_MAE(
+    mae        = mae_train_sub,
+    experiment = experiment,
+    assay.type = assay.type,
+    outcome.col = outcome.col
+  )
+  
+  wr_train <- .wrangle_data(long_data = long_train, outcome.col = outcome.col, na.rm = na.rm)
+  
+  feature_table    <- wr_train$feature_table
+  sample_metadata  <- wr_train$sample_metadata
+  feature_metadata <- wr_train$feature_metadata
+  
+  # ---- NEW: Verify non-empty structures ----
+  if (nrow(feature_table) == 0)
+    stop("prepare_from_MAE(): training feature_table is empty.")
+  
+  if (ncol(feature_table) == 0)
+    stop("prepare_from_MAE(): training feature_table has no samples.")
+  
+  if (nrow(sample_metadata) == 0)
+    stop("prepare_from_MAE(): sample_metadata is empty.")
+  
+  missing_Y <- is.na(sample_metadata$Y)
+  
+  if (any(missing_Y)) {
+    sample_metadata <- sample_metadata[!missing_Y, , drop = FALSE]
+    feature_table   <- feature_table[, rownames(sample_metadata), drop = FALSE]
+  }
+  
+  # VALIDATION --------
+  feature_table_valid   <- NULL
+  sample_metadata_valid <- NULL
+  # Need to check how mae_valid is being run, MAE_Valid should be NULL 
+  if (!is.null(mae_valid)) {
+    
+    mae_valid_sub <- mae_valid[, , experiment, drop = FALSE]
+    
+    # strict feature alignment
+    for (i in seq_along(experiment)) {
+      exp_name <- experiment[i]
+      at       <- assay.type[i]
+      
+      se_train <- MultiAssayExperiment::experiments(mae_train_sub)[[exp_name]]
+      se_valid <- MultiAssayExperiment::experiments(mae_valid_sub)[[exp_name]]
+      
+      f_train <- rownames(SummarizedExperiment::assay(se_train, at))
+      f_valid <- rownames(SummarizedExperiment::assay(se_valid, at))
+      
+      if (!identical(f_train, f_valid)) {
+        stop("Feature sets differ between mae_train and mae_valid in experiment '",
+             exp_name, "' - they must match exactly.")
+      }
+    }
+    
+    long_valid <- .get_data_from_MAE(
+      mae        = mae_valid_sub,
+      experiment = experiment,
+      assay.type = assay.type,
+      outcome.col = outcome.col
+    )
+    
+    wr_valid <- .wrangle_data(long_data = long_valid, outcome.col = outcome.col, na.rm = na.rm)
+    
+    feature_table_valid   <- wr_valid$feature_table
+    sample_metadata_valid <- wr_valid$sample_metadata
+    
+    # ---- NEW: validation emptiness check ----
+    if (nrow(feature_table_valid) == 0)
+      stop("prepare_from_MAE(): validation feature_table is empty.")
+    
+    if (ncol(feature_table_valid) == 0)
+      stop("prepare_from_MAE(): validation feature_table has no samples.")
+  }
+  
+  list(
+    feature_table         = feature_table,
+    sample_metadata       = sample_metadata,
+    feature_metadata      = feature_metadata,
+    feature_table_valid   = feature_table_valid,
+    sample_metadata_valid = sample_metadata_valid
+  )
+}
+
+
+.prepare_from_PCL <- function(
+    PCL_train,
+    PCL_valid = NULL,
+    na.rm     = FALSE
+) {
+  required <- c("feature_table", "sample_metadata", "feature_metadata")
+  
+  # ---- A: Check PCL_train structure ----
+  if (!is.list(PCL_train))
+    stop("'PCL_train' must be a list with feature_table, sample_metadata, feature_metadata.")
+  
+  missing_train <- setdiff(required, names(PCL_train))
+  if (length(missing_train) > 0)
+    stop("PCL_train is missing required components: ", paste(missing_train, collapse=", "))
+  
+  feature_table    <- PCL_train$feature_table
+  sample_metadata  <- PCL_train$sample_metadata
+  feature_metadata <- PCL_train$feature_metadata
+  
+  # ---- B: Validate row/column consistency ----
+  if (!all(rownames(feature_table) == rownames(feature_metadata))) {
+    stop("Row names of PCL_train$feature_table must equal row names of PCL_train$feature_metadata.")
+  }
+  
+  if (!all(colnames(feature_table) == rownames(sample_metadata))) {
+    stop("Column names of PCL_train$feature_table must equal row names of PCL_train$sample_metadata.")
+  }
+  
+  if (!"Y" %in% colnames(sample_metadata)) {
+    stop("PCL_train$sample_metadata must contain a column 'Y' for the outcome.")
+  }
+  
+  # ---- C: Handle missing values ----
+  if (na.rm && anyNA(feature_table)) {
+    keep <- stats::complete.cases(feature_table)
+    feature_table    <- feature_table[keep, , drop = FALSE]
+    feature_metadata <- feature_metadata[keep, , drop = FALSE]
+    
+    if (sum(keep) == 0)
+      stop("All features were removed due to missing data.")
+  }
+  
+  # ---- D: VALIDATION DATA (optional) ----
+  feature_table_valid   <- NULL
+  sample_metadata_valid <- NULL
+  
+  if (!is.null(PCL_valid)) {
+    if (!is.list(PCL_valid))
+      stop("'PCL_valid' must be a list with the same structure as PCL_train.")
+    
+    missing_valid <- setdiff(required, names(PCL_valid))
+    if (length(missing_valid) > 0)
+      stop("PCL_valid is missing required components: ", paste(missing_valid, collapse=", "))
+    
+    feature_table_valid   <- PCL_valid$feature_table
+    sample_metadata_valid <- PCL_valid$sample_metadata
+    
+    # strict feature alignment: must match exactly
+    if (!identical(rownames(feature_table), rownames(feature_table_valid))) {
+      stop("Validation feature_table must have identical rownames as training feature_table (same features, same order).")
+    }
+    
+    if (!all(colnames(feature_table_valid) == rownames(sample_metadata_valid))) {
+      stop("In PCL_valid, rownames(sample_metadata_valid) must match colnames(feature_table_valid).")
+    }
+    
+    if (!"Y" %in% colnames(sample_metadata_valid)) {
+      stop("PCL_valid$sample_metadata must contain a column 'Y'.")
+    }
+  }
+  
+  # ---- E: Return canonical format ----
+  list(
+    feature_table         = feature_table,
+    sample_metadata       = sample_metadata,
+    feature_metadata      = feature_metadata,
+    feature_table_valid   = feature_table_valid,
+    sample_metadata_valid = sample_metadata_valid
+  )
+}
+
+.safe_family_name <- function(fam) {
+  if (inherits(fam, "family")) return(tolower(fam$family))
+  if (is.character(fam) && length(fam) > 0) return(tolower(fam[1]))
+  NA_character_
+}
+
+.is_survival_outcome <- function(fam_name, sample_metadata) {
+  fam_flag <- fam_name %in% c("cox", "coxph", "survival")
+  meta_flag <- !is.null(sample_metadata) && (
+    all(c("time", "event") %in% colnames(sample_metadata)) ||
+      inherits(sample_metadata$Y, "Surv") ||
+      (is.matrix(sample_metadata$Y) && ncol(sample_metadata$Y) >= 2)
+  )
+  isTRUE(fam_flag || meta_flag)
+}
+
+.ensure_survival_metadata <- function(df, context = "training") {
+  if (is.null(df)) return(NULL)
+  
+  if (all(c("time", "event") %in% colnames(df))) {
+    df$time  <- as.numeric(df$time)
+    df$event <- as.numeric(df$event)
+    return(df)
+  }
+  
+  if ("Y" %in% colnames(df)) {
+    if (inherits(df$Y, "Surv")) {
+      surv_mat <- as.data.frame(as.matrix(df$Y))
+      df$time  <- as.numeric(surv_mat[[1]])
+      df$event <- as.numeric(surv_mat[[2]])
+      return(df)
+    }
+    
+    if (is.matrix(df$Y) && ncol(df$Y) >= 2) {
+      df$time  <- as.numeric(df$Y[, 1])
+      df$event <- as.numeric(df$Y[, 2])
+      return(df)
+    }
+  }
+  
+  stop("Survival mode requires 'time' and 'event' columns in sample_metadata (", context, ").")
+}
+
+compute_signed_univariate_importance <- function(feature_table, sample_metadata, feature_metadata, family) {
+  
+  Y <- sample_metadata$Y
+  fam <- family$family %||% NA_character_
+  
+  beta_vec <- apply(feature_table, 1, function(x) {
+    ok <- is.finite(x) & is.finite(Y)
+    x_use <- as.numeric(x[ok])
+    y_use <- as.numeric(Y[ok])
+    if (length(unique(x_use)) < 2 || length(y_use) < 3) return(NA_real_)
+    
+    fit <- tryCatch(
+      if (identical(fam, "binomial")) stats::glm(y_use ~ x_use, family = stats::binomial())
+      else stats::lm(y_use ~ x_use),
+      error = function(e) NULL
+    )
+    if (is.null(fit)) return(NA_real_)
+    
+    co <- stats::coef(fit)
+    if (length(co) < 2 || !is.finite(co[2])) return(NA_real_)
+    co[2]
+  })
+  
+  names(beta_vec) <- rownames(feature_table)
+  
+  layer_list <- split(beta_vec, feature_metadata$featureType)
+  layer_list <- lapply(layer_list, function(v) v[order(-abs(v))])
+  
+  list(
+    all = beta_vec[order(-abs(beta_vec))],
+    by_layer = layer_list
+  )
+}
+
+.infer_input_mode <- function(MAE_train, PCL_train) {
+  
+  has_MAE <- !is.null(MAE_train)
+  has_PCL <- !is.null(PCL_train)
+  
+  if (has_MAE && has_PCL) {
+    stop("Provide either MAE_* inputs or PCL_* inputs, not both.")
+  }
+  
+  if (has_MAE) return("MAE")
+  if (has_PCL) return("PCL")
+  
+  stop("You must supply either MAE_train or PCL_train.")
+}
+
+
+`%||%` <- function(a, b) if (!is.null(a)) a else b

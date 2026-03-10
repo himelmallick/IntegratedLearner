@@ -4,10 +4,20 @@
 \alias{plot.learner}
 \title{Plot the summary curves produced by IntegratedLearner object}
 \usage{
-\method{plot}{learner}(fit, label_size = 8, label_x = 0.3, vjust = 0.1, rowwise_plot = TRUE)
+\method{plot}{learner}(
+  x,
+  y = NULL,
+  label_size = 8,
+  label_x = 0.3,
+  vjust = 0.1,
+  rowwise_plot = TRUE,
+  ...
+)
 }
 \arguments{
-\item{fit}{fitted "IntegratedLearner" object}
+\item{x}{Fitted "IntegratedLearner" object}
+
+\item{y}{Unused (required for S3 signature)}
 
 \item{label_size}{(optional) Numerical value indicating the label size. Default is 8.}
 
@@ -16,6 +26,8 @@
 \item{vjust}{Adjusts the vertical position of each label. More positive values move the label further down on the plot canvas. Can be a single value (applied to all labels) or a vector of values (one for each label). Default is 0.1.}
 
 \item{rowwise_plot}{If both train and test data is available, should the train and test plots be rowwise_plot. Default is TRUE. If FALSE, plots are aligned column-wise.}
+
+\item{...}{Additional arguments (currently unused)}
 }
 \value{
 ggplot2 object

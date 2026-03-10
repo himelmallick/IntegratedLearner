@@ -7,9 +7,17 @@
 \method{predict}{SL.BART}(object, newdata, family, X = NULL, Y = NULL, ...)
 }
 \arguments{
-\item{object}{object}
+\item{object}{Fitted SL.BART model object}
 
-\item{newdata}{newdata}
+\item{newdata}{Data frame for prediction}
+
+\item{family}{Family object passed through (unused)}
+
+\item{X}{Training design matrix (unused)}
+
+\item{Y}{Training outcome (unused)}
+
+\item{...}{Additional arguments (unused)}
 }
 \value{
 Prediction from the SL.BART

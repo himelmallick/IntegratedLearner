@@ -5,16 +5,17 @@
 \title{Update IntegratedLearner fit object based on layers available in the test set}
 \usage{
 \method{update}{learner}(
-  fit,
+  object,
   feature_table_valid,
   sample_metadata_valid = NULL,
   feature_metadata_valid,
   seed = 1234,
-  verbose = FALSE
+  verbose = FALSE,
+  ...
 )
 }
 \arguments{
-\item{fit}{fitted "IntegratedLearner" object}
+\item{object}{fitted "IntegratedLearner" object}
 
 \item{feature_table_valid}{Feature table from validation set. It should be a data frame with features in rows and samples in columns. Feature names should be a subset of training data feature names.}
 
@@ -25,6 +26,8 @@
 \item{seed}{Seed for reproducibility. Default is 1234.}
 
 \item{verbose}{Should a summary of fits/ results be printed. Default is FALSE}
+
+\item{...}{Additional arguments (unused)}
 }
 \value{
 SL object

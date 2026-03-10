@@ -7,9 +7,11 @@
 \method{predict}{SL.nnls.auc}(object, newdata, ...)
 }
 \arguments{
-\item{object}{object}
+\item{object}{Fitted SL.nnls.auc model}
 
-\item{newdata}{newdata}
+\item{newdata}{Validation layer-level predictions}
+
+\item{...}{Additional arguments (unused)}
 }
 \value{
 Prediction from the meta-learner

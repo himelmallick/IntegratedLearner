@@ -55,7 +55,7 @@ nonterminal or not.}
 nonterminal or not.}
 
 \item{k}{For regression, k determines the prior probability that E(Y|X) is
-contained in the interval (y_{min}, y_{max}), based on a normal
+contained in the interval \eqn{(y_{min}, y_{max})}, based on a normal
 distribution. For example, when k=2, the prior probability is 95\\%. For
 classification, k determines the prior probability that E(Y|X) is between
 (-3,3). Note that a larger value of k results in more shrinkage and a more
@@ -74,6 +74,8 @@ posterior distribution of f(x).}
 
 \item{serialize}{If TRUE, bartMachine results can be saved to a file, but
 will require additional RAM.}
+
+\item{seed}{Seed for reproducibility passed to bartMachine.}
 
 \item{...}{Additional arguments (not used)}
 }

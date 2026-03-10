@@ -5,11 +5,13 @@
 \title{Integrated machine learning for multi-omics prediction and classification}
 \usage{
 IntegratedLearner(
-  feature_table,
-  sample_metadata,
-  feature_metadata,
-  feature_table_valid = NULL,
-  sample_metadata_valid = NULL,
+  MAE_train = NULL,
+  MAE_valid = NULL,
+  PCL_train = NULL,
+  PCL_valid = NULL,
+  experiment = NULL,
+  assay.type = NULL,
+  na.rm = FALSE,
   folds = 5,
   seed = 1234,
   base_learner = "SL.BART",
@@ -20,67 +22,111 @@ IntegratedLearner(
   verbose = FALSE,
   print_learner = TRUE,
   refit.stack = FALSE,
-  family = gaussian(),
+  family = stats::gaussian(),
   ...
 )
 }
 \arguments{
-\item{feature_table}{An R data frame containing multiview features (in rows) and samples (in columns).
-Column names of \code{feature_metadata} must match the row names of \code{sample_metadata}.}
+\item{MAE_train}{A \code{MultiAssayExperiment} containing the training data.
+Each experiment corresponds to one view (omics layer), usually stored as a
+\code{SummarizedExperiment} or \code{TreeSummarizedExperiment}.
+The \code{colData} of every selected experiment must contain a column
+named \code{"Y"} describing the outcome of interest (binary, continuous,
+or survival-encoded).}
 
-\item{sample_metadata}{An R data frame of metadata variables (in columns).
-Must have a column named \code{subjectID} describing per-subject unique identifiers.
-For longitudinal designs, this variable is expected to have non-unique values.
-Additionally, a column named \code{Y} must be present which is the outcome of interest (can be binary or continuous).
-Row names of \code{sample_metadata} must match the column names of \code{feature_table}.}
+\item{MAE_valid}{Optional \code{MultiAssayExperiment} containing an
+independent validation/test set for which prediction is desired.
+It must contain the same set of experiments used for training, with
+identical assay names and identical feature (row) names for each
+experiment. Additional experiments in \code{mae_test} are ignored.}
 
-\item{feature_metadata}{An R data frame of feature-specific metadata across views (in columns) and features (in rows).
-Must have a column named \code{featureID} describing per-feature unique identifiers.
-Additionally, a column named \code{featureType} should describe the corresponding source layers.
-Row names of \code{feature_metadata} must match the row names of \code{feature_table}.}
+\item{PCL_train}{Optional list of per-layer feature matrices (legacy PCL mode
+for backward compatibility).}
 
-\item{feature_table_valid}{Feature table from validation set for which prediction is desired.
-Must have the exact same structure as \code{feature_table}. If missing, uses \code{feature_table} for \code{feature_table_valid}.}
+\item{PCL_valid}{Optional validation list of per-layer feature matrices.}
 
-\item{sample_metadata_valid}{Sample-specific metadata table from independent validation set when available.
-Must have the exact same structure as \code{sample_metadata}.}
+\item{experiment}{Optional character or integer vector specifying which
+experiments (layers) to extract from \code{MAE_train} (and \code{MAE_valid},
+if supplied). If \code{NULL}, all experiments in \code{MAE_train} are used.}
 
-\item{folds}{How many folds in the V-fold nested cross-validation? Default is 10.}
+\item{assay.type}{Optional character vector of assay names, one per
+experiment. If \code{NULL}, each selected experiment must contain exactly
+one assay; otherwise, the user must supply \code{assay.type}.}
 
-\item{seed}{Specify the arbitrary seed value for reproducibility. Default is 1234.}
+\item{na.rm}{Logical; if \code{TRUE}, features with missing values are
+dropped after extraction.}
+
+\item{folds}{How many folds in the V-fold nested cross-validation?
+Default is 10.}
+
+\item{seed}{Specify the arbitrary seed value for reproducibility.
+Default is 1234.}
 
 \item{base_learner}{Base learner for late fusion and early fusion.
-Check out the \href{https://cran.r-project.org/web/packages/SuperLearner/vignettes/Guide-to-SuperLearner.html}{SuperLearner user manual} for all available options. Default is \code{`SL.BART`}.}
+Check out the
+\href{https://cran.r-project.org/web/packages/SuperLearner/vignettes/Guide-to-SuperLearner.html}{SuperLearner user manual}
+for all available options. Default is \code{`SL.BART`}.}
 
-\item{base_screener}{Whether to screen variables before fitting base models? \code{All} means no screening which is the default.
-Check out the \href{https://cran.r-project.org/web/packages/SuperLearner/vignettes/Guide-to-SuperLearner.html}{SuperLearner user manual} for all available options.}
+\item{base_screener}{Whether to screen variables before fitting base models?
+\code{All} means no screening which is the default.
+Check out the
+\href{https://cran.r-project.org/web/packages/SuperLearner/vignettes/Guide-to-SuperLearner.html}{SuperLearner user manual}
+for all available options.}
 
-\item{meta_learner}{Meta-learner for late fusion (stacked generalization). Defaults to \code{`SL.nnls.auc`}.
-Check out the \href{https://cran.r-project.org/web/packages/SuperLearner/vignettes/Guide-to-SuperLearner.html}{SuperLearner user manual} for all available options.}
+\item{meta_learner}{Meta-learner for late fusion (stacked generalization).
+Defaults to \code{`SL.nnls.auc`}.
+Check out the
+\href{https://cran.r-project.org/web/packages/SuperLearner/vignettes/Guide-to-SuperLearner.html}{SuperLearner user manual}
+for all available options.}
 
-\item{run_concat}{Should early fusion be run? Default is TRUE. Uses the specified \code{base_learner} as the learning algorithm.}
+\item{run_concat}{Should early fusion be run? Default is TRUE.
+Uses the specified \code{base_learner} as the learning algorithm.}
 
 \item{run_stacked}{Should stacked model (late fusion) be run? Default is TRUE.}
 
-\item{verbose}{logical; TRUE for \code{SuperLearner} printing progress (helpful for debugging). Default is FALSE.}
+\item{verbose}{logical; TRUE for \code{SuperLearner} printing progress
+(helpful for debugging). Default is FALSE.}
 
-\item{print_learner}{logical; Should a detailed summary be printed? Default is TRUE.}
+\item{print_learner}{logical; Should a detailed summary be printed?
+Default is TRUE.}
 
-\item{refit.stack}{logical; For late fusion, post-refit predictions on the entire data is returned if specified. Default is FALSE.}
+\item{refit.stack}{logical; For late fusion, post-refit predictions on the
+entire data are returned if specified. Default is FALSE.}
 
-\item{family}{Currently allows \code{`gaussian()`} for continuous or \code{`binomial()`} for binary outcomes.}
+\item{family}{Currently allows \code{`gaussian()`} for continuous,
+\code{`binomial()`} for binary, or an appropriate Cox/survival family
+for time-to-event outcomes. Determines whether \code{IL_conbin} or
+\code{IL_survival} is used internally.}
 
-\item{...}{Additional arguments. Not used currently.}
+\item{...}{Additional arguments passed to the underlying engines.}
 }
 \value{
-A \code{SuperLearner} object containing the trained model fits.
+A list-like IntegratedLearner object containing the trained model fits
+(layer-specific, stacked, and/or concatenated models), cross-validated
+performance estimates, and predicted values for training and, if supplied,
+validation data.
 }
 \description{
-Performs integrated machine learning to predict a binary or continuous outcome based on two or more omics layers (views).
-The \code{IntegratedLearner} function takes a training set (Y, X1, X2,...,Xn) and returns the predicted values based on a validation set.
-It also performs V-fold nested cross-validation to estimate the prediction accuracy of various fusion algorithms.
-Three types of integration paradigms are supported: early, late, and intermediate.
-The software includes multiple ML models based on the \code{\link[SuperLearner]{SuperLearner}} R package as well as several data exploration capabilities and visualization modules in a unified estimation framework.
+Performs integrated machine learning to predict a binary, continuous, or
+time-to-event outcome based on two or more omics layers (views).
+The \code{IntegratedLearner} function takes a training
+\code{MultiAssayExperiment} and, optionally, a validation
+\code{MultiAssayExperiment}, extracts multiview feature tables, and returns
+predicted values based on the validation set.
+It also performs V-fold nested cross-validation to estimate the prediction
+accuracy of various fusion algorithms.
+Three types of integration paradigms are supported: early, late, and
+intermediate.
+The software includes multiple ML models based on the
+\code{\link[SuperLearner]{SuperLearner}} R package as well as several data
+exploration capabilities and visualization modules in a unified estimation
+framework.
+}
+\details{
+Internally, \code{IntegratedLearner()} converts the MultiAssayExperiment
+into tabular multi-view matrices and then calls \code{IL_conbin} for
+continuous/binary outcomes or \code{IL_survival} for time-to-event outcomes,
+depending on the specified \code{family}.
 }
 \author{
 Himel Mallick, \email{him4004@med.cornell.edu}
