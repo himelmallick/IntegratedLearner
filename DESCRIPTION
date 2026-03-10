@@ -1,19 +1,29 @@
 Package: IntegratedLearner
 Type: Package
 Title: Integrated Multi-Omics Learner for Survival and Non-Survival Outcomes
-Version: 0.1.0
-Authors@R: person("Himel", "Mallick", email = "nalina@example.com", role = c("aut", "cre"))
-Description: IntegratedLearner provides a unified interface for multi-omics prediction
-    using late/early fusion for continuous, binary, and survival outcomes.
+Version: 0.1.1
+Authors@R: person("Himel", "Mallick", email = "nalina@example.com",
+    role = c("aut", "cre"))
+Description: IntegratedLearner provides a unified interface for multi-omics
+    prediction using early, late, and intermediate fusion for continuous,
+    binary, and survival outcomes. It wraps SuperLearner for non-survival
+    tasks and mlr3/mlr3proba for survival tasks, handling both
+    MultiAssayExperiment and PCL inputs with automated validation and
+    feature alignment across layers.
 License: MIT + file LICENSE
+URL: https://github.com/himelmallick/IntegratedLearner
+BugReports: https://github.com/himelmallick/IntegratedLearner/issues
 Encoding: UTF-8
 LazyData: true
-Depends: R (>= 4.2.0)
+Depends:
+    R (>= 4.2.0)
 Imports:
     SuperLearner,
     data.table,
     mlr3,
     mlr3proba,
+    mlr3pipelines,
+    mlr3extralearners,
     survival,
     glmnet,
     ranger,
