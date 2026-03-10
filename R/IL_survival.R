@@ -329,29 +329,36 @@ summarize_increments <- function(dH_mat, how = c("sum", "mean", "l2")) {
 
 cox_loglik_breslow <- function(times, events, eta) {
   ok <- is.finite(times) & is.finite(events) & is.finite(eta)
-  times <- times[ok]; events <- events[ok]; eta <- eta[ok]
+  times  <- times[ok]; events <- events[ok]; eta <- eta[ok]
   if (sum(events == 1) < 2) return(NA_real_)
-  
+
+  # order by time
   o <- order(times)
-  times <- times[o]; events <- events[o]; eta <- eta[o]
-  
+  times  <- times[o]; events <- events[o]; eta <- eta[o]
+
+  # stabilize
   eta <- eta - max(eta)
   exp_eta <- exp(eta)
+
+  # cumulative risk (reverse cumsum = Breslow risk set)
   risk_cum <- rev(cumsum(rev(exp_eta)))
-  
-  dt <- data.table::data.table(t = times, e = events, eta = eta, risk = risk_cum)
-  dt_e <- dt[e == 1]
-  if (nrow(dt_e) < 2) return(NA_real_)
-  
-  ll_dt <- dt_e[, .(
-    d = .N,
-    sum_eta = sum(eta),
-    risk_at_t = dt$risk[min(which(dt$t == .BY$t))]
-  ), by = .(t)]
-  
-  ll <- sum(ll_dt$sum_eta - ll_dt$d * log(ll_dt$risk_at_t))
+
+  event_times <- unique(times[events == 1])
+  if (length(event_times) < 2) return(NA_real_)
+
+  ll <- 0
+  for (t in event_times) {
+    idx_time  <- times == t
+    d         <- sum(events[idx_time])
+    first_idx <- which(idx_time)[1]           # start of risk set for this time
+    risk_at_t <- risk_cum[first_idx]
+    sum_eta   <- sum(eta[idx_time & events == 1])
+    ll <- ll + sum_eta - d * log(risk_at_t)
+  }
+
   if (!is.finite(ll)) NA_real_ else ll
 }
+
 
 cox_simplex_optim_reg <- function(R, times, events,
                                   maxit = 4000,
