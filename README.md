@@ -1,8 +1,4 @@
----
-output:
-  pdf_document: default
-  html_document: default
----
+
 # IntegratedLearner - Integrated machine learning for multi-omics prediction and classification
 
 The repository houses the **`IntegratedLearner`** R package for multi-omics prediction and classification. Binary, continuous, and survival outcomes are supported through a single high-level interface.
