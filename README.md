@@ -1,3 +1,8 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
 
 # IntegratedLearner - Integrated machine learning for multi-omics prediction and classification
 
@@ -26,7 +31,7 @@ library(IntegratedLearner)
 * Supports binary, continuous, and survival outcomes
 * Supports early, late, and intermediate fusion in one interface
 * Integrates with [SuperLearner](https://cran.r-project.org/web/packages/SuperLearner/index.html) for non-survival models (`SL.*`)
-* Uses `mlr3`/`mlr3proba` ecosystem for survival models (`surv.*`)
+* Uses a native BioC-friendly survival backend (`ILsurv`) for `surv.*` models
 * Visualization using built-in plotting
 * Built-in layer weights and feature-importance outputs for interpretability
 * Nested cross-validation to estimate prediction performance
@@ -42,7 +47,7 @@ The package vignette demonstrates binary, continuous, survival, `PCL`, and `MAE`
 
 For non-survival outcomes, late fusion proceeds by 1) fitting a machine learning algorithm (`base_learner`) per layer and 2) combining layer-wise cross-validated predictions using a meta model (`meta_learner`). A common default is [BART](https://arxiv.org/abs/0806.3286) as base learner (`base_learner = "SL.BART"`) with `SL.nnls.auc` as the meta-learner.
 
-For survival outcomes, `IntegratedLearner` dispatches to the survival engine (`ILsurv`) and supports `mlr3` survival learners (for example, `surv.coxph`, `surv.coxboost`, `surv.ranger`) with configurable late-fusion weighting (`COX`/`IBS`) and optional intermediate fusion.
+For survival outcomes, `IntegratedLearner` dispatches to the native survival engine (`ILsurv`) with configurable late-fusion weighting (`COX`/`IBS`) and optional intermediate fusion. Supported survival learners include Cox, penalized Cox, tree ensembles, boosting, and XGBoost-based survival variants (see full list below).
 
 For non-survival tasks, learners should use the `SL.` prefix (for example, `SL.randomForest`, `SL.BART`, `SL.glmnet`). See the [SuperLearner user manual](https://cran.r-project.org/web/packages/SuperLearner/vignettes/Guide-to-SuperLearner.html) for additional options.
 
@@ -85,12 +90,12 @@ IntegratedLearner(
 * `run_stacked`: Logical; include late-fusion stacked model for non-survival.
 * `family`: Typically `gaussian()` or `binomial()` for non-survival. Survival is auto-detected from metadata or family.
 * `verbose`: Logical progress flag.
-* `...`: Additional backend parameters. For survival, this includes options such as `weight_method`, `do_early_fusion`, and `intermediate_learners`.
+* `...`: Additional backend parameters. For survival, this includes options such as `weight_method`, `do_early_fusion`, `intermediate_learners`, and learner-specific hyperparameters (or `model_args`).
 
 Supported model families:
 
 * Non-survival: any available `SuperLearner` `SL.*` model.
-* Survival: `surv.rfsrc`, `surv.ranger`, `surv.coxboost`, `surv.bart`, `surv.coxph`, `surv.glmnet`.
+* Survival: `surv.coxph`, `surv.glmnet`, `surv.ranger`, `surv.ranger.extratrees`, `surv.ranger.maxstat`, `surv.ranger.C`, `surv.rfsrc`, `surv.coxboost`, `surv.gbm`, `surv.xgboost.cox`, `surv.xgboost.aft`, `surv.mboost`, `surv.bart`.
 
 Supported fusion modules:
 
