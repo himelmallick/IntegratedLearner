@@ -19,3 +19,9 @@ Solution of the quadratic programming problem
 \description{
 NNLS function to optimize weights of several base learners
 }
+\examples{
+x <- cbind(m1 = c(0.1, 0.2, 0.5), m2 = c(0.3, 0.1, 0.4))
+y <- c(0.2, 0.0, 1.0)
+wt <- rep(1, nrow(x))
+NNLS(x, y, wt)$solution
+}

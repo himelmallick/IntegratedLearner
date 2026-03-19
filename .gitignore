@@ -1,5 +1,9 @@
 # Add any directories, files, or patterns you don't want to be tracked by version control
 
+# OS / editor artifacts
+.DS_Store
+**/.DS_Store
+
 # History files
 .Rhistory
 .Rapp.history
@@ -13,6 +17,11 @@
 
 # Output files from R CMD build
 /*.tar.gz
+/IntegratedLearner.BiocCheck/
+
+# Generated docs
+/README.html
+/README.pdf
 
 # Output files from R CMD check
 /*.Rcheck/

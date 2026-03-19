@@ -14,7 +14,7 @@ SL.BART(
   id,
   num_trees = 50,
   num_burn_in = 250,
-  verbose = F,
+  verbose = FALSE,
   alpha = 0.95,
   beta = 2,
   k = 2,
@@ -79,6 +79,29 @@ will require additional RAM.}
 
 \item{...}{Additional arguments (not used)}
 }
+\value{
+A list with elements \code{pred} and \code{fit} following
+SuperLearner conventions.
+}
 \description{
 Support bayesian additive regression trees via the bartMachine package.
+}
+\examples{
+\dontshow{if (requireNamespace("bartMachine", quietly = TRUE)) withAutoprint(\{ # examplesIf}
+set.seed(1)
+X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
+Y <- rbinom(20, 1, plogis(X$x1 - X$x2))
+fit <- SL.BART(
+  Y = Y,
+  X = X,
+  newX = X[1:5, , drop = FALSE],
+  family = stats::binomial(),
+  obsWeights = rep(1, nrow(X)),
+  id = seq_len(nrow(X)),
+  num_trees = 5,
+  num_burn_in = 10,
+  num_iterations_after_burn_in = 20
+)
+head(fit$pred)
+\dontshow{\}) # examplesIf}
 }

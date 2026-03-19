@@ -138,3 +138,37 @@ time-to-event outcomes. This preserves the historical \code{ILsurv()}
 interface while using model fitting and fusion routines that do not depend on
 \pkg{mlr3proba}/\pkg{mlr3extralearners}.
 }
+\examples{
+\dontshow{if (requireNamespace("timeROC", quietly = TRUE)) withAutoprint(\{ # examplesIf}
+set.seed(1)
+sample_ids <- paste0("S", seq_len(40))
+feature_ids <- c(paste0("g", seq_len(8)), paste0("m", seq_len(6)))
+feature_types <- c(rep("gene", 8), rep("mirna", 6))
+feature_table <- as.data.frame(
+  matrix(rnorm(length(feature_ids) * length(sample_ids)),
+         nrow = length(feature_ids),
+         dimnames = list(feature_ids, sample_ids))
+)
+sample_metadata <- data.frame(
+  time = rexp(length(sample_ids), rate = 0.2),
+  event = rbinom(length(sample_ids), 1, 0.6),
+  row.names = sample_ids
+)
+feature_metadata <- data.frame(
+  featureID = feature_ids,
+  featureType = feature_types,
+  row.names = feature_ids
+)
+fit <- ILsurv(
+  feature_table = feature_table,
+  sample_metadata = sample_metadata,
+  feature_metadata = feature_metadata,
+  base_learner = "surv.coxph",
+  folds = 2,
+  do_early_fusion = FALSE,
+  intermediate_learners = character(0),
+  verbose = FALSE
+)
+names(fit$train_out)
+\dontshow{\}) # examplesIf}
+}

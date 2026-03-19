@@ -132,7 +132,6 @@ plot.learner <- function(x, y = NULL,
       ) +
         ggplot2::theme(plot.margin = grid::unit(c(1, 1, 1, 1), "cm"))
       
-      print(p)
       return(list(plot = p, ROC_table = ROC_table, ROC_table_valid = ROC_table_valid))
     }
     
@@ -147,7 +146,6 @@ plot.learner <- function(x, y = NULL,
     ) +
       ggplot2::theme(plot.margin = grid::unit(c(1, 1, 1, 1), "cm"))
     
-    print(p)
     return(list(plot = p, ROC_table = ROC_table))
   }
   
@@ -230,7 +228,6 @@ plot.learner <- function(x, y = NULL,
       ) +
         ggplot2::theme(plot.margin = grid::unit(c(1, 1, 1, 1), "cm"))
       
-      print(p)
       return(list(plot = p, R2_table = R2_table, R2_table_valid = R2_table_valid))
     }
     
@@ -244,7 +241,6 @@ plot.learner <- function(x, y = NULL,
     ) +
       ggplot2::theme(plot.margin = grid::unit(c(1, 1, 1, 1), "cm"))
     
-    print(p)
     return(list(plot = p, R2_table = R2_table))
   }
   

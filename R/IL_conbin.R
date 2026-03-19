@@ -73,6 +73,35 @@
 #'
 #' @keywords microbiome, metagenomics, multiomics, scRNASeq, tweedie, singlecell
 #' @seealso \code{\link{IntegratedLearner}}, IL_survival()
+#' @examples
+#' set.seed(1)
+#' sample_ids <- paste0("S", seq_len(24))
+#' feature_ids <- paste0("F", seq_len(12))
+#' feature_table <- as.data.frame(
+#'   matrix(rnorm(12 * 24), nrow = 12, ncol = 24,
+#'          dimnames = list(feature_ids, sample_ids))
+#' )
+#' sample_metadata <- data.frame(
+#'   Y = rbinom(24, 1, 0.5),
+#'   subjectID = sample_ids,
+#'   row.names = sample_ids
+#' )
+#' feature_metadata <- data.frame(
+#'   featureID = feature_ids,
+#'   featureType = rep(c("gene", "mirna"), each = 6),
+#'   row.names = feature_ids
+#' )
+#' fit <- IL_conbin(
+#'   feature_table = feature_table,
+#'   sample_metadata = sample_metadata,
+#'   feature_metadata = feature_metadata,
+#'   folds = 2,
+#'   base_learner = "SL.glm",
+#'   run_concat = FALSE,
+#'   print_learner = FALSE,
+#'   family = stats::binomial()
+#' )
+#' names(fit)
 #' @export
 #' 
 
@@ -113,31 +142,33 @@ IL_conbin<-function(feature_table,
   # Set parameters and extract subject IDs for sample splitting #
   ###############################################################
   
-  set.seed(seed)
   subjectID <- unique(sample_metadata$subjectID)
   
   ##################################
   # Trigger V-fold CV (Outer Loop) #
   ##################################
   
-  subjectCvFoldsIN <- caret::createFolds(1:length(subjectID), k = folds, returnTrain=TRUE)
+  subject_idx <- seq_along(subjectID)
+  subject_idx <- subject_idx[order((subject_idx * 1103515245 + as.integer(seed)) %% 2147483647)]
+  fold_test_idx <- split(subject_idx, rep(seq_len(folds), length.out = length(subject_idx)))
+  subjectCvFoldsIN <- lapply(fold_test_idx, function(test_idx) setdiff(subject_idx, test_idx))
   
   ########################################
   # Curate subject-level samples per fold #
   ########################################
   
   obsIndexIn <- vector("list", folds) 
-  for(k in 1:length(obsIndexIn)){
+  for (k in seq_along(obsIndexIn)) {
     x <- which(!sample_metadata$subjectID %in%  subjectID[subjectCvFoldsIN[[k]]])
     obsIndexIn[[k]] <- x
   }
-  names(obsIndexIn) <- sapply(1:folds, function(x) paste(c("fold", x), collapse=''))
+  names(obsIndexIn) <- vapply(seq_len(folds), function(x) paste0("fold", x), character(1))
   
   ###############################
   # Set up data for SL training #
   ###############################
   
-  cvControl = list(V = folds, shuffle = FALSE, validRows = obsIndexIn)
+  cvControl <- list(V = folds, shuffle = FALSE, validRows = obsIndexIn)
   
   #################################################
   # Stacked generalization input data preparation #
@@ -171,7 +202,7 @@ IL_conbin<-function(feature_table,
   
   for (i in seq_along(name_layers)){
     #if (verbose){ 
-      cat('Running base model for layer ', i, "...", "\n")
+      message("Running base model for layer ", i, "...")
     #}
     
     ##################################
@@ -182,8 +213,8 @@ IL_conbin<-function(feature_table,
       dplyr::filter(featureType == name_layers[i])    
     t_dat_slice<-feature_table[rownames(feature_table) %in% include_list$featureID, ]
     dat_slice<-as.data.frame(t(t_dat_slice))
-    Y = sample_metadata$Y
-    X = dat_slice
+    Y <- sample_metadata$Y
+    X <- dat_slice
     X_train_layers[[i]] <- X
 
     ###################################
@@ -263,7 +294,7 @@ IL_conbin<-function(feature_table,
   if (run_stacked){
     
     #if (verbose) {
-      cat('Running stacked model...\n')
+      message("Running stacked model...")
     #}
     
     ###################################
@@ -309,7 +340,7 @@ IL_conbin<-function(feature_table,
   
   if(run_concat){
     #if (verbose) {
-      cat('Running concatenated model...\n')
+      message("Running concatenated model...")
     #}
     ###################################
     # Prepate concatenated input data #
@@ -568,7 +599,9 @@ IL_conbin<-function(feature_table,
     
     
   }
-  if(!is.null(sample_metadata_valid)){res$Y_test=validY$Y}
+  if (!is.null(sample_metadata_valid)) {
+    res$Y_test <- validY$Y
+  }
   res$base_learner <- base_learner
   res$meta_learner <- meta_learner
   res$base_screener <- base_screener
@@ -576,10 +609,10 @@ IL_conbin<-function(feature_table,
   res$run_stacked <- run_stacked
   res$family <- family$family
   res$feature.names <- rownames(feature_table)
-  if(is.null(sample_metadata_valid)){
-    res$test=FALSE
-  }else{
-    res$test=TRUE
+  if (is.null(sample_metadata_valid)) {
+    res$test <- FALSE
+  } else {
+    res$test <- TRUE
   }
   if(meta_learner=="SL.nnls.auc" & run_stacked){
     res$weights <- res$model_fits$model_stacked$solution
@@ -588,22 +621,22 @@ IL_conbin<-function(feature_table,
   
   if(res$family=="binomial"){
     # Calculate AUC for each layer, stacked and concatenated 
-    pred=apply(res$yhat.train, 2, ROCR::prediction, labels=res$Y_train)
-    AUC=vector(length = length(pred))
-    names(AUC)=names(pred)
-    for(i in seq_along(pred)){
-      AUC[i] = round(ROCR::performance(pred[[i]], "auc")@y.values[[1]], 3)
+    pred <- apply(res$yhat.train, 2, ROCR::prediction, labels = res$Y_train)
+    AUC <- vector(length = length(pred))
+    names(AUC) <- names(pred)
+    for (i in seq_along(pred)) {
+      AUC[i] <- round(ROCR::performance(pred[[i]], "auc")@y.values[[1]], 3)
     }
     res$AUC.train <- AUC
     
-    if(res$test==TRUE){
+    if (res$test == TRUE) {
       
       # Calculate AUC for each layer, stacked and concatenated 
-      pred=apply(res$yhat.test, 2, ROCR::prediction, labels=res$Y_test)
-      AUC=vector(length = length(pred))
-      names(AUC)=names(pred)
-      for(i in seq_along(pred)){
-        AUC[i] = round(ROCR::performance(pred[[i]], "auc")@y.values[[1]], 3)
+      pred <- apply(res$yhat.test, 2, ROCR::prediction, labels = res$Y_test)
+      AUC <- vector(length = length(pred))
+      names(AUC) <- names(pred)
+      for (i in seq_along(pred)) {
+        AUC[i] <- round(ROCR::performance(pred[[i]], "auc")@y.values[[1]], 3)
       }
     res$AUC.test <- AUC  
     }
@@ -611,18 +644,18 @@ IL_conbin<-function(feature_table,
   if(res$family=="gaussian"){
       
       # Calculate R^2 for each layer, stacked and concatenated 
-      R2=vector(length = ncol(res$yhat.train))
-      names(R2)=names(res$yhat.train)
-      for(i in seq_along(R2)){
-        R2[i] = as.vector(stats::cor(res$yhat.train[ ,i], res$Y_train)^2)
+      R2 <- vector(length = ncol(res$yhat.train))
+      names(R2) <- names(res$yhat.train)
+      for (i in seq_along(R2)) {
+        R2[i] <- as.vector(stats::cor(res$yhat.train[ ,i], res$Y_train)^2)
       }
       res$R2.train <- R2
-      if(res$test==TRUE){
+      if (res$test == TRUE) {
         # Calculate R^2 for each layer, stacked and concatenated 
-        R2=vector(length = ncol(res$yhat.test))
-        names(R2)=names(res$yhat.test)
-        for(i in seq_along(R2)){
-          R2[i] = as.vector(stats::cor(res$yhat.test[ ,i], res$Y_test)^2)
+        R2 <- vector(length = ncol(res$yhat.test))
+        names(R2) <- names(res$yhat.test)
+        for (i in seq_along(R2)) {
+          R2[i] <- as.vector(stats::cor(res$yhat.test[ ,i], res$Y_test)^2)
         }
     res$R2.test <- R2
     }

@@ -31,8 +31,13 @@ VarImp.learner <- function(fit,
     }
     
     if (!all(layer.names %in% names(fit$model_fits$model_layers))) {
-      stop(paste(layer.names[!(layer.names %in% names(fit$model_fits$model_layers))],
-                 "is not a valid layer in the fit object."))
+      bad_layers <- layer.names[!(layer.names %in% names(fit$model_fits$model_layers))]
+      stop(
+        "Invalid layer(s) in fit object: ",
+        paste(bad_layers, collapse = ", "),
+        ".",
+        call. = FALSE
+      )
     }
     
     #######################################################
@@ -52,7 +57,8 @@ VarImp.learner <- function(fit,
       colnames(VIMP_layer) <- c("mean", "sd")
       VIMP_layer$type <- layer.names[i]
       
-      VIMP_list[[i]] <- VIMP_layer[1:num.var, ]
+      top_n <- min(num.var, nrow(VIMP_layer))
+      VIMP_list[[i]] <- VIMP_layer[seq_len(top_n), ]
     }
     
     VIMP <- do.call(rbind, VIMP_list)

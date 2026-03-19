@@ -19,3 +19,9 @@ auc.obj(b, X, Y)
 \description{
 Title Meta level Objective function: NNLS for gaussian; Rank loss for binary observations
 }
+\examples{
+set.seed(1)
+X <- data.frame(m1 = rnorm(30), m2 = rnorm(30))
+Y <- rbinom(30, 1, plogis(0.7 * X$m1 - 0.4 * X$m2))
+auc.obj(c(0.5, 0.5), X, Y)
+}

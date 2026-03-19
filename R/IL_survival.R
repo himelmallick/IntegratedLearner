@@ -43,7 +43,6 @@
 }
 
 .make_stratified_folds <- function(time_vec, event_vec, folds, seed = 123) {
-  set.seed(seed)
   q <- stats::quantile(time_vec, probs = seq(0, 1, length.out = 6), na.rm = TRUE)
   q <- unique(q)
   if (length(q) < 2L) {
@@ -56,7 +55,7 @@
   for (s in unique(stratum_id)) {
     idx <- which(stratum_id == s)
     if (length(idx) == 0L) next
-    idx <- sample(idx)
+    idx <- idx[order((idx * 1103515245 + as.integer(seed)) %% 2147483647)]
     grp <- rep(seq_len(folds), length.out = length(idx))
     for (f in seq_len(folds)) fold_id[idx[grp == f]] <- f
   }
@@ -643,7 +642,7 @@
 }
 
 .get_cumhaz_increments <- function(Smat, time_grid, t_vec, eps = 1e-12, win_frac = 0.01) {
-  idx <- sapply(t_vec, function(t) which.min(abs(time_grid - t)))
+  idx <- vapply(t_vec, function(t) which.min(abs(time_grid - t)), integer(1))
   Sclamped <- pmin(pmax(Smat[, idx, drop = FALSE], eps), 1 - 1e-8)
   H <- -log(Sclamped)
   dH <- cbind(H[, 1], H[, -1, drop = FALSE] - H[, -ncol(H), drop = FALSE])
@@ -746,14 +745,14 @@
   if (is.null(t_vec)) {
     t_vec <- as.numeric(stats::quantile(time_grid, probs = t_vec_probs, na.rm = TRUE))
   }
-  t_vec <- sapply(t_vec, function(t) time_grid[which.min(abs(time_grid - t))])
+  t_vec <- vapply(t_vec, function(t) time_grid[which.min(abs(time_grid - t))], numeric(1))
   t_vec <- unique(as.numeric(t_vec))
   if (length(t_vec) < 2L) stop("Need >=2 distinct time points for cumhaz increments (COX method).", call. = FALSE)
 
-  R_raw <- sapply(layers, function(lay) {
+  R_raw <- do.call(cbind, lapply(layers, function(lay) {
     dH <- .get_cumhaz_increments(surv_mat_list[[lay]], time_grid, t_vec = t_vec, eps = eps)
     .summarize_increments(dH, how = layer_score)
-  })
+  }))
   colnames(R_raw) <- layers
 
   for (j in seq_len(ncol(R_raw))) {
@@ -845,12 +844,12 @@
   }
   survs <- rowSums(pred_arr, dims = 2)
 
-  bsc <- sapply(seq_along(time_grid), function(j) {
+  bsc <- vapply(seq_along(time_grid), function(j) {
     help1 <- as.integer(time_sorted <= time_grid[j] & obj_surv[ot, 2] == 1)
     help2 <- as.integer(time_sorted > time_grid[j])
     mean(((0 - survs[, j])^2 * help1 / csurv) +
            ((1 - survs[, j])^2 * help2 / csurv_btime[j]))
-  })
+  }, numeric(1))
 
   idx <- 2:length(time_grid)
   ret <- diff(time_grid) %*% ((bsc[idx - 1] + bsc[idx]) / 2)
@@ -864,12 +863,12 @@
   }
   survs <- rowSums(pred_arr, dims = 2)
 
-  bsc <- sapply(seq_along(time_grid), function(j) {
+  bsc <- vapply(seq_along(time_grid), function(j) {
     help1 <- as.integer(time_sorted <= time_grid[j] & obj_surv[ot, 2] == 1)
     help2 <- as.integer(time_sorted > time_grid[j])
     mean(((0 - survs[, j])^2 * help1 / csurv) +
            ((1 - survs[, j])^2 * help2 / csurv_btime[j]))
-  })
+  }, numeric(1))
 
   idx <- 2:length(time_grid)
   ret <- diff(time_grid) %*% ((bsc[idx - 1] + bsc[idx]) / 2)
@@ -927,7 +926,8 @@
 
     csurv_btime <- summary(cens_fit, times = ibs_time_grid, extend = TRUE)$surv
     if (anyNA(csurv_btime)) {
-      min_v <- suppressWarnings(min(csurv_btime[is.finite(csurv_btime)], na.rm = TRUE))
+      finite_csurv <- csurv_btime[is.finite(csurv_btime)]
+      min_v <- if (length(finite_csurv)) min(finite_csurv) else NA_real_
       if (!is.finite(min_v)) min_v <- 1
       csurv_btime[is.na(csurv_btime)] <- min_v
     }
@@ -1054,7 +1054,7 @@
     model_args = list()
 ) {
   .vmsg <- function(...) {
-    if (isTRUE(verbose)) cat(paste0(...), "\n")
+    if (isTRUE(verbose)) message(...)
     invisible(NULL)
   }
   .fmt <- function(x) {
@@ -1462,6 +1462,37 @@
 #'
 #' @return List with \code{train_out} and \code{valid_out} in the same nested
 #'   format as previous survival implementations.
+#' @examplesIf requireNamespace("timeROC", quietly = TRUE)
+#' set.seed(1)
+#' sample_ids <- paste0("S", seq_len(40))
+#' feature_ids <- c(paste0("g", seq_len(8)), paste0("m", seq_len(6)))
+#' feature_types <- c(rep("gene", 8), rep("mirna", 6))
+#' feature_table <- as.data.frame(
+#'   matrix(rnorm(length(feature_ids) * length(sample_ids)),
+#'          nrow = length(feature_ids),
+#'          dimnames = list(feature_ids, sample_ids))
+#' )
+#' sample_metadata <- data.frame(
+#'   time = rexp(length(sample_ids), rate = 0.2),
+#'   event = rbinom(length(sample_ids), 1, 0.6),
+#'   row.names = sample_ids
+#' )
+#' feature_metadata <- data.frame(
+#'   featureID = feature_ids,
+#'   featureType = feature_types,
+#'   row.names = feature_ids
+#' )
+#' fit <- ILsurv(
+#'   feature_table = feature_table,
+#'   sample_metadata = sample_metadata,
+#'   feature_metadata = feature_metadata,
+#'   base_learner = "surv.coxph",
+#'   folds = 2,
+#'   do_early_fusion = FALSE,
+#'   intermediate_learners = character(0),
+#'   verbose = FALSE
+#' )
+#' names(fit$train_out)
 #' @export
 ILsurv <- function(
     feature_table,

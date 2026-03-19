@@ -45,3 +45,20 @@ SL object
 \description{
 Horseshoe regression
 }
+\examples{
+\dontshow{if (requireNamespace("bayesreg", quietly = TRUE)) withAutoprint(\{ # examplesIf}
+set.seed(1)
+X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
+Y <- X$x1 + rnorm(20, sd = 0.3)
+fit <- SL.horseshoe(
+  Y = Y,
+  X = X,
+  newX = X[1:5, , drop = FALSE],
+  family = stats::gaussian(),
+  N = 200,
+  burnin = 50,
+  thinning = 2
+)
+head(fit$pred)
+\dontshow{\}) # examplesIf}
+}

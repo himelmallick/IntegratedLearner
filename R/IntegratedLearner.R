@@ -86,6 +86,38 @@
 #' @keywords microbiome, metagenomics, multiomics, scRNASeq, tweedie, singlecell
 #' @importFrom stats setNames
 #' @importFrom ranger ranger
+#' @examples
+#' set.seed(1)
+#' sample_ids <- paste0("S", seq_len(30))
+#' feature_ids <- paste0("F", seq_len(10))
+#' feature_table <- as.data.frame(
+#'   matrix(rnorm(10 * 30), nrow = 10, ncol = 30,
+#'          dimnames = list(feature_ids, sample_ids))
+#' )
+#' sample_metadata <- data.frame(
+#'   Y = rbinom(30, 1, 0.5),
+#'   subjectID = sample_ids,
+#'   row.names = sample_ids
+#' )
+#' feature_metadata <- data.frame(
+#'   featureID = feature_ids,
+#'   featureType = rep(c("gene", "mirna"), each = 5),
+#'   row.names = feature_ids
+#' )
+#' pcl <- list(
+#'   feature_table = feature_table,
+#'   sample_metadata = sample_metadata,
+#'   feature_metadata = feature_metadata
+#' )
+#' fit <- IntegratedLearner(
+#'   PCL_train = pcl,
+#'   folds = 2,
+#'   base_learner = "SL.glm",
+#'   run_concat = FALSE,
+#'   print_learner = FALSE,
+#'   family = stats::binomial()
+#' )
+#' fit$family
 #' @export
 IntegratedLearner <- function(
     MAE_train   = NULL,

@@ -16,114 +16,55 @@ NULL
 print.learner <- function(x,...){
   res <- x
   num_layers <- length(res$X_train_layers)
-  
-  cat("Time for model fit :",res$time,"minutes \n")
-  if(res$family=="binomial"){
-    
-    cat("========================================\n")
-    cat("Model fit for individual layers:",res$base_learner,"\n")
-    if(res$run_stacked==TRUE){cat("Model fit for stacked layer:",res$meta_learner,"\n")}
-    if(res$run_concat==TRUE){cat("Model fit for concatenated layer:",res$base_learner,"\n")}
-    
-    cat("========================================\n")
-    cat("AUC metric for training data: \n")
-    cat("Individual layers: \n")
-    print(res$AUC.train[1:num_layers])
-    cat("======================\n")
-    
-    if(res$run_stacked==TRUE){
-      cat("Stacked model:")
-      cat(as.numeric(res$AUC.train["stacked"]),"\n")
-      cat("======================\n")
-      
+
+  .fmt_vec <- function(v) paste(names(v), round(as.numeric(v), 3), sep = "=", collapse = ", ")
+
+  message("Time for model fit: ", res$time, " minutes")
+  message("Model fit for individual layers: ", res$base_learner)
+  if (isTRUE(res$run_stacked)) message("Model fit for stacked layer: ", res$meta_learner)
+  if (isTRUE(res$run_concat)) message("Model fit for concatenated layer: ", res$base_learner)
+
+  if (res$family == "binomial") {
+    message("AUC (train, individual layers): ", .fmt_vec(res$AUC.train[seq_len(num_layers)]))
+    if (isTRUE(res$run_stacked)) {
+      message("AUC (train, stacked): ", round(as.numeric(res$AUC.train["stacked"]), 3))
     }
-    if(res$run_concat==TRUE){
-      cat("Concatenated model:")
-      cat(as.numeric(res$AUC.train["concatenated"]),"\n")
-      cat("======================\n")
-      
+    if (isTRUE(res$run_concat)) {
+      message("AUC (train, concatenated): ", round(as.numeric(res$AUC.train["concatenated"]), 3))
     }
-    cat("========================================\n")
-    if(res$test==TRUE){
-      
-      #cat("======================\n")
-      cat("AUC metric for test data: \n")
-      cat("Individual layers: \n")
-      print(res$AUC.test[1:num_layers])
-      cat("======================\n")
-      
-      if(res$run_stacked==TRUE){
-        cat("Stacked model:")
-        cat(as.numeric(res$AUC.test["stacked"]),"\n")
-        cat("======================\n")
-        
+    if (isTRUE(res$test)) {
+      message("AUC (test, individual layers): ", .fmt_vec(res$AUC.test[seq_len(num_layers)]))
+      if (isTRUE(res$run_stacked)) {
+        message("AUC (test, stacked): ", round(as.numeric(res$AUC.test["stacked"]), 3))
       }
-      if(res$run_concat==TRUE){
-        cat("Concatenated model:")
-        cat(as.numeric(res$AUC.test["concatenated"]),"\n")
-        cat("======================\n")
-        
+      if (isTRUE(res$run_concat)) {
+        message("AUC (test, concatenated): ", round(as.numeric(res$AUC.test["concatenated"]), 3))
       }
-      cat("========================================\n")
-      
     }
-    
-  } else if(res$family=="gaussian"){
-    
-    
-    cat("========================================\n")
-    cat("Model fit for individual layers:",res$base_learner,"\n")
-    if(res$run_stacked==TRUE){cat("Model fit for stacked layer:",res$meta_learner,"\n")}
-    if(res$run_concat==TRUE){cat("Model fit for concatenated layer:",res$base_learner,"\n")}
-    
-    cat("========================================\n")
-    cat("R^2 for training data: \n")
-    cat("Individual layers: \n")
-    print(res$R2.train[1:num_layers])
-    cat("======================\n")
-    if(res$run_stacked==TRUE){
-      cat("Stacked model:")
-      cat(as.numeric(res$R2.train["stacked"]),"\n")
-      cat("======================\n")
-      
+  } else if (res$family == "gaussian") {
+    message("R2 (train, individual layers): ", .fmt_vec(res$R2.train[seq_len(num_layers)]))
+    if (isTRUE(res$run_stacked)) {
+      message("R2 (train, stacked): ", round(as.numeric(res$R2.train["stacked"]), 3))
     }
-    if(res$run_concat==TRUE){
-      cat("Concatenated model:")
-      cat(as.numeric(res$R2.train["concatenated"]),"\n")
-      cat("======================\n")
+    if (isTRUE(res$run_concat)) {
+      message("R2 (train, concatenated): ", round(as.numeric(res$R2.train["concatenated"]), 3))
     }
-    cat("========================================\n")
-    if(res$test==TRUE){
-      #cat("======================\n")
-      cat("R^2 for test data: \n")
-      cat("Individual layers: \n")
-      print(res$R2.test[1:num_layers])
-      cat("======================\n")
-      if(res$run_stacked==TRUE){
-        cat("Stacked model:")
-        cat(as.numeric(res$R2.test["stacked"]),"\n")
-        cat("======================\n")
-        
+    if (isTRUE(res$test)) {
+      message("R2 (test, individual layers): ", .fmt_vec(res$R2.test[seq_len(num_layers)]))
+      if (isTRUE(res$run_stacked)) {
+        message("R2 (test, stacked): ", round(as.numeric(res$R2.test["stacked"]), 3))
       }
-      if(res$run_concat==TRUE){
-        cat("Concatenated model:")
-        cat(as.numeric(res$R2.test["concatenated"]),"\n")
-        cat("======================\n")
+      if (isTRUE(res$run_concat)) {
+        message("R2 (test, concatenated): ", round(as.numeric(res$R2.test["concatenated"]), 3))
       }
-      cat("========================================\n")
-      
     }
-    
   }
-  
-  if(res$meta_learner=="SL.nnls.auc" & res$run_stacked){
-    
-    cat("Weights for individual layers predictions in IntegratedLearner: \n")
-    print(round(res$weights,digits=3))
-    cat("========================================\n")
-    
+
+  if (identical(res$meta_learner, "SL.nnls.auc") && isTRUE(res$run_stacked) && !is.null(res$weights)) {
+    message("Layer weights: ", .fmt_vec(res$weights))
   }
-  
+
+  invisible(res)
 }
 
 expit <- function(x){
@@ -173,11 +114,29 @@ expit <- function(x){
 #'   will require additional RAM.
 #' @param seed Seed for reproducibility passed to bartMachine.
 #' @param ... Additional arguments (not used)
+#' @return A list with elements \code{pred} and \code{fit} following
+#'   SuperLearner conventions.
+#' @examplesIf requireNamespace("bartMachine", quietly = TRUE)
+#' set.seed(1)
+#' X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
+#' Y <- rbinom(20, 1, plogis(X$x1 - X$x2))
+#' fit <- SL.BART(
+#'   Y = Y,
+#'   X = X,
+#'   newX = X[1:5, , drop = FALSE],
+#'   family = stats::binomial(),
+#'   obsWeights = rep(1, nrow(X)),
+#'   id = seq_len(nrow(X)),
+#'   num_trees = 5,
+#'   num_burn_in = 10,
+#'   num_iterations_after_burn_in = 20
+#' )
+#' head(fit$pred)
 #' 
 #' @encoding utf-8
 #' @export
 SL.BART <- function(Y, X, newX, family, obsWeights, id,
-                    num_trees = 50, num_burn_in = 250, verbose = F,
+                    num_trees = 50, num_burn_in = 250, verbose = FALSE,
                     alpha = 0.95, beta = 2, k = 2, q = 0.9, nu = 3,
                     num_iterations_after_burn_in = 1000,
                     serialize = TRUE, seed=5678,
@@ -190,9 +149,9 @@ SL.BART <- function(Y, X, newX, family, obsWeights, id,
     # Need to convert Y to a factor, otherwise bartMachine does regression.
     # And importantly, bartMachine expects the first level to be the positive
     # class, so we have to specify levels.
-    Y = factor(Y, levels = c("1", "0"))
+    Y <- factor(Y, levels = c("1", "0"))
   }
-  model = bartMachine::bartMachine(X, Y, num_trees = num_trees,
+  model <- bartMachine::bartMachine(X, Y, num_trees = num_trees,
                                    num_burn_in = num_burn_in, verbose = verbose,
                                    alpha = alpha, beta = beta, k = k, q = q, nu = nu,
                                    num_iterations_after_burn_in = num_iterations_after_burn_in,
@@ -247,6 +206,23 @@ predict.SL.BART <- function(object, newdata, family, X = NULL, Y = NULL,...) {
 #' @param ... Additional arguments passed to \code{mxBART::mxbart}.
 #'
 #' @return A list with elements \code{pred} and \code{fit} (SuperLearner convention).
+#' @examplesIf requireNamespace("mxBART", quietly = TRUE)
+#' set.seed(1)
+#' X <- data.frame(x1 = rnorm(30), x2 = rnorm(30))
+#' Y <- X$x1 - 0.3 * X$x2 + rnorm(30, sd = 0.2)
+#' fit <- SL.mxBART(
+#'   Y = Y,
+#'   X = X,
+#'   newX = X[1:4, , drop = FALSE],
+#'   family = stats::gaussian(),
+#'   obsWeights = rep(1, nrow(X)),
+#'   id = seq_len(nrow(X)),
+#'   ntree = 10,
+#'   ndpost = 20,
+#'   nskip = 10,
+#'   keepevery = 1
+#' )
+#' head(fit$pred)
 #' @export
 SL.mxBART <- function(Y, X, newX, family, obsWeights, id,
                       sparse = FALSE, ntree = 50,
@@ -366,23 +342,20 @@ predict.SL.mxBART <- function(object, newdata,family=family, X=X, Y=Y,
 #'   one standard error of the minimum (see Breiman et al. 1984 on CART for
 #'   background).
 #' @param ... Any additional arguments are passed through to cv.glmnet.
+#' @return A list with elements \code{pred} and \code{fit}.
 #'
 #' @examples
-#' if (requireNamespace("mlbench", quietly = TRUE)) {
-#'   data(PimaIndiansDiabetes2, package = "mlbench")
-#'   dat <- stats::na.omit(PimaIndiansDiabetes2)
-#'   Y <- as.numeric(dat$diabetes == "pos")
-#'   X <- subset(dat, select = -diabetes)
-#' }
-#' \dontrun{
-#'   sl <- SuperLearner::SuperLearner(
-#'     Y, X,
-#'     family = stats::binomial(),
-#'     SL.library = c("SL.mean", "SL.glm", "SL.glmnet")
-#'   )
-#' }
-#' 
-#'
+#' set.seed(1)
+#' X <- data.frame(x1 = rnorm(30), x2 = rnorm(30), x3 = rnorm(30))
+#' Y <- rbinom(30, 1, plogis(X$x1 - X$x2))
+#' fit <- SL.glmnet2(
+#'   Y = Y, X = X, newX = X[1:5, , drop = FALSE],
+#'   family = stats::binomial(),
+#'   obsWeights = rep(1, nrow(X)),
+#'   id = seq_len(nrow(X)),
+#'   alpha = 0.5, nfolds = 2, nlambda = 5
+#' )
+#' head(fit$pred)
 #' @references
 #'
 #' Friedman, J., Hastie, T., & Tibshirani, R. (2010). Regularization paths for
@@ -473,21 +446,20 @@ SL.glmnet2 <- function(Y, X, newX, family, obsWeights, id,
 #'   one standard error of the minimum (see Breiman et al. 1984 on CART for
 #'   background).
 #' @param ... Any additional arguments are passed through to cv.glmnet.
+#' @return A list with elements \code{pred} and \code{fit}.
 #'
 #' @examples
-#' if (requireNamespace("mlbench", quietly = TRUE)) {
-#'   data(PimaIndiansDiabetes2, package = "mlbench")
-#'   dat <- stats::na.omit(PimaIndiansDiabetes2)
-#'   Y <- as.numeric(dat$diabetes == "pos")
-#'   X <- subset(dat, select = -diabetes)
-#' }
-#' \dontrun{
-#'   sl <- SuperLearner::SuperLearner(
-#'     Y, X,
-#'     family = stats::binomial(),
-#'     SL.library = c("SL.mean", "SL.glm", "SL.glmnet")
-#'   )
-#' }
+#' set.seed(1)
+#' X <- data.frame(x1 = rnorm(30), x2 = rnorm(30), x3 = rnorm(30))
+#' Y <- rbinom(30, 1, plogis(X$x1 - X$x2))
+#' fit <- SL.LASSO(
+#'   Y = Y, X = X, newX = X[1:5, , drop = FALSE],
+#'   family = stats::binomial(),
+#'   obsWeights = rep(1, nrow(X)),
+#'   id = seq_len(nrow(X)),
+#'   nfolds = 2, nlambda = 5
+#' )
+#' head(fit$pred)
 #'
 #' @references
 #'
@@ -582,21 +554,20 @@ SL.LASSO <- function(Y, X, newX, family, obsWeights, id,
 #'   one standard error of the minimum (see Breiman et al. 1984 on CART for
 #'   background).
 #' @param ... Any additional arguments are passed through to cv.glmnet.
+#' @return A list with elements \code{pred} and \code{fit}.
 #'
 #' @examples
-#' if (requireNamespace("mlbench", quietly = TRUE)) {
-#'   data(PimaIndiansDiabetes2, package = "mlbench")
-#'   dat <- stats::na.omit(PimaIndiansDiabetes2)
-#'   Y <- as.numeric(dat$diabetes == "pos")
-#'   X <- subset(dat, select = -diabetes)
-#' }
-#' \dontrun{
-#'   sl <- SuperLearner::SuperLearner(
-#'     Y, X,
-#'     family = stats::binomial(),
-#'     SL.library = c("SL.mean", "SL.glm", "SL.glmnet")
-#'   )
-#' }
+#' set.seed(1)
+#' X <- data.frame(x1 = rnorm(30), x2 = rnorm(30), x3 = rnorm(30))
+#' Y <- rbinom(30, 1, plogis(X$x1 - X$x2))
+#' fit <- SL.enet(
+#'   Y = Y, X = X, newX = X[1:5, , drop = FALSE],
+#'   family = stats::binomial(),
+#'   obsWeights = rep(1, nrow(X)),
+#'   id = seq_len(nrow(X)),
+#'   alpha = c(0, 0.5, 1), nfolds = 2, nlambda = 5
+#' )
+#' head(fit$pred)
 #'
 #' @references
 #'
@@ -699,6 +670,20 @@ get_cvm <- function(model) {
 #' @param ... other parameters passed to bayesreg function
 #'
 #' @return SL object
+#' @examplesIf requireNamespace("bayesreg", quietly = TRUE)
+#' set.seed(1)
+#' X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
+#' Y <- X$x1 + rnorm(20, sd = 0.3)
+#' fit <- SL.horseshoe(
+#'   Y = Y,
+#'   X = X,
+#'   newX = X[1:5, , drop = FALSE],
+#'   family = stats::gaussian(),
+#'   N = 200,
+#'   burnin = 50,
+#'   thinning = 2
+#' )
+#' head(fit$pred)
 #' @export
 #' @export
 SL.horseshoe <- function(Y, X, newX, family, prior = "horseshoe", N = 20000L, burnin = 1000L,
@@ -710,12 +695,12 @@ SL.horseshoe <- function(Y, X, newX, family, prior = "horseshoe", N = 20000L, bu
     # Need to convert Y to a factor, otherwise bartMachine does regression.
     # And importantly, bayesreg expects the second level to be the positive
     # class, so we have to specify levels.
-    Y = factor(Y, levels = c("0", "1"))
+    Y <- factor(Y, levels = c("0", "1"))
   }
   
   #.SL.require('bayesreg') 
-  df <- data.frame(X,Y)
-  model.HS=bayesreg::bayesreg(Y~.,df,model = family$family,prior=prior,
+  df <- data.frame(X, Y)
+  model.HS <- bayesreg::bayesreg(Y ~ ., df, model = family$family, prior = prior,
                     n.samples=N,burnin = burnin,thin = thinning)  
   newX <- as.matrix(newX)
   ynew.samp <- rep(1,nrow(newX)) %*% model.HS$beta0+ newX %*% model.HS$beta
@@ -762,12 +747,17 @@ predict.SL.horseshoe <- function(object, newdata, family, X = NULL, Y = NULL,...
 #' @param Y Outcome variable
 #'
 #' @return 1 - AUC
+#' @examples
+#' set.seed(1)
+#' X <- data.frame(m1 = rnorm(30), m2 = rnorm(30))
+#' Y <- rbinom(30, 1, plogis(0.7 * X$m1 - 0.4 * X$m2))
+#' auc.obj(c(0.5, 0.5), X, Y)
 #' @export
 auc.obj <- function(b,X,Y){
   #Doesn't use observation weights in this part right now
   wavg <- as.matrix(X) %*% b
-  pred = ROCR::prediction(wavg, Y)
-  AUC = ROCR::performance(pred, "auc")@y.values[[1]]
+  pred <- ROCR::prediction(wavg, Y)
+  AUC <- ROCR::performance(pred, "auc")@y.values[[1]]
   return((1-AUC))
   
 }
@@ -779,6 +769,11 @@ auc.obj <- function(b,X,Y){
 #' @param wt wt
 #'
 #' @return Solution of the quadratic programming problem
+#' @examples
+#' x <- cbind(m1 = c(0.1, 0.2, 0.5), m2 = c(0.3, 0.1, 0.4))
+#' y <- c(0.2, 0.0, 1.0)
+#' wt <- rep(1, nrow(x))
+#' NNLS(x, y, wt)$solution
 #' @export
 NNLS <- function(x, y, wt) {
   wX <- sqrt(wt) * x
@@ -806,6 +801,18 @@ NNLS <- function(x, y, wt) {
 #' @param ... Additional arguments passed through
 #'
 #' @return Estimated meta-learner coefficients and predictions
+#' @examples
+#' set.seed(1)
+#' X <- data.frame(m1 = rnorm(30), m2 = rnorm(30))
+#' Y <- 0.4 * X$m1 - 0.2 * X$m2 + rnorm(30, sd = 0.1)
+#' out <- SL.nnls.auc(
+#'   Y = Y,
+#'   X = X,
+#'   newX = X[1:5, , drop = FALSE],
+#'   family = stats::gaussian(),
+#'   obsWeights = rep(1, nrow(X))
+#' )
+#' head(out$pred)
 #' @export
 SL.nnls.auc <- function(Y, X, newX, family, obsWeights,bounds = c(0, Inf), ...) {
   if(family$family=="gaussian"){
@@ -825,7 +832,7 @@ SL.nnls.auc <- function(Y, X, newX, family, obsWeights,bounds = c(0, Inf), ...) 
   }else if (family$family=="binomial"){
     
     
-    nmethods = ncol(X)
+    nmethods <- ncol(X)
     coef_init <- stats::runif(nmethods)
     coef_init <- coef_init/sum(coef_init)
     fit.rankloss <- nloptr::nloptr(x0=coef_init,

@@ -90,10 +90,8 @@ update.learner <- function(object,
     
     if (!identical(valid_feat, train_feat)) {
       stop(
-        paste0(
-          "Validation set feature names for layer '", layer_i,
-          "' do not match training data (must be identical and in same order)."
-        ),
+        "Validation set feature names for layer '", layer_i,
+        "' do not match training data (must be identical and in same order).",
         call. = FALSE
       )
     }

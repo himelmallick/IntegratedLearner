@@ -128,6 +128,39 @@ into tabular multi-view matrices and then calls \code{IL_conbin} for
 continuous/binary outcomes or \code{IL_survival} for time-to-event outcomes,
 depending on the specified \code{family}.
 }
+\examples{
+set.seed(1)
+sample_ids <- paste0("S", seq_len(30))
+feature_ids <- paste0("F", seq_len(10))
+feature_table <- as.data.frame(
+  matrix(rnorm(10 * 30), nrow = 10, ncol = 30,
+         dimnames = list(feature_ids, sample_ids))
+)
+sample_metadata <- data.frame(
+  Y = rbinom(30, 1, 0.5),
+  subjectID = sample_ids,
+  row.names = sample_ids
+)
+feature_metadata <- data.frame(
+  featureID = feature_ids,
+  featureType = rep(c("gene", "mirna"), each = 5),
+  row.names = feature_ids
+)
+pcl <- list(
+  feature_table = feature_table,
+  sample_metadata = sample_metadata,
+  feature_metadata = feature_metadata
+)
+fit <- IntegratedLearner(
+  PCL_train = pcl,
+  folds = 2,
+  base_learner = "SL.glm",
+  run_concat = FALSE,
+  print_learner = FALSE,
+  family = stats::binomial()
+)
+fit$family
+}
 \author{
 Himel Mallick, \email{him4004@med.cornell.edu}
 }
