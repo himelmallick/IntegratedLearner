@@ -50,10 +50,6 @@ library(curatedMetagenomicData)
 library(TreeSummarizedExperiment)
 library(SummarizedExperiment)
 library(MultiAssayExperiment)
-library(mlr3)
-library(mlr3proba)
-library(mlr3pipelines)
-library(mlr3extralearners)
 library(survival)
 library(S4Vectors)
 ```
@@ -219,7 +215,7 @@ The returned object is the same style as `PCL` mode, so downstream interpretatio
 | Parameter | Default | Description |
 |---|---|---|
 | `do_early_fusion` | `TRUE` | Train an early-fusion survival model on all features. |
-| `weight_method` | `"IBS"` or `"COX"` | Late-fusion weighting objective. |
+| `weight_method` | `"IBS"` | Late-fusion weighting objective (`"IBS"` or `"COX"`). |
 | `intermediate_learners` | `c("surv.coxph")` | Intermediate fusion learners on layer-risk features. |
 | `t_vec`, `t_vec_probs` | `NULL`, quantiles | Time grid used in COX-style weighting summaries. |
 | `layer_score` | `"sum"` | Aggregation of cumulative hazard increments (`sum`, `mean`, `l2`). |
@@ -237,7 +233,7 @@ The returned object is the same style as `PCL` mode, so downstream interpretatio
 | Path | Supported base models |
 |---|---|
 | Continuous/Binary (`IL_conbin`) | Any `SuperLearner`-compatible `SL.*` learner available in your R session. Package wrappers include: `SL.BART`, `SL.LASSO`, `SL.enet`, `SL.glmnet2`, `SL.horseshoe`, `SL.mxBART` (plus standard SuperLearner learners such as `SL.glm`, `SL.randomForest`, etc.). |
-| Survival (`ILsurv`) | Built-in survival learner IDs: `surv.rfsrc`, `surv.ranger`, `surv.coxboost`, `surv.bart`, `surv.coxph`, `surv.glmnet`. |
+| Survival (`ILsurv`) | Built-in survival learner IDs: `surv.coxph`, `surv.glmnet`, `surv.ranger`, `surv.ranger.extratrees`, `surv.ranger.maxstat`, `surv.ranger.C`, `surv.rfsrc`, `surv.coxboost`, `surv.gbm`, `surv.xgboost.cox`, `surv.xgboost.aft`, `surv.mboost`, `surv.bart`. |
 
 ### Supported Fusion Outputs
 
@@ -609,11 +605,13 @@ For survival tasks, `IntegratedLearner` dispatches to `ILsurv` when survival met
 - `event`: event indicator (`0/1`).
 - optional `Y`: `Surv(time, event)` convenience column.
 
+This path uses the package-native survival backend (no `mlr3` dependency required).
+
 This section provides a complete MAE workflow, followed by an equivalent PCL sketch.
 
 ### Step 1: Construct MAE Survival Inputs from TCGA_BRCA
 
-```{r}
+```{r,eval = F}
 
 
 load(url("https://github.com/himelmallick/IntegratedLearner/blob/master/data/Survival/TCGA_BRCA.RData?raw=true"))
@@ -659,7 +657,7 @@ mae <- MultiAssayExperiment(
 
 ### Step 2: Split MAE into Training and Validation
 
-```{r}
+```{r,eval = F}
 set.seed(1)
 idx <- sample(seq_along(sample_ids), size = floor(0.7 * length(sample_ids)))
 mae_train <- mae[, idx, ]
@@ -686,14 +684,14 @@ mae_valid <- propagate_Y(mae_valid)
 
 ### Step 3: Fit Survival Model (MAE Mode)
 
-```{r,warning=FALSE}
+```{r,warning=FALSE,eval = F}
 fit_surv_mae <- IntegratedLearner(
   MAE_train = mae_train,
   MAE_valid = mae_valid,
   experiment = c("taxonomy", "pathway"),
   assay.type = c("relative_abundance", "pathway_abundance"),
   folds = 2,
-  base_learner = "surv.coxboost",  # alternatives: surv.coxph, surv.ranger, surv.glmnet, ...
+  base_learner = "surv.coxboost",  # alternatives include surv.coxph/surv.ranger/surv.xgboost.cox/...
   weight_method = "COX",           # alternative: "IBS"
   verbose = TRUE
 )
@@ -701,7 +699,7 @@ fit_surv_mae <- IntegratedLearner(
 
 ### Step 4: Interpret Survival Outputs
 
-```{r}
+```{r,eval = F}
 # Single-layer training metrics
 # fit_surv_mae$train_out$single$metrics
 
@@ -722,7 +720,7 @@ fit_surv_mae$valid_out$single$valid_cindex
 
 ### Equivalent PCL Survival Pattern (Same Data)
 
-```{r,warning =FALSE}
+```{r,warning =FALSE,eval = F}
 # Convert to PCL-style objects if preferred:
 feature_table <- as.data.frame(rbind(mat_gene, mat_mirna))
 feature_metadata <- rbind(
