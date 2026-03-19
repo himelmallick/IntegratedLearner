@@ -2,7 +2,7 @@ Package: IntegratedLearner
 Type: Package
 Title: Integrated Multi-Omics Learner for Survival and Non-Survival Outcomes
 Version: 0.1.1
-Authors@R: person("Himel", "Mallick", email = "nalina@example.com",
+Authors@R: person("Himel", "Mallick", email = "him4004@med.cornell.edu",
     role = c("aut", "cre"))
 Description: IntegratedLearner provides a unified interface for multi-omics
     prediction using early, late, and intermediate fusion for continuous,
@@ -14,9 +14,8 @@ License: MIT + file LICENSE
 URL: https://github.com/himelmallick/IntegratedLearner
 BugReports: https://github.com/himelmallick/IntegratedLearner/issues
 Encoding: UTF-8
-LazyData: true
 Depends:
-    R (>= 4.2.0)
+    R (>= 4.5.0)
 Imports:
     SuperLearner,
     survival,
@@ -24,6 +23,14 @@ Imports:
     ranger,
     randomForestSRC,
     CoxBoost,
+    SummarizedExperiment,
+    MultiAssayExperiment,
+    bartMachine,
+    BART,
+    gbm,
+    xgboost,
+    glmnetUtils,
+    timeROC,
     dplyr,
     stringr,
     tibble,
@@ -33,19 +40,11 @@ Imports:
     caret,
     ROCR
 Suggests:
-    bartMachine,
-    BART,
     bayesplot,
     cowplot,
-    gbm,
     ggplot2,
     mboost,
-    SummarizedExperiment,
-    MultiAssayExperiment,
     S4Vectors,
-    timeROC,
-    xgboost,
-    glmnetUtils,
     nloptr,
     prediction,
     quadprog,
@@ -55,6 +54,13 @@ Suggests:
     curatedMetagenomicData,
     mlbench,
     bayesreg
+VignetteBuilder:
+    knitr
+biocViews:
+    Software,
+    Classification,
+    Multiomics,
+    Microbiome
 Config/testthat/edition: 3
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
