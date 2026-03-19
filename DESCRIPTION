@@ -7,9 +7,9 @@ Authors@R: person("Himel", "Mallick", email = "nalina@example.com",
 Description: IntegratedLearner provides a unified interface for multi-omics
     prediction using early, late, and intermediate fusion for continuous,
     binary, and survival outcomes. It wraps SuperLearner for non-survival
-    tasks and mlr3/mlr3proba for survival tasks, handling both
-    MultiAssayExperiment and PCL inputs with automated validation and
-    feature alignment across layers.
+    tasks and a BioC-friendly native survival backend (no mlr3 dependency)
+    for time-to-event modeling, handling both MultiAssayExperiment and PCL
+    inputs with automated validation and feature alignment across layers.
 License: MIT + file LICENSE
 URL: https://github.com/himelmallick/IntegratedLearner
 BugReports: https://github.com/himelmallick/IntegratedLearner/issues
@@ -19,14 +19,11 @@ Depends:
     R (>= 4.2.0)
 Imports:
     SuperLearner,
-    data.table,
-    mlr3,
-    mlr3proba,
-    mlr3pipelines,
-    mlr3extralearners,
     survival,
     glmnet,
     ranger,
+    randomForestSRC,
+    CoxBoost,
     MultiAssayExperiment,
     SummarizedExperiment,
     dplyr,
@@ -39,10 +36,15 @@ Imports:
     ROCR
 Suggests:
     bartMachine,
+    BART,
     bayesplot,
     cowplot,
+    gbm,
     ggplot2,
+    mboost,
+    S4Vectors,
     timeROC,
+    xgboost,
     glmnetUtils,
     nloptr,
     prediction,
@@ -53,5 +55,6 @@ Suggests:
     curatedMetagenomicData,
     mlbench,
     bayesreg
+Config/testthat/edition: 3
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
