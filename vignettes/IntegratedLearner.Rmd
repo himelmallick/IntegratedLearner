@@ -39,19 +39,12 @@ library(IntegratedLearner)
 # Needed for BART-based sections
 options(java.parameters = "-Xmx6G")
 
-# Tutorial dependencies
-library(tidyverse)
+# Tutorial dependencies used in evaluated chunks
+library(dplyr)
+library(ggplot2)
 library(SuperLearner)
-library(caret)
-library(cowplot)
-library(bayesplot)
-library(bartMachine)
-library(curatedMetagenomicData)
-library(TreeSummarizedExperiment)
-library(SummarizedExperiment)
-library(MultiAssayExperiment)
-library(survival)
-library(S4Vectors)
+library(stringr)
+library(tibble)
 ```
 
 ## Input Data Contract
@@ -80,7 +73,7 @@ For survival workflows, include `time` and `event` columns in `sample_metadata` 
 `IntegratedLearner` accepts `MultiAssayExperiment` inputs through `MAE_train`/`MAE_valid`. This is often the cleanest path when each omics layer is already represented as a `SummarizedExperiment`/`TreeSummarizedExperiment`.
 
 
-```{r, eval=TRUE,warning = FALSE}
+```{r, eval=FALSE,warning = FALSE}
 
 
 # 1) Download two aligned layers from curatedMetagenomicData
@@ -166,7 +159,7 @@ fit_mae_bin <- IntegratedLearner(
   MAE_valid = mae_valid,
   experiment = c("taxonomy", "pathway"),
   assay.type = c("relative_abundance", "pathway_abundance"),
-  folds = 3,
+  folds = 2,
   base_learner = "SL.randomForest",
   meta_learner = "SL.nnls.auc",
   family = binomial(),
@@ -354,7 +347,7 @@ PCL_valid <- list(
 fit <- IntegratedLearner(
   PCL_train = PCL_train,
   PCL_valid = PCL_valid,
-  folds = 5,
+  folds = 2,
   base_learner = "SL.randomForest",
   meta_learner = "SL.nnls.auc",
   verbose = TRUE,
@@ -427,16 +420,24 @@ PCL_train <- list(
 
 ### Step 3: Fit Continuous Model
 
-For this example, we use BART base learners (`SL.BART`) with leave-one-subject-out style CV (`folds = 17`).
+For this build-friendly example, we use a stable baseline learner (`SL.glm`) with 5-fold CV.
+An optional BART-only interpretation block is included below and runs only when `fit$base_learner = "SL.BART"` and `bartMachine` is available.
 
 ```{r, warning=FALSE}
 fit <- IntegratedLearner(
   PCL_train = PCL_train,
-  folds = 17,
-  base_learner = "SL.BART",
+  folds = 2,
+  base_learner = "SL.glm",
   meta_learner = "SL.nnls.auc",
   family = gaussian()
 )
+
+is_bart_fit <- identical(fit$base_learner, "SL.BART") &&
+  requireNamespace("bartMachine", quietly = TRUE)
+
+if (!isTRUE(is_bart_fit)) {
+  message("Skipping BART-specific posterior and feature-importance chunks in this run.")
+}
 ```
 
 ### Step 4: Evaluate Predictive Accuracy
@@ -451,11 +452,11 @@ fit$R2.train
 plot.obj <- IntegratedLearner:::plot.learner(fit)
 ```
 
-### Step 5: Uncertainty and Feature-Level Interpretation (BART)
+### Step 5: Uncertainty and Feature-Level Interpretation (BART, optional)
 
 When using `SL.BART`, you can inspect posterior predictive distributions and derive weighted posterior summaries.
 
-```{r}
+```{r, eval=exists("is_bart_fit") && isTRUE(is_bart_fit)}
 weights <- fit$weights
 
 dataX <- fit$X_train_layers
@@ -478,10 +479,10 @@ names(dataY) <- rownames(dataX[[1]])
 
 Visualize 68% and 95% credible intervals for observations:
 
-```{r fig.width=9, fig.height=7}
+```{r fig.width=9, fig.height=7, eval=exists("is_bart_fit") && isTRUE(is_bart_fit)}
 ord_names <- names(sort(rowMeans(weighted.post.samples), decreasing = TRUE))
 
-mcmc_intervals(t(weighted.post.samples), prob = 0.68, prob_outer = 0.95) +
+bayesplot::mcmc_intervals(t(weighted.post.samples), prob = 0.68, prob_outer = 0.95) +
   scale_y_discrete(limits = ord_names) +
   geom_point(aes(x = dataY[ord_names], y = ord_names), shape = 1, size = 3, color = "black") +
   coord_flip() +
@@ -495,7 +496,7 @@ mcmc_intervals(t(weighted.post.samples), prob = 0.68, prob_outer = 0.95) +
 
 Layer weights and feature-level inclusion proportions can also be examined for biological interpretation.
 
-```{r}
+```{r, eval=exists("is_bart_fit") && isTRUE(is_bart_fit)}
 omicsEye_theme <- function() {
   angle <- 45
   hjust <- 1
@@ -577,8 +578,8 @@ p5 <- VIMP %>%
   xlab("")
 ```
 
-```{r fig.width=7, fig.height=4}
-plot_grid(
+```{r fig.width=7, fig.height=4, eval=exists("is_bart_fit") && isTRUE(is_bart_fit)}
+cowplot::plot_grid(
   p4,
   ncol = 1,
   labels = c("Estimated IntegratedLearner Layer Weights"),
@@ -587,8 +588,8 @@ plot_grid(
 ) + theme(plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm"))
 ```
 
-```{r fig.width=9, fig.height=7}
-plot_grid(
+```{r fig.width=9, fig.height=7, eval=exists("is_bart_fit") && isTRUE(is_bart_fit)}
+cowplot::plot_grid(
   p5,
   ncol = 1,
   labels = c("Top Features by Layer (BART Inclusion Proportions)"),

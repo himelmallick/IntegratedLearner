@@ -169,6 +169,28 @@ IL_conbin<-function(feature_table,
   ###############################
   
   cvControl <- list(V = folds, shuffle = FALSE, validRows = obsIndexIn)
+  sl_library <- if (is.null(base_screener) || identical(base_screener, "All")) {
+    base_learner
+  } else {
+    list(c(base_learner, base_screener))
+  }
+  sl_env <- new.env(parent = environment())
+  sl_ns <- asNamespace("SuperLearner")
+  lib_names <- unique(c(base_learner, base_screener, meta_learner, "All"))
+  for (nm in lib_names) {
+    if (length(nm) != 1L || !is.character(nm) || !nzchar(nm)) {
+      next
+    }
+    if (!exists(nm, envir = sl_env, inherits = TRUE) &&
+        exists(nm, envir = sl_ns, inherits = FALSE)) {
+      assign(nm, get(nm, envir = sl_ns, inherits = FALSE), envir = sl_env)
+    }
+    pred_nm <- paste0("predict.", nm)
+    if (!exists(pred_nm, envir = sl_env, inherits = TRUE) &&
+        exists(pred_nm, envir = sl_ns, inherits = FALSE)) {
+      assign(pred_nm, get(pred_nm, envir = sl_ns, inherits = FALSE), envir = sl_env)
+    }
+  }
   
   #################################################
   # Stacked generalization input data preparation #
@@ -225,7 +247,8 @@ IL_conbin<-function(feature_table,
                                                      X = X,
                                                      cvControl = cvControl,    
                                                      verbose = verbose, 
-                                                     SL.library = list(c(base_learner,base_screener)),
+                                                     env = sl_env,
+                                                     SL.library = sl_library,
                                                      family = family)
     
     ###################################################
@@ -305,6 +328,7 @@ IL_conbin<-function(feature_table,
                                                X = combo, 
                                                cvControl = cvControl,    
                                                verbose = verbose, 
+                                               env = sl_env,
                                                SL.library = meta_learner,
                                                family=family)
                                                 
@@ -352,12 +376,13 @@ IL_conbin<-function(feature_table,
     # Run user-specified base learner #
     ###################################
     
-    SL_fit_concat<-SuperLearner::SuperLearner(Y = Y, 
-                                              X = fulldat, 
-                                              cvControl = cvControl,    
-                                              verbose = verbose, 
-                                              SL.library = list(c(base_learner,base_screener)),
-                                              family=family)
+    SL_fit_concat <- SuperLearner::SuperLearner(Y = Y, 
+                                                X = fulldat, 
+                                                cvControl = cvControl,    
+                                                verbose = verbose, 
+                                                env = sl_env,
+                                                SL.library = sl_library,
+                                                family = family)
     
     # Extract the fit object from superlearner
     model_concat <- SL_fit_concat$fitLibrary[[1]]$object

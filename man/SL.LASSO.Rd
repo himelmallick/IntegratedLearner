@@ -72,7 +72,7 @@ fit <- SL.LASSO(
   family = stats::binomial(),
   obsWeights = rep(1, nrow(X)),
   id = seq_len(nrow(X)),
-  nfolds = 2, nlambda = 5
+  nfolds = 5, nlambda = 5
 )
 head(fit$pred)
 

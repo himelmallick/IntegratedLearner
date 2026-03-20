@@ -72,7 +72,7 @@ fit <- SL.enet(
   family = stats::binomial(),
   obsWeights = rep(1, nrow(X)),
   id = seq_len(nrow(X)),
-  alpha = c(0, 0.5, 1), nfolds = 2, nlambda = 5
+  alpha = c(0, 0.5, 1), nfolds = 5, nlambda = 5
 )
 head(fit$pred)
 

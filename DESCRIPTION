@@ -37,10 +37,10 @@ Imports:
     tidyr,
     methods,
     stats,
-    caret,
     ROCR
 Suggests:
     bayesplot,
+    caret,
     cowplot,
     ggplot2,
     mboost,

@@ -116,22 +116,24 @@ expit <- function(x){
 #' @param ... Additional arguments (not used)
 #' @return A list with elements \code{pred} and \code{fit} following
 #'   SuperLearner conventions.
-#' @examplesIf requireNamespace("bartMachine", quietly = TRUE)
-#' set.seed(1)
-#' X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
-#' Y <- rbinom(20, 1, plogis(X$x1 - X$x2))
-#' fit <- SL.BART(
-#'   Y = Y,
-#'   X = X,
-#'   newX = X[1:5, , drop = FALSE],
-#'   family = stats::binomial(),
-#'   obsWeights = rep(1, nrow(X)),
-#'   id = seq_len(nrow(X)),
-#'   num_trees = 5,
-#'   num_burn_in = 10,
-#'   num_iterations_after_burn_in = 20
-#' )
-#' head(fit$pred)
+#' @examples
+#' if (FALSE) {
+#'   set.seed(1)
+#'   X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
+#'   Y <- rbinom(20, 1, plogis(X$x1 - X$x2))
+#'   fit <- SL.BART(
+#'     Y = Y,
+#'     X = X,
+#'     newX = X[1:5, , drop = FALSE],
+#'     family = stats::binomial(),
+#'     obsWeights = rep(1, nrow(X)),
+#'     id = seq_len(nrow(X)),
+#'     num_trees = 5,
+#'     num_burn_in = 10,
+#'     num_iterations_after_burn_in = 20
+#'   )
+#'   head(fit$pred)
+#' }
 #' 
 #' @encoding utf-8
 #' @export
@@ -206,23 +208,25 @@ predict.SL.BART <- function(object, newdata, family, X = NULL, Y = NULL,...) {
 #' @param ... Additional arguments passed to \code{mxBART::mxbart}.
 #'
 #' @return A list with elements \code{pred} and \code{fit} (SuperLearner convention).
-#' @examplesIf requireNamespace("mxBART", quietly = TRUE)
-#' set.seed(1)
-#' X <- data.frame(x1 = rnorm(30), x2 = rnorm(30))
-#' Y <- X$x1 - 0.3 * X$x2 + rnorm(30, sd = 0.2)
-#' fit <- SL.mxBART(
-#'   Y = Y,
-#'   X = X,
-#'   newX = X[1:4, , drop = FALSE],
-#'   family = stats::gaussian(),
-#'   obsWeights = rep(1, nrow(X)),
-#'   id = seq_len(nrow(X)),
-#'   ntree = 10,
-#'   ndpost = 20,
-#'   nskip = 10,
-#'   keepevery = 1
-#' )
-#' head(fit$pred)
+#' @examples
+#' if (FALSE) {
+#'   set.seed(1)
+#'   X <- data.frame(x1 = rnorm(30), x2 = rnorm(30))
+#'   Y <- X$x1 - 0.3 * X$x2 + rnorm(30, sd = 0.2)
+#'   fit <- SL.mxBART(
+#'     Y = Y,
+#'     X = X,
+#'     newX = X[1:4, , drop = FALSE],
+#'     family = stats::gaussian(),
+#'     obsWeights = rep(1, nrow(X)),
+#'     id = seq_len(nrow(X)),
+#'     ntree = 10,
+#'     ndpost = 20,
+#'     nskip = 10,
+#'     keepevery = 1
+#'   )
+#'   head(fit$pred)
+#' }
 #' @export
 SL.mxBART <- function(Y, X, newX, family, obsWeights, id,
                       sparse = FALSE, ntree = 50,
@@ -353,7 +357,7 @@ predict.SL.mxBART <- function(object, newdata,family=family, X=X, Y=Y,
 #'   family = stats::binomial(),
 #'   obsWeights = rep(1, nrow(X)),
 #'   id = seq_len(nrow(X)),
-#'   alpha = 0.5, nfolds = 2, nlambda = 5
+#'   alpha = 0.5, nfolds = 5, nlambda = 5
 #' )
 #' head(fit$pred)
 #' @references
@@ -457,7 +461,7 @@ SL.glmnet2 <- function(Y, X, newX, family, obsWeights, id,
 #'   family = stats::binomial(),
 #'   obsWeights = rep(1, nrow(X)),
 #'   id = seq_len(nrow(X)),
-#'   nfolds = 2, nlambda = 5
+#'   nfolds = 5, nlambda = 5
 #' )
 #' head(fit$pred)
 #'
@@ -565,7 +569,7 @@ SL.LASSO <- function(Y, X, newX, family, obsWeights, id,
 #'   family = stats::binomial(),
 #'   obsWeights = rep(1, nrow(X)),
 #'   id = seq_len(nrow(X)),
-#'   alpha = c(0, 0.5, 1), nfolds = 2, nlambda = 5
+#'   alpha = c(0, 0.5, 1), nfolds = 5, nlambda = 5
 #' )
 #' head(fit$pred)
 #'
@@ -670,20 +674,22 @@ get_cvm <- function(model) {
 #' @param ... other parameters passed to bayesreg function
 #'
 #' @return SL object
-#' @examplesIf requireNamespace("bayesreg", quietly = TRUE)
-#' set.seed(1)
-#' X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
-#' Y <- X$x1 + rnorm(20, sd = 0.3)
-#' fit <- SL.horseshoe(
-#'   Y = Y,
-#'   X = X,
-#'   newX = X[1:5, , drop = FALSE],
-#'   family = stats::gaussian(),
-#'   N = 200,
-#'   burnin = 50,
-#'   thinning = 2
-#' )
-#' head(fit$pred)
+#' @examples
+#' if (FALSE) {
+#'   set.seed(1)
+#'   X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
+#'   Y <- X$x1 + rnorm(20, sd = 0.3)
+#'   fit <- SL.horseshoe(
+#'     Y = Y,
+#'     X = X,
+#'     newX = X[1:5, , drop = FALSE],
+#'     family = stats::gaussian(),
+#'     N = 200,
+#'     burnin = 50,
+#'     thinning = 2
+#'   )
+#'   head(fit$pred)
+#' }
 #' @export
 #' @export
 SL.horseshoe <- function(Y, X, newX, family, prior = "horseshoe", N = 20000L, burnin = 1000L,
