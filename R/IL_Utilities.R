@@ -114,9 +114,26 @@ print.learner <- function(x,...){
       
     }
     
+  } else if (res$family == "multinomial") {
+    
+    cat("========================================\n")
+    cat("Multiclass model fit with", length(res$class_levels), "classes\n")
+    cat("Base learner:", res$base_learner, "\n")
+    if (res$run_stacked == TRUE) cat("Stacked learner:", res$meta_learner, "\n")
+    if (res$run_concat == TRUE) cat("Concatenated learner:", res$base_learner, "\n")
+    cat("========================================\n")
+    cat("Multiclass metrics for training data:\n")
+    print(res$metrics.train)
+    cat("========================================\n")
+    
+    if (res$test == TRUE && !is.null(res$metrics.test)) {
+      cat("Multiclass metrics for test data:\n")
+      print(res$metrics.test)
+      cat("========================================\n")
+    }
   }
   
-  if(res$meta_learner=="SL.nnls.auc" & res$run_stacked){
+  if(res$meta_learner=="SL.nnls.auc" & res$run_stacked && !is.null(res$weights)){
     
     cat("Weights for individual layers predictions in IntegratedLearner: \n")
     print(round(res$weights,digits=3))

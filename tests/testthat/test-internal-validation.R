@@ -104,16 +104,14 @@ test_that("validate_IL_inputs enforces non-survival constraints", {
   
   multiclass <- pcl
   multiclass$sample_metadata$Y <- rep(c(0, 1, 2), length.out = nrow(multiclass$sample_metadata))
-  expect_error(
+  expect_invisible(
     IntegratedLearner:::.validate_IL_inputs(
       feature_table = multiclass$feature_table,
       sample_metadata = multiclass$sample_metadata,
       feature_metadata = multiclass$feature_metadata,
       family_name = "binomial",
       is_survival = FALSE
-    ),
-    "Multiclass outcomes are not supported",
-    fixed = TRUE
+    )
   )
   
   non01 <- pcl

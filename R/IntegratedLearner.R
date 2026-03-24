@@ -150,6 +150,10 @@ IntegratedLearner <- function(
   
   fam_name <- .safe_family_name(family)
   is_survival <- .is_survival_outcome(fam_name, sample_metadata)
+  is_multiclass <- FALSE
+  if (!is_survival && identical(fam_name, "binomial")) {
+    is_multiclass <- length(unique(as.character(sample_metadata$Y))) > 2L
+  }
   
   if (is_survival) {
     sample_metadata       <- .ensure_survival_metadata(sample_metadata, context = "training")
@@ -183,6 +187,25 @@ IntegratedLearner <- function(
     )
     res$family <- "survival"
     res$feature.names <- rownames(feature_table)
+  } else if (is_multiclass) {
+    res <- IL_multiclass(
+      feature_table         = feature_table,
+      sample_metadata       = sample_metadata,
+      feature_metadata      = feature_metadata,
+      feature_table_valid   = feature_table_valid,
+      sample_metadata_valid = sample_metadata_valid,
+      folds                 = folds,
+      seed                  = seed,
+      base_learner          = base_learner,
+      base_screener         = base_screener,
+      meta_learner          = meta_learner,
+      run_concat            = run_concat,
+      run_stacked           = run_stacked,
+      verbose               = verbose,
+      print_learner         = print_learner,
+      family                = family,
+      ...
+    )
   } else {
     res <- IL_conbin(
       feature_table         = feature_table,

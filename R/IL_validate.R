@@ -37,22 +37,31 @@
   if (!is_survival) {
     Y <- sample_metadata$Y
     
-    if (any(!is.finite(Y))) {
-      stop("sample_metadata$Y contains non-finite values; please clean or impute the outcome.")
-    }
-    
     if (identical(family_name, "binomial")) {
-      if (length(unique(Y)) < 2)
+      if (is.numeric(Y) && any(!is.finite(Y))) {
+        stop("sample_metadata$Y contains non-finite values; please clean or impute the outcome.")
+      }
+      y_chr <- as.character(Y)
+      if (any(!nzchar(y_chr) | is.na(y_chr))) {
+        stop("sample_metadata$Y contains missing/empty class labels; please clean the outcome.")
+      }
+      if (length(unique(y_chr)) < 2) {
         stop("Binomial outcome must have at least two classes")
+      }
       
-      if (length(unique(Y)) > 2)
-        stop("Multiclass outcomes are not supported")
-      
-      if (!all(Y %in% c(0, 1)))
-        warning("Binomial outcome is not coded as {0,1}")
+      # Backwards-compatible warning for binary settings not coded as 0/1.
+      if (length(unique(y_chr)) == 2L) {
+        y_num <- suppressWarnings(as.numeric(as.character(Y)))
+        if (all(is.finite(y_num)) && !all(y_num %in% c(0, 1))) {
+          warning("Binomial outcome is not coded as {0,1}")
+        }
+      }
     }
     
     if (identical(family_name, "gaussian")) {
+      if (any(!is.finite(Y))) {
+        stop("sample_metadata$Y contains non-finite values; please clean or impute the outcome.")
+      }
       if (length(unique(Y)) <= 5)
         warning("Gaussian family with <=5 unique Y values - are you sure?")
     }

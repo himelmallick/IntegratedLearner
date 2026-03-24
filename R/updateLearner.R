@@ -22,6 +22,14 @@ update.learner <- function(object,
   
   fit <- object
   
+  if (identical(fit$family, "multinomial")) {
+    stop(
+      "update.learner() for multiclass fits is not implemented yet. ",
+      "Please use predict.learner() with the full feature/layer set.",
+      call. = FALSE
+    )
+  }
+  
   # ---- input checks ----
   if (is.null(feature_table_valid) || is.null(feature_metadata_valid)) {
     stop("feature_table_valid and feature_metadata_valid cannot be NULL.", call. = FALSE)
