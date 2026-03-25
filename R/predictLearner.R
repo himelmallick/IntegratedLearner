@@ -17,6 +17,16 @@ predict.learner <- function(object,
   
   fit <- object
   
+  if (identical(fit$family, "multinomial")) {
+    return(predict_multiclass.learner(
+      object = fit,
+      feature_table_valid = feature_table_valid,
+      sample_metadata_valid = sample_metadata_valid,
+      feature_metadata = feature_metadata,
+      ...
+    ))
+  }
+  
   # Needed because this function uses dplyr at runtime
   .require_package("dplyr")
   

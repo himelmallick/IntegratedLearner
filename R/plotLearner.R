@@ -248,5 +248,34 @@ plot.learner <- function(x, y = NULL,
     return(list(plot = p, R2_table = R2_table))
   }
   
-  stop("Unknown family in fit$family. Expected 'binomial' or 'gaussian'.", call. = FALSE)
+  if (fit$family == "multinomial") {
+    if (is.null(fit$metrics.train)) {
+      stop("No multiclass metrics found in fit object.", call. = FALSE)
+    }
+    
+    train_tbl <- fit$metrics.train
+    train_tbl$dataset <- "train"
+    plot_tbl <- train_tbl
+    
+    if (isTRUE(fit$test) && !is.null(fit$metrics.test)) {
+      test_tbl <- fit$metrics.test
+      test_tbl$dataset <- "test"
+      plot_tbl <- rbind(plot_tbl, test_tbl)
+    }
+    
+    p <- ggplot2::ggplot(plot_tbl, ggplot2::aes(x = model, y = accuracy, fill = dataset)) +
+      ggplot2::geom_col(position = "dodge") +
+      ggplot2::theme_bw() +
+      ggplot2::ylab("Accuracy") +
+      ggplot2::xlab("") +
+      ggplot2::coord_flip() +
+      ggplot2::labs(fill = "")
+    
+    print(p)
+    out <- list(plot = p, metrics_train = train_tbl)
+    if (exists("test_tbl")) out$metrics_test <- test_tbl
+    return(out)
+  }
+  
+  stop("Unknown family in fit$family. Expected 'binomial', 'gaussian', or 'multinomial'.", call. = FALSE)
 }

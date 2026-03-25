@@ -99,6 +99,16 @@ IL_conbin<-function(feature_table,
   ##############
   
   start.time<-Sys.time()
+
+  .validate_IL_inputs(
+    feature_table = feature_table,
+    sample_metadata = sample_metadata,
+    feature_metadata = feature_metadata,
+    feature_table_valid = feature_table_valid,
+    sample_metadata_valid = sample_metadata_valid,
+    family_name = .safe_family_name(family),
+    is_survival = FALSE
+  )
   
   
   #############################################################################################
