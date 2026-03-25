@@ -1,6 +1,6 @@
 # IntegratedLearner - Integrated machine learning for multi-omics prediction and classification
 
-The repository houses the **`IntegratedLearner`** R package for multi-omics prediction and classification. Binary, continuous, and survival outcomes are supported through a single high-level interface.
+The repository houses the **`IntegratedLearner`** R package for multi-omics prediction and classification. Binary, multiclass, continuous, and survival outcomes are supported through a single high-level interface.
 
 ## Dependencies
 
@@ -22,9 +22,10 @@ library(IntegratedLearner)
 
 ## Features
 * Supports both `PCL` and `MAE` input modes
-* Supports binary, continuous, and survival outcomes
+* Supports binary, multiclass, continuous, and survival outcomes
 * Supports early, late, and intermediate fusion in one interface
-* Integrates with [SuperLearner](https://cran.r-project.org/web/packages/SuperLearner/index.html) for non-survival models (`SL.*`)
+* Integrates with [SuperLearner](https://cran.r-project.org/web/packages/SuperLearner/index.html) for binary/continuous models (`SL.*`)
+* Includes a native multiclass backend with multiclass learners (`glmnet`, `randomforest`, `ranger`, `xgboost`, `mbart`, `multinom`) and optional multiclass screening
 * Uses a native BioC-friendly survival backend (`ILsurv`) for `surv.*` models
 * Visualization using built-in plotting
 * Built-in layer weights and feature-importance outputs for interpretability
@@ -33,22 +34,24 @@ library(IntegratedLearner)
 
 ## Quickstart Guide
 
-The package vignette demonstrates binary, continuous, survival, `PCL`, and `MAE` workflows. This vignette can be viewed online [here](http://htmlpreview.github.io/?https://github.com/himelmallick/IntegratedLearner/blob/master/vignettes/IntegratedLearner.html).
+The package vignette demonstrates binary, multiclass, continuous, survival, `PCL`, and `MAE` workflows. This vignette can be viewed online [here](http://htmlpreview.github.io/?https://github.com/himelmallick/IntegratedLearner/blob/master/vignettes/IntegratedLearner.html).
 
 ## Background
 
 **`IntegratedLearner`** provides an integrated machine learning framework to 1) consolidate predictions by borrowing information across several longitudinal and cross-sectional omics data layers, 2) decipher the mechanistic role of individual omics features that can potentially lead to new sets of testable hypotheses, and 3) quantify uncertainty of the integration process. Three integration paradigms are supported: early, late, and intermediate.
 
-For non-survival outcomes, late fusion proceeds by 1) fitting a machine learning algorithm (`base_learner`) per layer and 2) combining layer-wise cross-validated predictions using a meta model (`meta_learner`). A common default is [BART](https://arxiv.org/abs/0806.3286) as base learner (`base_learner = "SL.BART"`) with `SL.nnls.auc` as the meta-learner.
+For binary/continuous outcomes, late fusion proceeds by 1) fitting a machine learning algorithm (`base_learner`) per layer and 2) combining layer-wise cross-validated predictions using a meta model (`meta_learner`). A common default is [BART](https://arxiv.org/abs/0806.3286) as base learner (`base_learner = "SL.BART"`) with `SL.nnls.auc` as the meta-learner.
+
+For multiclass outcomes (`family = binomial()` with `length(unique(Y)) > 2`), `IntegratedLearner` dispatches to a native multiclass backend that performs multiclass probability modeling at layer, stacked, and concatenated levels. Optional screening is available via `base_screener` (for example: `anova`, `glmnet`, `randomforest`, `ranger`, `xgboost`) with `screen_*` arguments.
 
 For survival outcomes, `IntegratedLearner` dispatches to the native survival engine (`ILsurv`) with configurable late-fusion weighting (`COX`/`IBS`) and optional intermediate fusion. Supported survival learners include Cox, penalized Cox, tree ensembles, boosting, and XGBoost-based survival variants (see full list below).
 
-For non-survival tasks, learners should use the `SL.` prefix (for example, `SL.randomForest`, `SL.BART`, `SL.glmnet`). See the [SuperLearner user manual](https://cran.r-project.org/web/packages/SuperLearner/vignettes/Guide-to-SuperLearner.html) for additional options.
+For binary/continuous non-survival tasks, learners should use the `SL.` prefix (for example, `SL.randomForest`, `SL.BART`, `SL.glmnet`). For multiclass, use multiclass learner IDs such as `randomforest`, `ranger`, `xgboost`, `glmnet`, `mbart`, or `multinom`.
 
 ## Basic Usage
 
 ```r
-# PCL mode (binary/continuous/survival)
+# PCL mode (binary/continuous)
 IntegratedLearner(
   PCL_train = pcl_train,
   PCL_valid = pcl_valid,        # optional
@@ -58,7 +61,19 @@ IntegratedLearner(
   family = binomial()
 )
 
-# MAE mode (binary/continuous/survival)
+# MAE mode (multiclass)
+IntegratedLearner(
+  MAE_train = mae_train,
+  MAE_valid = mae_valid,        # optional
+  experiment = c("metabolome", "species"),
+  assay.type = c("abundance", "abundance"),
+  folds = 5,
+  base_learner = "randomforest",
+  meta_learner = "randomforest",
+  family = binomial()
+)
+
+# MAE mode (survival)
 IntegratedLearner(
   MAE_train = mae_train,
   MAE_valid = mae_valid,        # optional
@@ -78,22 +93,24 @@ IntegratedLearner(
 * `na.rm`: Logical; drop features containing missing values after extraction/prep.
 * `folds`: Integer. Number of folds for cross-validation. Default is `5`.
 * `seed`: Integer seed for reproducibility. Default is `1234`.
-* `base_learner`: Non-survival uses `SL.*` learners; survival uses supported `surv.*` learners.
-* `meta_learner`: Meta learner for non-survival late fusion. Default is `"SL.nnls.auc"`.
+* `base_learner`: Binary/continuous uses `SL.*`; multiclass uses native multiclass learners; survival uses supported `surv.*` learners.
+* `base_screener`: Optional pre-screening method before multiclass base/concat model fits (`All`, `anova`, `glmnet`, `randomforest`, `ranger`, `xgboost`).
+* `meta_learner`: Meta learner for non-survival late fusion. Defaults to `"SL.nnls.auc"` in binary/continuous; multiclass supports native learners (for example `glmnet`, `randomforest`, `xgboost`).
 * `run_concat`: Logical; include early-fusion (concatenated) model for non-survival.
 * `run_stacked`: Logical; include late-fusion stacked model for non-survival.
-* `family`: Typically `gaussian()` or `binomial()` for non-survival. Survival is auto-detected from metadata or family.
+* `family`: `gaussian()` (continuous), `binomial()` (binary or multiclass, auto-detected from `Y`), or survival family/metadata.
 * `verbose`: Logical progress flag.
-* `...`: Additional backend parameters. For survival, this includes options such as `weight_method`, `do_early_fusion`, `intermediate_learners`, and learner-specific hyperparameters (or `model_args`).
+* `...`: Additional backend parameters. For multiclass screening, use `screen_*` arguments (for example `screen_keep_n`, `screen_keep_prop`, `screen_max_features`). For survival, includes options such as `weight_method`, `do_early_fusion`, `intermediate_learners`, and learner-specific hyperparameters (or `model_args`).
 
 Supported model families:
 
-* Non-survival: any available `SuperLearner` `SL.*` model.
+* Binary/continuous non-survival: any available `SuperLearner` `SL.*` model.
+* Multiclass non-survival: `glmnet`, `randomforest`, `ranger`, `xgboost`, `mbart`, `multinom`.
 * Survival: `surv.coxph`, `surv.glmnet`, `surv.ranger`, `surv.ranger.extratrees`, `surv.ranger.maxstat`, `surv.ranger.C`, `surv.rfsrc`, `surv.coxboost`, `surv.gbm`, `surv.xgboost.cox`, `surv.xgboost.aft`, `surv.mboost`, `surv.bart`.
 
 Supported fusion modules:
 
-* Non-survival: single-layer + early (`run_concat`) + late (`run_stacked`).
+* Non-survival (binary/continuous/multiclass): single-layer + early (`run_concat`) + late (`run_stacked`).
 * Survival: single-layer + early (`do_early_fusion`) + late weighted fusion (`COX`/`IBS`) + intermediate (`intermediate_learners`).
 
 #### The IntegratedLearner workflow
@@ -112,6 +129,15 @@ For continuous/binary fits (`IL_conbin` path):
 * `AUC.train`/`AUC.test` (binomial) or `R2.train`/`R2.test` (gaussian).
 * `feature_importance_signed`: Global signed feature importance.
 * `feature_importance_signed_by_layer`: Per-layer signed feature importance.
+
+For multiclass fits (`IL_multiclass` path):
+
+* `model_fits`: Layer-wise, stacked, and concatenated multiclass model objects.
+* `prob.train` / `prob.test`: Per-model class-probability matrices.
+* `class.train` / `class.test`: Predicted class labels.
+* `metrics.train` / `metrics.test`: Accuracy, balanced accuracy, and multiclass log-loss.
+* `selected_features_by_layer`, `selected_features_concat`: Features retained by multiclass screeners (when used).
+* `feature_importance_signed_by_class`: Signed importance by class.
 
 For survival fits (`ILsurv` path):
 
