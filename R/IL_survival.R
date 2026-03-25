@@ -1,7 +1,5 @@
 # BioC-friendly survival backend for IntegratedLearner.
 
-.is_missing <- function(x) is.null(x) || length(x) == 0L
-
 .require_pkg <- function(pkg, method) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
     stop(
@@ -1077,32 +1075,22 @@
     "surv.mboost",
     "surv.bart"
   )
-  if (!(base_learner %in% supported)) {
-    stop("Unsupported base_learner. Supported: ", paste(supported, collapse = ", "), call. = FALSE)
-  }
+
+  validated <- .validate_survival_core_inputs(
+    feature_table = feature_table,
+    sample_metadata = sample_metadata,
+    feature_metadata = feature_metadata,
+    base_learner = base_learner,
+    supported_learners = supported,
+    model_args = model_args
+  )
+
   weight_method <- match.arg(weight_method)
   cox_layer_score <- match.arg(cox_layer_score)
   cox_weight_penalty <- match.arg(cox_weight_penalty)
-  if (missing(model_args) || is.null(model_args)) model_args <- list()
-  if (!is.list(model_args)) {
-    stop("'model_args' must be a named list (or NULL).", call. = FALSE)
-  }
-
-  if (.is_missing(feature_table) || .is_missing(sample_metadata) || .is_missing(feature_metadata)) {
-    stop("feature_table, sample_metadata, and feature_metadata are required.", call. = FALSE)
-  }
-  if (!("featureType" %in% colnames(feature_metadata))) {
-    feature_metadata$featureType <- "layer1"
-  }
-  if (!all(c("time", "event") %in% colnames(sample_metadata))) {
-    stop("sample_metadata must contain columns 'time' and 'event'.", call. = FALSE)
-  }
-  if (!all(rownames(sample_metadata) == colnames(feature_table))) {
-    stop("rownames(sample_metadata) must match colnames(feature_table).", call. = FALSE)
-  }
-
-  layers <- unique(feature_metadata$featureType)
-  if (length(layers) == 0L) stop("No layers found in feature_metadata$featureType.", call. = FALSE)
+  model_args <- validated$model_args
+  feature_metadata <- validated$feature_metadata
+  layers <- validated$layers
   times <- as.numeric(sample_metadata$time)
   events <- as.numeric(sample_metadata$event)
   fold_id <- .make_stratified_folds(times, events, folds = folds, seed = seed)

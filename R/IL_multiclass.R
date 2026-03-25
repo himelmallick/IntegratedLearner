@@ -29,30 +29,27 @@ IL_multiclass <- function(feature_table,
 
   start.time <- Sys.time()
 
-  y_raw <- as.character(sample_metadata$Y)
-  if (any(is.na(y_raw) | !nzchar(y_raw))) {
-    stop("sample_metadata$Y contains missing/empty class labels.", call. = FALSE)
-  }
-  class_levels <- sort(unique(y_raw))
-  if (length(class_levels) < 3L) {
-    stop("IL_multiclass requires at least 3 classes.", call. = FALSE)
-  }
-  Y <- factor(y_raw, levels = class_levels)
+  .validate_IL_inputs(
+    feature_table = feature_table,
+    sample_metadata = sample_metadata,
+    feature_metadata = feature_metadata,
+    feature_table_valid = feature_table_valid,
+    sample_metadata_valid = sample_metadata_valid,
+    family_name = "binomial",
+    is_survival = FALSE
+  )
+
+  validated <- .validate_multiclass_training_inputs(sample_metadata = sample_metadata, folds = folds)
+  Y <- validated$Y
+  class_levels <- validated$class_levels
 
   learner_id <- .map_multiclass_learner(base_learner)
   meta_id <- .map_multiclass_meta_learner(meta_learner)
   screener_id <- .map_multiclass_screener(base_screener)
 
   set.seed(seed)
-  subjectID <- unique(sample_metadata$subjectID)
-  folds <- as.integer(folds)
-  if (!is.finite(folds) || folds < 2L) {
-    stop("'folds' must be an integer >= 2 for multiclass classification.", call. = FALSE)
-  }
-  if (length(subjectID) < folds) {
-    folds <- length(subjectID)
-    warning("Reduced folds to the number of unique subject IDs for multiclass training.", call. = FALSE)
-  }
+  subjectID <- validated$subjectID
+  folds <- validated$folds
 
   subjectCvFoldsIN <- caret::createFolds(seq_along(subjectID), k = folds, returnTrain = TRUE)
   obsIndexIn <- vector("list", folds)
@@ -1204,19 +1201,11 @@ predict_multiclass.learner <- function(object,
                                        ...) {
   fit <- object
 
-  if (is.null(feature_table_valid)) {
-    stop("Feature table for validation set cannot be empty", call. = FALSE)
-  }
-  if (is.null(feature_metadata)) {
-    stop("feature_metadata cannot be NULL for multiclass prediction.", call. = FALSE)
-  }
-  if (!"featureID" %in% colnames(feature_metadata) || !"featureType" %in% colnames(feature_metadata)) {
-    stop("feature_metadata must contain both 'featureID' and 'featureType'.", call. = FALSE)
-  }
-
-  if (all(fit$feature.names %in% rownames(feature_table_valid)) == FALSE) {
-    stop("Validation feature_table must include all training features.", call. = FALSE)
-  }
+  .validate_multiclass_prediction_inputs(
+    fit = fit,
+    feature_table_valid = feature_table_valid,
+    feature_metadata = feature_metadata
+  )
 
   class_levels <- fit$class_levels
   layer_models <- fit$model_fits$model_layers
