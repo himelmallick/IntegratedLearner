@@ -355,3 +355,35 @@ test_that("credint.learner supports multiclass mbart concatenated uncertainty", 
 
   expect_s3_class(p, "ggplot")
 })
+
+test_that("multiclass base_screener performs feature filtering", {
+  skip_if_not_installed("glmnet")
+
+  pcl <- make_toy_multiclass_pcl(n_samples = 36, n_features = 24, seed = 2044)
+  full_by_layer <- table(pcl$feature_metadata$featureType)
+
+  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl,
+    folds = 3,
+    seed = 2044,
+    base_learner = "glmnet",
+    meta_learner = "glmnet",
+    base_screener = "anova",
+    run_stacked = FALSE,
+    run_concat = TRUE,
+    print_learner = FALSE,
+    family = stats::binomial(),
+    screen_keep_n = 3
+  ))
+
+  expect_identical(fit$base_screener_used, "anova")
+  expect_true(is.list(fit$selected_features_by_layer))
+  expect_true(all(names(fit$selected_features_by_layer) %in% names(full_by_layer)))
+
+  for (lay in names(fit$model_fits$model_layers)) {
+    expect_lte(length(fit$model_fits$model_layers[[lay]]$feature_names), 3L)
+    expect_lt(length(fit$model_fits$model_layers[[lay]]$feature_names), full_by_layer[[lay]])
+  }
+
+  expect_lte(length(fit$model_fits$model_concat$feature_names), 6L)
+})
