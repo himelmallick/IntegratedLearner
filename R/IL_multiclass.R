@@ -186,11 +186,14 @@ IL_multiclass <- function(feature_table,
   concat_oof_prob <- NULL
   concat_valid_prob <- NULL
   concat_full_model <- NULL
+  concat_train_matrix <- NULL
+  concat_valid_matrix <- NULL
 
   if (isTRUE(run_concat)) {
     if (isTRUE(verbose)) cat("Running multiclass concatenated model...\n")
 
     fulldat <- as.data.frame(t(feature_table))
+    concat_train_matrix <- fulldat
 
     concat_oof_prob <- .fit_oof_multiclass(
       X = fulldat,
@@ -213,6 +216,7 @@ IL_multiclass <- function(feature_table,
 
     if (!is.null(feature_table_valid)) {
       fulldat_valid <- as.data.frame(t(feature_table_valid))
+      concat_valid_matrix <- fulldat_valid
       concat_valid_prob <- .predict_multiclass_model_impl(
         fit_obj = concat_full_model,
         newX = fulldat_valid,
@@ -305,6 +309,7 @@ IL_multiclass <- function(feature_table,
   res <- list(
     model_fits = model_fits,
     X_train_layers = X_train_layers,
+    X_train_concat = concat_train_matrix,
     Y_train = Y,
     prob.train = prob_train,
     class.train = class_train,
@@ -331,6 +336,7 @@ IL_multiclass <- function(feature_table,
 
   if (!is.null(sample_metadata_valid) && !is.null(feature_table_valid)) {
     res$X_test_layers <- X_test_layers
+    res$X_test_concat <- concat_valid_matrix
     res$Y_test <- Y_test
     res$prob.test <- prob_test
     res$class.test <- class_test

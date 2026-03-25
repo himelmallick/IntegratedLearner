@@ -285,3 +285,73 @@ test_that("mbart handles constant columns without predict-time dimension mismatc
   expect_equal(ncol(prob), length(levels(y)))
   expect_identical(colnames(prob), levels(y))
 })
+
+test_that("credint.learner supports multiclass mbart fits", {
+  skip_if_not_installed("BART")
+  skip_if_not_installed("bayesplot")
+  skip_if_not_installed("ggplot2")
+
+  pcl <- make_toy_multiclass_pcl(n_samples = 24, n_features = 10, seed = 2042)
+
+  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl,
+    folds = 2,
+    seed = 2042,
+    base_learner = "mbart",
+    meta_learner = "glmnet",
+    run_stacked = FALSE,
+    run_concat = FALSE,
+    print_learner = FALSE,
+    family = stats::binomial(),
+    ntree = 10,
+    ndpost = 20,
+    nskip = 10,
+    keepevery = 1
+  ))
+
+  p <- suppressWarnings(IntegratedLearner:::credint.learner(
+    fit = fit,
+    test = FALSE,
+    model = "omicsA",
+    class = "C1"
+  ))
+
+  expect_s3_class(p, "ggplot")
+})
+
+test_that("credint.learner supports multiclass mbart concatenated uncertainty", {
+  skip_if_not_installed("BART")
+  skip_if_not_installed("bayesplot")
+  skip_if_not_installed("ggplot2")
+
+  pcl <- make_toy_multiclass_pcl(n_samples = 60, n_features = 10, seed = 2043)
+
+  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl,
+    folds = 2,
+    seed = 2043,
+    base_learner = "mbart",
+    meta_learner = "glmnet",
+    run_stacked = FALSE,
+    run_concat = TRUE,
+    print_learner = FALSE,
+    family = stats::binomial(),
+    ntree = 10,
+    ndpost = 20,
+    nskip = 10,
+    keepevery = 1
+  ))
+
+  fit_bad_names <- fit
+  old_feat <- fit_bad_names$model_fits$model_concat$feature_names
+  fit_bad_names$model_fits$model_concat$feature_names <- paste0("feat_", seq_along(old_feat))
+
+  p <- suppressWarnings(IntegratedLearner:::credint.learner(
+    fit = fit_bad_names,
+    test = FALSE,
+    model = "concatenated",
+    class = "C1"
+  ))
+
+  expect_s3_class(p, "ggplot")
+})
