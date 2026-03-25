@@ -199,7 +199,8 @@ SL.BART <- function(Y, X, newX, family, obsWeights, id,
                     num_iterations_after_burn_in = 1000,
                     serialize = TRUE, seed=5678,
                     ...) {
-  #.SL.require("bartMachine")
+  .require_package("bartMachine")
+  .warn_if_java_bart_machine_mismatch()
   
   ################
   ### CK changes:
@@ -209,11 +210,35 @@ SL.BART <- function(Y, X, newX, family, obsWeights, id,
     # class, so we have to specify levels.
     Y = factor(Y, levels = c("1", "0"))
   }
-  model = bartMachine::bartMachine(X, Y, num_trees = num_trees,
-                                   num_burn_in = num_burn_in, verbose = verbose,
-                                   alpha = alpha, beta = beta, k = k, q = q, nu = nu,
-                                   num_iterations_after_burn_in = num_iterations_after_burn_in,
-                                   serialize = serialize,seed=seed)
+  model <- tryCatch(
+    bartMachine::bartMachine(
+      X, Y,
+      num_trees = num_trees,
+      num_burn_in = num_burn_in,
+      verbose = verbose,
+      alpha = alpha, beta = beta, k = k, q = q, nu = nu,
+      num_iterations_after_burn_in = num_iterations_after_burn_in,
+      serialize = serialize, seed = seed
+    ),
+    error = function(e) {
+      msg <- conditionMessage(e)
+      if (grepl("NoClassDefFoundError", msg) &&
+          grepl("jdk/incubator/vector/Vector", msg, fixed = TRUE)) {
+        stop(
+          paste0(
+            "SL.BART failed because Java module 'jdk.incubator.vector' is not ",
+            "enabled in the current R session JVM.\n",
+            "Restart R and set, before loading Java-dependent packages:\n",
+            "  options(java.parameters = c(\"-Xmx6G\", ",
+            "\"--add-modules=jdk.incubator.vector\"))\n",
+            "If this still fails, ensure a full JDK (not JRE) is being used."
+          ),
+          call. = FALSE
+        )
+      }
+      stop(msg, call. = FALSE)
+    }
+  )
   # pred returns predicted responses (on the scale of the outcome)
   #pred <- bartMachine:::predict.bartMachine(model, newX)
   pred <- stats::predict(model, newX)
@@ -237,7 +262,7 @@ SL.BART <- function(Y, X, newX, family, obsWeights, id,
 #' @return Prediction from the SL.BART
 #' @export
 predict.SL.BART <- function(object, newdata, family, X = NULL, Y = NULL,...) {
-  #.SL.require("bartMachine")
+  .require_package("bartMachine")
   pred <- stats::predict(object$object, newdata)
   return(pred)
 }
@@ -1550,6 +1575,35 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
   }
   return(NULL)
 }
+
+.java_major_version <- function() {
+  out <- tryCatch(
+    suppressWarnings(system2("java", "-version", stdout = TRUE, stderr = TRUE)),
+    error = function(e) character()
+  )
+  if (!length(out) || is.na(out[1])) return(NA_integer_)
+  m <- regmatches(out[1], regexec('"([0-9]+)(\\.[0-9]+)?', out[1]))[[1]]
+  if (length(m) < 2L) return(NA_integer_)
+  as.integer(m[2])
+}
+
+.warn_if_java_bart_machine_mismatch <- local({
+  warned <- FALSE
+  function() {
+    if (warned) return(invisible(NULL))
+    jv <- .java_major_version()
+    if (!is.na(jv) && jv < 21L) {
+      warning(
+        "Detected Java ", jv, ". Some bartMachine builds require Java 21 and ",
+        "can fail with UnsupportedClassVersionError. If this occurs, upgrade ",
+        "Java or use a non-Java learner (e.g., 'SL.randomForest').",
+        call. = FALSE
+      )
+      warned <<- TRUE
+    }
+    invisible(NULL)
+  }
+})
 
 
 ########################

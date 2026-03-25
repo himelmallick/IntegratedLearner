@@ -26,7 +26,6 @@ Imports:
     CoxBoost,
     SummarizedExperiment,
     MultiAssayExperiment,
-    bartMachine,
     BART,
     gbm,
     xgboost,
@@ -54,7 +53,10 @@ Suggests:
     rmarkdown,
     curatedMetagenomicData,
     mlbench,
-    bayesreg
+    bayesreg,
+    bartMachine
+SystemRequirements:
+    Java (optional; required for SL.BART / bartMachine workflows)
 VignetteBuilder:
     knitr
 biocViews:

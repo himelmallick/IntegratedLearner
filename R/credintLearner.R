@@ -238,8 +238,6 @@ credint.learner <- function(fit,
     return(p)
   }
   
-  .require_package("bartMachine")
-  
   if (!(fit$base_learner == "SL.BART" && fit$meta_learner == "SL.nnls.auc")) {
     stop(
       "Credible Interval feature is currently only available for ",
@@ -247,6 +245,8 @@ credint.learner <- function(fit,
       call. = FALSE
     )
   }
+  
+  .require_package("bartMachine")
   
   weights <- fit$weights
   

@@ -11,6 +11,10 @@ install.packages("devtools")
 library(devtools)
 ```
 
+Optional dependency for BART workflows:
+- `SL.BART` and BART uncertainty utilities rely on `bartMachine` and a working Java setup.
+- If Java/BART are unavailable, use non-Java learners such as `SL.randomForest` (continuous/binary) or native multiclass learners.
+
 ## Installation
 
 Once the dependencies are installed, `IntegratedLearner` can be loaded using the following command:

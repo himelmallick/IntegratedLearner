@@ -1,0 +1,23 @@
+IntegratedLearner uses optional Java-backed functionality for `SL.BART`
+and BART uncertainty / variable-importance workflows via `bartMachine`.
+
+Most package functionality (including non-BART learners and multiclass/survival
+modules) does not require Java.
+
+If you plan to use `SL.BART`:
+
+1. Install a Java runtime (Java 21 is recommended for recent `bartMachine`
+   builds).
+2. Install R packages `rJava` and `bartMachine`.
+3. Restart R after Java installation.
+
+Platform notes:
+- macOS: install OpenJDK (e.g., Homebrew), then reinstall `rJava`.
+- Linux: install OpenJDK using your distribution package manager, then install
+  `rJava` and `bartMachine`.
+- Windows: install a JDK/JRE, ensure Java is on PATH, then install `rJava`
+  and `bartMachine`.
+
+When Java/BART are unavailable, use non-Java learners such as:
+- `base_learner = "SL.randomForest"` (continuous/binary)
+- native multiclass learners (`randomforest`, `xgboost`, `glmnet`, `mbart`)
