@@ -2,8 +2,12 @@ Package: IntegratedLearner
 Type: Package
 Title: Integrated Multi-Omics Learner for Survival and Non-Survival Outcomes
 Version: 0.1.1
-Authors@R: person("Himel", "Mallick", email = "him4004@med.cornell.edu",
-    role = c("aut", "cre"))
+Authors@R: c(
+    person("Nalin", "Arora", email = "naa4050@med.cornell.edu", role = "aut"),
+    person("Anupreet", "Porwal", role = "aut"),
+    person("Himel", "Mallick", email = "him4004@med.cornell.edu",
+        role = c("aut", "cre"))
+    )
 Description: IntegratedLearner provides a unified interface for multi-omics
     prediction using early, late, and intermediate fusion for continuous,
     binary, and survival outcomes. It wraps SuperLearner for non-survival
