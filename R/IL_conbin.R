@@ -63,7 +63,12 @@
 #' @param family Allows \code{gaussian()} for continuous and \code{binomial()} 
 #'   for binary outcomes. Survival outcomes must be handled via 
 #'   IL_survival().
-#' @param ... Additional arguments (currently unused).
+#' @param loco Logical; if \code{TRUE}, use leave-one-cohort-out folds for all
+#'   train-time components (single-layer, stacked/late fusion, and
+#'   concatenated/early fusion where applicable). Default \code{FALSE}.
+#' @param cohort_col Character scalar naming the cohort column in
+#'   \code{sample_metadata} when \code{loco = TRUE}.
+#' @param ... Additional model arguments.
 #'
 #' @return A list-like IntegratedLearner object containing fitted layer-specific,
 #'   stacked, and concatenated models, cross-validated performance (AUC or R²),
@@ -75,6 +80,52 @@
 #' @seealso \code{\link{IntegratedLearner}}, IL_survival()
 #' @export
 #' 
+
+.safe_binomial_auc <- function(y_true, y_score) {
+  y_chr <- as.character(y_true)
+  if (length(unique(y_chr[!is.na(y_chr)])) < 2L) return(NA_real_)
+  tryCatch(
+    as.numeric(ROCR::performance(ROCR::prediction(predictions = y_score, labels = y_true), "auc")@y.values[[1]]),
+    error = function(e) NA_real_
+  )
+}
+
+.safe_gaussian_r2 <- function(y_true, y_score) {
+  out <- suppressWarnings(stats::cor(y_true, y_score, use = "complete.obs")^2)
+  if (!is.finite(out)) return(NA_real_)
+  as.numeric(out)
+}
+
+.conbin_metric_by_model <- function(y_true, yhat, family_name) {
+  yhat_df <- as.data.frame(yhat, check.names = FALSE)
+  if (identical(family_name, "binomial")) {
+    met <- vapply(yhat_df, function(pred) .safe_binomial_auc(y_true, pred), numeric(1))
+  } else {
+    met <- vapply(yhat_df, function(pred) .safe_gaussian_r2(y_true, pred), numeric(1))
+  }
+  stats::setNames(as.numeric(met), names(met))
+}
+
+.conbin_metric_by_cohort <- function(sample_metadata, y_true, yhat, family_name, cohort_col) {
+  if (!(cohort_col %in% colnames(sample_metadata))) return(NULL)
+  cohort_vec <- as.character(sample_metadata[[cohort_col]])
+  if (any(is.na(cohort_vec) | !nzchar(cohort_vec))) return(NULL)
+  idx_list <- split(seq_len(nrow(sample_metadata)), cohort_vec)
+  metric_name <- if (identical(family_name, "binomial")) "AUC" else "R2"
+  out <- lapply(names(idx_list), function(cc) {
+    idx <- idx_list[[cc]]
+    met <- .conbin_metric_by_model(y_true[idx], as.data.frame(yhat[idx, , drop = FALSE], check.names = FALSE), family_name)
+    data.frame(
+      cohort = cc,
+      model = names(met),
+      metric = metric_name,
+      value = as.numeric(met),
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )
+  })
+  do.call(rbind, out)
+}
 
 IL_conbin<-function(feature_table,
                             sample_metadata, 
@@ -91,7 +142,10 @@ IL_conbin<-function(feature_table,
                             verbose = FALSE, 
                             print_learner = TRUE, 
                             refit.stack = FALSE, 
-                            family=stats::gaussian(), ...)
+                            family=stats::gaussian(),
+                            loco = FALSE,
+                            cohort_col = NULL,
+                            ...)
 { 
   
   ##############
@@ -109,6 +163,7 @@ IL_conbin<-function(feature_table,
     family_name = .safe_family_name(family),
     is_survival = FALSE
   )
+  sl_env <- .make_sl_env()
   
   
   #############################################################################################
@@ -123,25 +178,43 @@ IL_conbin<-function(feature_table,
   # Set parameters and extract subject IDs for sample splitting #
   ###############################################################
   
-  set.seed(seed)
-  subjectID <- unique(sample_metadata$subjectID)
+  dots <- list(...)
+  loco_state <- .resolve_loco_flag(loco = loco, dots = dots)
+  use_loco <- loco_state$loco
+  obsIndexIn <- NULL
+  fold_scheme <- "subject_cv"
   
-  ##################################
-  # Trigger V-fold CV (Outer Loop) #
-  ##################################
-  
-  subjectCvFoldsIN <- caret::createFolds(1:length(subjectID), k = folds, returnTrain=TRUE)
-  
-  ########################################
-  # Curate subject-level samples per fold #
-  ########################################
-  
-  obsIndexIn <- vector("list", folds) 
-  for(k in 1:length(obsIndexIn)){
-    x <- which(!sample_metadata$subjectID %in%  subjectID[subjectCvFoldsIN[[k]]])
-    obsIndexIn[[k]] <- x
+  if (isTRUE(use_loco)) {
+    obsIndexIn <- tryCatch(
+      .build_loco_valid_rows(sample_metadata = sample_metadata, cohort_col = cohort_col),
+      error = function(e) {
+        warning(
+          "Falling back to subject-level folds because LOCO setup failed: ",
+          conditionMessage(e),
+          call. = FALSE
+        )
+        NULL
+      }
+    )
+    if (!is.null(obsIndexIn)) {
+      folds <- length(obsIndexIn)
+      fold_scheme <- "loco"
+      if (isTRUE(verbose)) {
+        cat("Using LOCO folds for all train-time components with", folds, "cohorts.\n")
+      }
+    }
   }
-  names(obsIndexIn) <- sapply(1:folds, function(x) paste(c("fold", x), collapse=''))
+  
+  if (is.null(obsIndexIn)) {
+    obsIndexIn <- .build_subject_valid_rows(
+      sample_metadata = sample_metadata,
+      folds = folds,
+      seed = seed
+    )
+    folds <- length(obsIndexIn)
+  }
+  
+  fold_id <- .valid_rows_to_fold_id(obsIndexIn, nrow(sample_metadata))
   
   ###############################
   # Set up data for SL training #
@@ -205,7 +278,8 @@ IL_conbin<-function(feature_table,
                                                      cvControl = cvControl,    
                                                      verbose = verbose, 
                                                      SL.library = list(c(base_learner,base_screener)),
-                                                     family = family)
+                                                     family = family,
+                                                     env = sl_env)
     
     ###################################################
     # Append the corresponding y and X to the results #
@@ -285,7 +359,8 @@ IL_conbin<-function(feature_table,
                                                cvControl = cvControl,    
                                                verbose = verbose, 
                                                SL.library = meta_learner,
-                                               family=family)
+                                               family=family,
+                                               env = sl_env)
                                                 
     
     # Extract the fit object from SuperLearner
@@ -336,7 +411,8 @@ IL_conbin<-function(feature_table,
                                               cvControl = cvControl,    
                                               verbose = verbose, 
                                               SL.library = list(c(base_learner,base_screener)),
-                                              family=family)
+                                              family=family,
+                                              env = sl_env)
     
     # Extract the fit object from superlearner
     model_concat <- SL_fit_concat$fitLibrary[[1]]$object
@@ -584,6 +660,10 @@ IL_conbin<-function(feature_table,
   res$base_screener <- base_screener
   res$run_concat <- run_concat
   res$run_stacked <- run_stacked
+  res$loco <- isTRUE(use_loco) && identical(fold_scheme, "loco")
+  res$cohort_col <- cohort_col
+  res$fold_scheme <- fold_scheme
+  res$fold_id <- fold_id
   res$family <- family$family
   res$feature.names <- rownames(feature_table)
   if(is.null(sample_metadata_valid)){
@@ -638,6 +718,33 @@ IL_conbin<-function(feature_table,
     }
       
   }    
+
+  if (isTRUE(res$loco) && !is.null(cohort_col) && (cohort_col %in% colnames(sample_metadata))) {
+    metric_name <- if (identical(res$family, "binomial")) "AUC" else "R2"
+    train_overall <- if (identical(metric_name, "AUC")) res$AUC.train else res$R2.train
+    res$loco_results <- list(
+      metric = metric_name,
+      train_overall = train_overall,
+      train_by_cohort = .conbin_metric_by_cohort(
+        sample_metadata = sample_metadata,
+        y_true = res$Y_train,
+        yhat = res$yhat.train,
+        family_name = res$family,
+        cohort_col = cohort_col
+      )
+    )
+    if (isTRUE(res$test) && (cohort_col %in% colnames(sample_metadata_valid))) {
+      test_overall <- if (identical(metric_name, "AUC")) res$AUC.test else res$R2.test
+      res$loco_results$test_overall <- test_overall
+      res$loco_results$test_by_cohort <- .conbin_metric_by_cohort(
+        sample_metadata = sample_metadata_valid,
+        y_true = res$Y_test,
+        yhat = res$yhat.test,
+        family_name = res$family,
+        cohort_col = cohort_col
+      )
+    }
+  }
   
   imp_signed <- compute_signed_univariate_importance(
     feature_table = feature_table,

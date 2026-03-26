@@ -7,6 +7,26 @@ utils::globalVariables(c(
 ))
 NULL
 
+# Build an evaluation environment for SuperLearner where:
+# - built-in SuperLearner learners/screeners are available (parent namespace)
+# - IntegratedLearner custom wrappers (e.g., SL.BART, SL.nnls.auc) are also available
+.make_sl_env <- function() {
+  sl_ns <- asNamespace("SuperLearner")
+  il_ns <- asNamespace("IntegratedLearner")
+  env <- new.env(parent = sl_ns)
+
+  il_objects <- ls(il_ns, all.names = TRUE)
+  keep <- il_objects[grepl("^(SL\\.|screen\\.|method\\.)", il_objects)]
+  if ("All" %in% il_objects) keep <- c(keep, "All")
+  keep <- unique(keep)
+
+  for (nm in keep) {
+    assign(nm, get(nm, envir = il_ns, inherits = FALSE), envir = env)
+  }
+
+  env
+}
+
 ###############################
 #### Print learner summary ####
 ###############################
@@ -1733,6 +1753,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
                                    values_to = "value")
     
     cd <- as.data.frame(SummarizedExperiment::colData(se))
+    cd <- as.data.frame(cd, stringsAsFactors = FALSE, check.names = FALSE)
     cd$sampleID <- rownames(cd)
     
     if (!"subjectID" %in% colnames(cd)) {
@@ -1749,7 +1770,16 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
     }
     
     extra_surv_cols <- intersect(c("time", "event"), colnames(cd))
-    keep_cols <- c("sampleID", "subjectID", outcome.col, extra_surv_cols)
+    base_cols <- c("sampleID", "subjectID", outcome.col, extra_surv_cols)
+    extra_meta_cols <- setdiff(colnames(cd), base_cols)
+    if (length(extra_meta_cols) > 0L) {
+      # Keep only atomic/factor metadata columns to avoid merge issues with list-columns.
+      keep_extra <- vapply(cd[, extra_meta_cols, drop = FALSE], function(z) {
+        is.atomic(z) || is.factor(z)
+      }, logical(1))
+      extra_meta_cols <- extra_meta_cols[keep_extra]
+    }
+    keep_cols <- unique(c(base_cols, extra_meta_cols))
     
     df_long <- merge(df_long,
                      cd[, keep_cols, drop = FALSE],
@@ -1781,9 +1811,19 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
     stop(".wrangle_data(): long_data is empty - nothing to reshape.")
   }
   
-  # sample metadata
-  sample_metadata <- unique(long_data[, c("sampleID", "subjectID", outcome.col, intersect(c("time", "event"), colnames(long_data)))])
-  colnames(sample_metadata)[colnames(sample_metadata) == outcome.col] <- "Y"
+  # sample metadata: preserve all sample-level columns carried from MAE colData
+  meta_cols <- setdiff(colnames(long_data), c("featureID", "experiment", "value"))
+  sample_metadata <- unique(long_data[, meta_cols, drop = FALSE])
+  if (outcome.col %in% colnames(sample_metadata) && outcome.col != "Y") {
+    colnames(sample_metadata)[colnames(sample_metadata) == outcome.col] <- "Y"
+  }
+  if (!"Y" %in% colnames(sample_metadata)) {
+    stop(".wrangle_data(): outcome column '", outcome.col, "' was not found in long_data metadata.")
+  }
+  base_order <- c("sampleID", "subjectID", "Y", intersect(c("time", "event"), colnames(sample_metadata)))
+  base_order <- unique(base_order[base_order %in% colnames(sample_metadata)])
+  other_cols <- setdiff(colnames(sample_metadata), base_order)
+  sample_metadata <- sample_metadata[, c(base_order, other_cols), drop = FALSE]
   rownames(sample_metadata) <- sample_metadata$sampleID
   
   if (inherits(sample_metadata$Y, "Surv")) {

@@ -25,6 +25,8 @@ IL_multiclass <- function(feature_table,
                           print_learner = TRUE,
                           family = stats::binomial(),
                           eps = 1e-15,
+                          loco = FALSE,
+                          cohort_col = NULL,
                           ...) {
 
   start.time <- Sys.time()
@@ -47,24 +49,47 @@ IL_multiclass <- function(feature_table,
   meta_id <- .map_multiclass_meta_learner(meta_learner)
   screener_id <- .map_multiclass_screener(base_screener)
 
+  dots_raw <- list(...)
+  loco_state <- .resolve_loco_flag(loco = loco, dots = dots_raw)
+  use_loco <- loco_state$loco
+  dots_raw <- loco_state$dots
+
   set.seed(seed)
-  subjectID <- validated$subjectID
   folds <- validated$folds
+  obsIndexIn <- NULL
+  fold_scheme <- "subject_cv"
 
-  subjectCvFoldsIN <- caret::createFolds(seq_along(subjectID), k = folds, returnTrain = TRUE)
-  obsIndexIn <- vector("list", folds)
-  for (k in seq_along(obsIndexIn)) {
-    obsIndexIn[[k]] <- which(!sample_metadata$subjectID %in% subjectID[subjectCvFoldsIN[[k]]])
+  if (isTRUE(use_loco)) {
+    obsIndexIn <- tryCatch(
+      .build_loco_valid_rows(sample_metadata = sample_metadata, cohort_col = cohort_col),
+      error = function(e) {
+        warning(
+          "Falling back to subject-level folds because LOCO setup failed: ",
+          conditionMessage(e),
+          call. = FALSE
+        )
+        NULL
+      }
+    )
+    if (!is.null(obsIndexIn)) {
+      folds <- length(obsIndexIn)
+      fold_scheme <- "loco"
+      if (isTRUE(verbose)) {
+        cat("Using LOCO folds for all train-time multiclass components with", folds, "cohorts.\n")
+      }
+    }
   }
-  names(obsIndexIn) <- sapply(seq_len(folds), function(x) paste(c("fold", x), collapse = ""))
 
-  fold_id <- integer(nrow(sample_metadata))
-  for (k in seq_along(obsIndexIn)) {
-    fold_id[obsIndexIn[[k]]] <- k
+  if (is.null(obsIndexIn)) {
+    obsIndexIn <- .build_subject_valid_rows(
+      sample_metadata = sample_metadata,
+      folds = folds,
+      seed = seed
+    )
+    folds <- length(obsIndexIn)
   }
-  if (any(fold_id == 0L)) {
-    fold_id[fold_id == 0L] <- sample.int(folds, sum(fold_id == 0L), replace = TRUE)
-  }
+
+  fold_id <- .valid_rows_to_fold_id(obsIndexIn, nrow(sample_metadata))
 
   feature_metadata$featureType <- as.factor(feature_metadata$featureType)
   name_layers <- with(
@@ -92,7 +117,6 @@ IL_multiclass <- function(feature_table,
     names(X_test_layers) <- name_layers
   }
 
-  dots_raw <- list(...)
   parsed_args <- .extract_multiclass_screen_args(dots_raw)
   dots <- parsed_args$model_args
   screener_args <- parsed_args$screener_args
@@ -356,6 +380,9 @@ IL_multiclass <- function(feature_table,
     selected_features_concat = concat_selected_features,
     run_concat = run_concat,
     run_stacked = run_stacked,
+    loco = isTRUE(use_loco) && identical(fold_scheme, "loco"),
+    cohort_col = cohort_col,
+    fold_scheme = fold_scheme,
     family = "multinomial",
     feature.names = rownames(feature_table),
     feature_importance_signed_by_class = imp$by_class,
@@ -375,6 +402,29 @@ IL_multiclass <- function(feature_table,
     res$class.test <- class_test
     res$yhat.test <- class_test
     res$metrics.test <- metrics_test
+  }
+
+  if (isTRUE(res$loco) && !is.null(cohort_col) && (cohort_col %in% colnames(sample_metadata))) {
+    res$loco_results <- list(
+      train_overall = metrics_train,
+      train_by_cohort = .multiclass_metrics_by_cohort(
+        prob_list = prob_train,
+        y_true = Y,
+        sample_metadata = sample_metadata,
+        cohort_col = cohort_col,
+        eps = eps
+      )
+    )
+    if (!is.null(metrics_test) && !is.null(sample_metadata_valid) && (cohort_col %in% colnames(sample_metadata_valid))) {
+      res$loco_results$test_overall <- metrics_test
+      res$loco_results$test_by_cohort <- .multiclass_metrics_by_cohort(
+        prob_list = prob_test,
+        y_true = Y_test,
+        sample_metadata = sample_metadata_valid,
+        cohort_col = cohort_col,
+        eps = eps
+      )
+    }
   }
 
   stop.time <- Sys.time()
@@ -403,6 +453,47 @@ IL_multiclass <- function(feature_table,
   logloss <- -mean(log(pmax(p_true, eps)))
 
   c(accuracy = acc, balanced_accuracy = bal_acc, logloss = logloss)
+}
+
+.multiclass_metrics_by_cohort <- function(prob_list, y_true, sample_metadata, cohort_col, eps = 1e-15) {
+  if (is.null(prob_list) || !(cohort_col %in% colnames(sample_metadata))) return(NULL)
+  cohort_vec <- as.character(sample_metadata[[cohort_col]])
+  if (any(is.na(cohort_vec) | !nzchar(cohort_vec))) return(NULL)
+  idx_list <- split(seq_len(nrow(sample_metadata)), cohort_vec)
+
+  out <- lapply(names(idx_list), function(cc) {
+    idx <- idx_list[[cc]]
+    do.call(rbind, lapply(names(prob_list), function(nm) {
+      yy <- y_true[idx]
+      keep <- !is.na(yy)
+      if (!any(keep)) {
+        return(data.frame(
+          cohort = cc,
+          model = nm,
+          accuracy = NA_real_,
+          balanced_accuracy = NA_real_,
+          logloss = NA_real_,
+          stringsAsFactors = FALSE,
+          check.names = FALSE
+        ))
+      }
+      met <- .multiclass_metrics(
+        prob_mat = prob_list[[nm]][idx[keep], , drop = FALSE],
+        y_true = yy[keep],
+        eps = eps
+      )
+      data.frame(
+        cohort = cc,
+        model = nm,
+        accuracy = unname(met["accuracy"]),
+        balanced_accuracy = unname(met["balanced_accuracy"]),
+        logloss = unname(met["logloss"]),
+        stringsAsFactors = FALSE,
+        check.names = FALSE
+      )
+    }))
+  })
+  do.call(rbind, out)
 }
 
 .class_from_prob <- function(prob_mat) {

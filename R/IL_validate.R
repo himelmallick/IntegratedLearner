@@ -210,3 +210,88 @@
     layers = layers
   )
 }
+
+.resolve_loco_flag <- function(loco = FALSE, dots = list()) {
+  if (!is.list(dots)) {
+    dots <- list()
+  }
+  if ("loco_late_fusion" %in% names(dots)) {
+    loco <- dots$loco_late_fusion
+    dots$loco_late_fusion <- NULL
+    warning(
+      "Argument 'loco_late_fusion' is deprecated; use 'loco' instead.",
+      call. = FALSE
+    )
+  }
+  if (length(loco) != 1L || is.na(loco)) {
+    stop("'loco' must be TRUE/FALSE.", call. = FALSE)
+  }
+  list(loco = isTRUE(as.logical(loco)), dots = dots)
+}
+
+.build_loco_valid_rows <- function(sample_metadata, cohort_col) {
+  if (is.null(cohort_col) || !is.character(cohort_col) || length(cohort_col) != 1L) {
+    stop("'cohort_col' must be a single character column name when LOCO is enabled.", call. = FALSE)
+  }
+  if (!(cohort_col %in% colnames(sample_metadata))) {
+    stop(
+      "LOCO requested, but sample_metadata does not contain cohort column '",
+      cohort_col, "'.",
+      call. = FALSE
+    )
+  }
+
+  cohort_vec <- as.character(sample_metadata[[cohort_col]])
+  if (any(is.na(cohort_vec) | !nzchar(cohort_vec))) {
+    stop("Cohort labels contain missing/empty values; please clean cohort column.", call. = FALSE)
+  }
+
+  cohorts <- unique(cohort_vec)
+  if (length(cohorts) < 2L) {
+    stop("LOCO requires at least 2 unique cohorts.", call. = FALSE)
+  }
+
+  valid_rows <- lapply(cohorts, function(cc) which(cohort_vec == cc))
+  names(valid_rows) <- paste0("cohort_", make.names(cohorts))
+  valid_rows
+}
+
+.build_subject_valid_rows <- function(sample_metadata, folds, seed = 1234) {
+  if (!("subjectID" %in% colnames(sample_metadata))) {
+    stop("sample_metadata must contain column 'subjectID' for subject-level CV.", call. = FALSE)
+  }
+
+  folds <- as.integer(folds)
+  if (!is.finite(folds) || folds < 2L) {
+    stop("'folds' must be an integer >= 2.", call. = FALSE)
+  }
+
+  subjectID <- unique(sample_metadata$subjectID)
+  if (length(subjectID) < folds) {
+    folds <- length(subjectID)
+    warning("Reduced folds to the number of unique subject IDs.", call. = FALSE)
+  }
+
+  set.seed(seed)
+  subjectCvFoldsIN <- caret::createFolds(seq_along(subjectID), k = folds, returnTrain = TRUE)
+  valid_rows <- vector("list", length(subjectCvFoldsIN))
+  for (k in seq_along(valid_rows)) {
+    valid_rows[[k]] <- which(!sample_metadata$subjectID %in% subjectID[subjectCvFoldsIN[[k]]])
+  }
+  names(valid_rows) <- sapply(seq_along(valid_rows), function(x) paste(c("fold", x), collapse = ""))
+  valid_rows
+}
+
+.valid_rows_to_fold_id <- function(valid_rows, n_obs) {
+  fold_id <- integer(n_obs)
+  for (k in seq_along(valid_rows)) {
+    idx <- valid_rows[[k]]
+    idx <- as.integer(idx[is.finite(idx)])
+    idx <- idx[idx >= 1L & idx <= n_obs]
+    fold_id[idx] <- k
+  }
+  if (any(fold_id == 0L)) {
+    fold_id[fold_id == 0L] <- sample.int(length(valid_rows), sum(fold_id == 0L), replace = TRUE)
+  }
+  fold_id
+}

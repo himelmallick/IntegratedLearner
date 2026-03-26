@@ -40,6 +40,54 @@
   list(cindex = as.numeric(cindex), auc = auc_df)
 }
 
+.surv_auc_mean <- function(auc_df) {
+  if (!is.data.frame(auc_df) || !("AUC" %in% colnames(auc_df))) return(NA_real_)
+  out <- suppressWarnings(mean(as.numeric(auc_df$AUC), na.rm = TRUE))
+  if (!is.finite(out)) return(NA_real_)
+  as.numeric(out)
+}
+
+.survival_overall_summary <- function(risk_metrics) {
+  if (length(risk_metrics) == 0L) return(NULL)
+  out <- lapply(names(risk_metrics), function(nm) {
+    met <- risk_metrics[[nm]]
+    data.frame(
+      model = nm,
+      cindex = as.numeric(met$cindex),
+      auc_mean = .surv_auc_mean(met$auc),
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )
+  })
+  do.call(rbind, out)
+}
+
+.survival_metrics_by_cohort <- function(times, events, risk_by_model, cohort_vec) {
+  if (length(risk_by_model) == 0L) return(NULL)
+  cohort_vec <- as.character(cohort_vec)
+  if (any(is.na(cohort_vec) | !nzchar(cohort_vec))) return(NULL)
+  idx_list <- split(seq_along(cohort_vec), cohort_vec)
+  out <- lapply(names(idx_list), function(cc) {
+    idx <- idx_list[[cc]]
+    do.call(rbind, lapply(names(risk_by_model), function(nm) {
+      rr <- as.numeric(risk_by_model[[nm]][idx])
+      met <- tryCatch(
+        .compute_auc_cindex(times[idx], events[idx], rr),
+        error = function(e) list(cindex = NA_real_, auc = data.frame(time = NA_real_, AUC = NA_real_))
+      )
+      data.frame(
+        cohort = cc,
+        model = nm,
+        cindex = as.numeric(met$cindex),
+        auc_mean = .surv_auc_mean(met$auc),
+        stringsAsFactors = FALSE,
+        check.names = FALSE
+      )
+    }))
+  })
+  do.call(rbind, out)
+}
+
 .make_stratified_folds <- function(time_vec, event_vec, folds, seed = 123) {
   set.seed(seed)
   q <- stats::quantile(time_vec, probs = seq(0, 1, length.out = 6), na.rm = TRUE)
@@ -1049,7 +1097,9 @@
     cox_optim_maxit = 4000,
     intermediate_learners = c("surv.coxph"),
     verbose = FALSE,
-    model_args = list()
+    model_args = list(),
+    loco = FALSE,
+    cohort_col = NULL
 ) {
   .vmsg <- function(...) {
     if (isTRUE(verbose)) cat(paste0(...), "\n")
@@ -1093,7 +1143,33 @@
   layers <- validated$layers
   times <- as.numeric(sample_metadata$time)
   events <- as.numeric(sample_metadata$event)
-  fold_id <- .make_stratified_folds(times, events, folds = folds, seed = seed)
+  use_loco <- .resolve_loco_flag(loco = loco)$loco
+  fold_scheme <- "stratified_cv"
+  fold_id <- NULL
+  if (isTRUE(use_loco)) {
+    valid_rows <- tryCatch(
+      .build_loco_valid_rows(sample_metadata = sample_metadata, cohort_col = cohort_col),
+      error = function(e) {
+        warning(
+          "Falling back to stratified folds because LOCO setup failed: ",
+          conditionMessage(e),
+          call. = FALSE
+        )
+        NULL
+      }
+    )
+    if (!is.null(valid_rows)) {
+      fold_id <- .valid_rows_to_fold_id(valid_rows, nrow(sample_metadata))
+      folds <- length(valid_rows)
+      fold_scheme <- "loco"
+      if (isTRUE(verbose)) {
+        .vmsg("  using LOCO folds for single/early/late/intermediate components: ", folds)
+      }
+    }
+  }
+  if (is.null(fold_id)) {
+    fold_id <- .make_stratified_folds(times, events, folds = folds, seed = seed)
+  }
 
   .vmsg("ILsurv starting")
   .vmsg("  base_learner: ", base_learner)
@@ -1245,6 +1321,7 @@
 
   intermediate_train <- list()
   intermediate_models <- list()
+  intermediate_train_risk <- list()
   if (length(intermediate_learners) > 0L) {
     .vmsg("Running intermediate fusion learners: ", paste(intermediate_learners, collapse = ", "))
     for (learner_id in intermediate_learners) {
@@ -1269,6 +1346,7 @@
         train_cindex = met$cindex,
         train_auc = met$auc
       )
+      intermediate_train_risk[[learner_id]] <- inter_oof$oof_risk
       intermediate_models[[learner_id]] <- .train_full(
         method = learner_id,
         X = layer_risk_mat,
@@ -1283,6 +1361,12 @@
   }
 
   valid_out_formatted <- NULL
+  single_valid_metrics <- list()
+  early_valid <- NULL
+  late_valid <- NULL
+  intermediate_valid <- list()
+  preds_valid_list <- list()
+  intermediate_valid_risk <- list()
   if (!is.null(valid_feature_table) && !is.null(valid_sample_metadata)) {
     .vmsg("Running validation")
     if (!all(c("time", "event") %in% colnames(valid_sample_metadata))) {
@@ -1290,9 +1374,6 @@
     }
     V_times <- as.numeric(valid_sample_metadata$time)
     V_events <- as.numeric(valid_sample_metadata$event)
-
-    preds_valid_list <- list()
-    single_valid_metrics <- list()
 
     for (lay in names(full_layer_models)) {
       lay_features <- rownames(feature_metadata)[feature_metadata$featureType == lay]
@@ -1345,7 +1426,6 @@
     late_valid <- .compute_auc_cindex(V_times, V_events, combined_valid_risk)
     .vmsg("  [valid late] cindex=", .fmt(late_valid$cindex))
 
-    early_valid <- NULL
     if (isTRUE(do_early_fusion) && !is.null(early_fusion_out$full_model)) {
       all_features <- rownames(feature_metadata)
       Xv_all <- t(valid_feature_table[all_features, , drop = FALSE])
@@ -1354,11 +1434,11 @@
       .vmsg("  [valid early] cindex=", .fmt(early_valid$cindex))
     }
 
-    intermediate_valid <- list()
     if (length(intermediate_models) > 0L) {
       for (learner_id in names(intermediate_models)) {
         rv <- .predict_surv_risk(learner_id, intermediate_models[[learner_id]], layer_risk_valid)
         mv <- .compute_auc_cindex(V_times, V_events, rv)
+        intermediate_valid_risk[[learner_id]] <- rv
         intermediate_valid[[learner_id]] <- list(
           valid_cindex = mv$cindex,
           valid_auc = mv$auc
@@ -1402,6 +1482,93 @@
     intermediate = intermediate_train
   )
 
+  loco_results <- NULL
+  if (isTRUE(use_loco) && identical(fold_scheme, "loco") &&
+      !is.null(cohort_col) && (cohort_col %in% colnames(sample_metadata))) {
+    train_risk_by_model <- preds_list
+    if (!is.null(early_fusion_out)) {
+      train_risk_by_model[["early"]] <- early_fusion_out$train_risk
+    }
+    train_risk_by_model[["late"]] <- combined_train_risk
+    if (length(intermediate_train_risk) > 0L) {
+      for (nm in names(intermediate_train_risk)) {
+        train_risk_by_model[[paste0("intermediate::", nm)]] <- intermediate_train_risk[[nm]]
+      }
+    }
+
+    train_metric_by_model <- c(
+      single_layer_metrics,
+      if (!is.null(early_fusion_out)) list(early = list(cindex = early_fusion_out$train_cindex, auc = early_fusion_out$train_auc)) else list(),
+      list(late = list(cindex = late_train$cindex, auc = late_train$auc)),
+      lapply(names(intermediate_train), function(nm) {
+        list(cindex = intermediate_train[[nm]]$train_cindex, auc = intermediate_train[[nm]]$train_auc)
+      })
+    )
+    if (length(intermediate_train) > 0L) {
+      names(train_metric_by_model) <- c(
+        names(single_layer_metrics),
+        if (!is.null(early_fusion_out)) "early",
+        "late",
+        paste0("intermediate::", names(intermediate_train))
+      )
+    }
+
+    loco_results <- list(
+      train_overall = .survival_overall_summary(train_metric_by_model),
+      train_by_cohort = .survival_metrics_by_cohort(
+        times = times,
+        events = events,
+        risk_by_model = train_risk_by_model,
+        cohort_vec = sample_metadata[[cohort_col]]
+      )
+    )
+
+    if (!is.null(valid_feature_table) && !is.null(valid_sample_metadata) &&
+        (cohort_col %in% colnames(valid_sample_metadata)) &&
+        length(preds_valid_list) > 0L && !is.null(late_valid)) {
+      valid_risk_by_model <- preds_valid_list
+      if (!is.null(early_valid) && isTRUE(do_early_fusion) && !is.null(early_fusion_out$full_model)) {
+        all_features <- rownames(feature_metadata)
+        Xv_all <- t(valid_feature_table[all_features, , drop = FALSE])
+        valid_risk_by_model[["early"]] <- .predict_surv_risk(base_learner, early_fusion_out$full_model, Xv_all)
+      }
+      valid_risk_by_model[["late"]] <- combined_valid_risk
+      if (length(intermediate_valid_risk) > 0L) {
+        for (nm in names(intermediate_valid_risk)) {
+          valid_risk_by_model[[paste0("intermediate::", nm)]] <- intermediate_valid_risk[[nm]]
+        }
+      }
+
+      valid_metric_by_model <- c(
+        single_valid_metrics,
+        if (!is.null(early_valid)) list(early = early_valid) else list(),
+        list(late = late_valid),
+        lapply(names(intermediate_valid), function(nm) {
+          list(
+            cindex = intermediate_valid[[nm]]$valid_cindex,
+            auc = intermediate_valid[[nm]]$valid_auc
+          )
+        })
+      )
+      if (length(intermediate_valid) > 0L) {
+        names(valid_metric_by_model) <- c(
+          names(single_valid_metrics),
+          if (!is.null(early_valid)) "early",
+          "late",
+          paste0("intermediate::", names(intermediate_valid))
+        )
+      }
+
+      loco_results$valid_overall <- .survival_overall_summary(valid_metric_by_model)
+      loco_results$valid_by_cohort <- .survival_metrics_by_cohort(
+        times = V_times,
+        events = V_events,
+        risk_by_model = valid_risk_by_model,
+        cohort_vec = valid_sample_metadata[[cohort_col]]
+      )
+    }
+  }
+
   .vmsg("ILsurv completed")
   list(
     train_out = train_out,
@@ -1409,7 +1576,11 @@
     backend = "bioc_prototype",
     base_learner = base_learner,
     supported_learners = supported,
-    fold_id = fold_id
+    fold_id = fold_id,
+    loco = isTRUE(use_loco) && identical(fold_scheme, "loco"),
+    cohort_col = cohort_col,
+    fold_scheme = fold_scheme,
+    loco_results = loco_results
   )
 }
 
@@ -1474,6 +1645,8 @@ ILsurv <- function(
     optim_maxit_ibs = 300,
     ibs_shrink_to_uniform = 0,
     intermediate_learners = c("surv.coxph"),
+    loco = FALSE,
+    cohort_col = NULL,
     ...
 ) {
   weight_method <- match.arg(weight_method)
@@ -1481,6 +1654,9 @@ ILsurv <- function(
   weight_penalty <- match.arg(weight_penalty)
 
   dots <- list(...)
+  loco_state <- .resolve_loco_flag(loco = loco, dots = dots)
+  loco <- loco_state$loco
+  dots <- loco_state$dots
 
   model_args <- list()
   if ("model_args" %in% names(dots)) {
@@ -1520,12 +1696,19 @@ ILsurv <- function(
     cox_optim_maxit = optim_maxit_cox,
     intermediate_learners = intermediate_learners,
     verbose = verbose,
-    model_args = model_args
+    model_args = model_args,
+    loco = loco,
+    cohort_col = cohort_col
   )
 
   list(
     train_out = res$train_out,
-    valid_out = res$valid_out
+    valid_out = res$valid_out,
+    loco_results = res$loco_results,
+    loco = res$loco,
+    cohort_col = res$cohort_col,
+    fold_scheme = res$fold_scheme,
+    fold_id = res$fold_id
   )
 }
 
