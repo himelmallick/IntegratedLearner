@@ -1,6 +1,6 @@
 ---
 title: "Using IntegratedLearner for Multi-omics Prediction and Classification"
-author: "Himel Mallick, Nalin Arora and Anupreet Porwal"
+author: "Nalin Arora, Anupreet Porwal and Himel Mallick"
 date: "2026-03-10"
 output: rmarkdown::html_vignette
 vignette: >
@@ -9,14 +9,49 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
-```{r setup, include = FALSE}
+```{r setup, include = FALSE, warning=FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
+
+java_major_version <- function() {
+  out <- tryCatch(
+    suppressWarnings(system2("java", "-version", stdout = TRUE, stderr = TRUE)),
+    error = function(e) character()
+  )
+  line1 <- out[1]
+  if (length(line1) == 0 || is.na(line1)) return(NA_integer_)
+  m <- regmatches(line1, regexec('"([0-9]+)(\\.[0-9]+)?', line1))[[1]]
+  if (length(m) < 2) return(NA_integer_)
+  as.integer(m[2])
+}
+
+has_java_vector_module <- function() {
+  out <- tryCatch(
+    suppressWarnings(system2("java", "--list-modules", stdout = TRUE, stderr = TRUE)),
+    error = function(e) character()
+  )
+  any(grepl("^jdk.incubator.vector@", out))
+}
+
+# Set Java flags before any potential bartMachine/rJava namespace load.
+java_params <- "-Xmx6G"
+if (has_java_vector_module()) {
+  java_params <- c(java_params, "--add-modules=jdk.incubator.vector")
+}
+options(java.parameters = java_params)
+
+can_run_sl_bart <- function() {
+  have_bart <- requireNamespace("bartMachine", quietly = TRUE)
+  jv <- java_major_version()
+  have_bart && !is.na(jv) && jv >= 21 && has_java_vector_module()
+}
+
+use_sl_bart <- isTRUE(can_run_sl_bart())
 ```
 
-This vignette is a practical tutorial for binary, continuous, and survival outcome workflows in `IntegratedLearner`.
+This vignette is a practical tutorial for binary, multiclass, continuous, and survival outcome workflows in `IntegratedLearner`.
 
 The goal is to show a complete end-to-end pattern you can adapt to your own multi-omics study:
 
@@ -34,10 +69,8 @@ The goal is to show a complete end-to-end pattern you can adapt to your own mult
 
 ```{r, warning=FALSE, message=FALSE}
 # Main package
+devtools::install_github("himelmallick/IntegratedLearner")
 library(IntegratedLearner)
-
-# Needed for BART-based sections
-options(java.parameters = "-Xmx6G")
 
 # Tutorial dependencies
 library(tidyverse)
@@ -45,13 +78,23 @@ library(SuperLearner)
 library(caret)
 library(cowplot)
 library(bayesplot)
-library(bartMachine)
 library(curatedMetagenomicData)
 library(TreeSummarizedExperiment)
 library(SummarizedExperiment)
 library(MultiAssayExperiment)
 library(survival)
 library(S4Vectors)
+if (use_sl_bart) {
+  library(bartMachine)
+}
+```
+
+```{r, include=FALSE}
+if (!use_sl_bart) {
+  message(
+    "SL.BART sections are in fallback mode: Java >= 21 with bartMachine is required for SL.BART."
+  )
+}
 ```
 
 ## Input Data Contract
@@ -80,7 +123,7 @@ For survival workflows, include `time` and `event` columns in `sample_metadata` 
 `IntegratedLearner` accepts `MultiAssayExperiment` inputs through `MAE_train`/`MAE_valid`. This is often the cleanest path when each omics layer is already represented as a `SummarizedExperiment`/`TreeSummarizedExperiment`.
 
 
-```{r, eval=TRUE,warning = FALSE}
+```{r, eval=TRUE,warning = FALSE, eval=FALSE}
 
 
 # 1) Download two aligned layers from curatedMetagenomicData
@@ -166,7 +209,7 @@ fit_mae_bin <- IntegratedLearner(
   MAE_valid = mae_valid,
   experiment = c("taxonomy", "pathway"),
   assay.type = c("relative_abundance", "pathway_abundance"),
-  folds = 3,
+  folds = 2,
   base_learner = "SL.randomForest",
   meta_learner = "SL.nnls.auc",
   family = binomial(),
@@ -181,7 +224,7 @@ fit_mae_bin$weights
 
 The returned object is the same style as `PCL` mode, so downstream interpretation (`AUC.train`, `R2.train`, `weights`, `plot.learner`) is unchanged.
 
-## Parameter Reference (Conbin and Survival)
+## Parameter Reference (Conbin, Multiclass, and Survival)
 
 ### Common Wrapper Parameters (`IntegratedLearner`)
 
@@ -194,9 +237,9 @@ The returned object is the same style as `PCL` mode, so downstream interpretatio
 | `na.rm` | `FALSE` | all | Drop features with missing values after extraction/prep. |
 | `folds` | `5` | all | Outer CV folds. |
 | `seed` | `1234` | all | Reproducibility seed. |
-| `base_learner` | `"SL.BART"` | all | Base learner. Use `SL.*` IDs for continuous/binary and explicitly set a supported `surv.*` ID for survival runs. |
+| `base_learner` | `"SL.BART"` | all | Base learner. Use `SL.*` IDs for continuous/binary, native multiclass IDs (for example `randomforest`, `xgboost`, `mbart`) for multiclass, and explicitly set a supported `surv.*` ID for survival runs. |
 | `verbose` | `FALSE` | all | Print progress. |
-| `family` | `gaussian()` | all | Non-survival: `gaussian()`/`binomial()`. Survival is auto-detected from metadata or family. |
+| `family` | `gaussian()` | all | Non-survival: `gaussian()`/`binomial()`. Multiclass is auto-detected when `family = binomial()` and `Y` has more than two classes. Survival is auto-detected from metadata or family. |
 | `...` | — | all | Passed to the selected backend (`IL_conbin` or `ILsurv`). |
 
 ### Conbin-Specific Parameters (Continuous/Binary Path)
@@ -209,6 +252,18 @@ The returned object is the same style as `PCL` mode, so downstream interpretatio
 | `run_concat` | `TRUE` | Enables early-fusion concatenated model. |
 | `print_learner` | `TRUE` | Prints fit summary. |
 | `refit.stack` | `FALSE` | Refit stacked learner on full data for final predictions. |
+
+### Multiclass-Specific Parameters (Native Multiclass Path)
+
+| Parameter | Default | Description |
+|---|---|---|
+| `base_learner` | `"glmnet"` | Native multiclass learner per layer and for concatenated fit. Supported: `glmnet`, `randomforest`, `ranger`, `xgboost`, `mbart`, `multinom`. |
+| `meta_learner` | `"glmnet"` | Native multiclass learner used for stacked fusion. |
+| `base_screener` | `"All"` | Optional multiclass feature screening before layer/concat model fit (`All`, `anova`, `glmnet`, `randomforest`, `ranger`, `xgboost`). |
+| `run_stacked` | `TRUE` | Enables late-fusion stacked multiclass model. |
+| `run_concat` | `TRUE` | Enables early-fusion concatenated multiclass model. |
+| `folds` | `5` | Subject-level CV folds for OOF multiclass probabilities. |
+| `...` (`screen_*`) | — | Screener controls (for example `screen_keep_n`, `screen_keep_prop`, `screen_max_features`, `screen_min_features`). |
 
 ### Survival-Specific Parameters (via `...`)
 
@@ -233,6 +288,7 @@ The returned object is the same style as `PCL` mode, so downstream interpretatio
 | Path | Supported base models |
 |---|---|
 | Continuous/Binary (`IL_conbin`) | Any `SuperLearner`-compatible `SL.*` learner available in your R session. Package wrappers include: `SL.BART`, `SL.LASSO`, `SL.enet`, `SL.glmnet2`, `SL.horseshoe`, `SL.mxBART` (plus standard SuperLearner learners such as `SL.glm`, `SL.randomForest`, etc.). |
+| Multiclass (`IL_multiclass`) | Native multiclass learner IDs: `glmnet`, `randomforest`, `ranger`, `xgboost`, `mbart`, `multinom`. |
 | Survival (`ILsurv`) | Built-in survival learner IDs: `surv.coxph`, `surv.glmnet`, `surv.ranger`, `surv.ranger.extratrees`, `surv.ranger.maxstat`, `surv.ranger.C`, `surv.rfsrc`, `surv.coxboost`, `surv.gbm`, `surv.xgboost.cox`, `surv.xgboost.aft`, `surv.mboost`, `surv.bart`. |
 
 ### Supported Fusion Outputs
@@ -240,6 +296,7 @@ The returned object is the same style as `PCL` mode, so downstream interpretatio
 | Path | Single-layer | Early fusion | Late fusion | Intermediate fusion |
 |---|---|---|---|---|
 | Continuous/Binary | Yes | `run_concat = TRUE` | `run_stacked = TRUE` with `meta_learner` | Not a separate branch in `IL_conbin` |
+| Multiclass | Yes | `run_concat = TRUE` | `run_stacked = TRUE` with native multiclass `meta_learner` | Not a separate branch in `IL_multiclass` |
 | Survival | Yes (`train_out$single`) | `do_early_fusion = TRUE` | Weighted layer blending (`weight_method = "IBS"` or `"COX"`) | `intermediate_learners` on layer-risk summaries |
 
 ## Output Reference: What You Get and How to Access It
@@ -255,6 +312,16 @@ This section summarizes the outputs produced by each integration method and wher
 | Late fusion (stacked) | Meta-model over layer-level predictions | Enable with `run_stacked = TRUE`; outputs in `fit$yhat.train[, "stacked"]`, `fit$model_fits$model_stacked`, `fit$SL_fits$SL_fit_stacked` |
 | Layer weights (stacked) | Relative contribution of each layer in late fusion | `fit$weights` (available when `meta_learner = "SL.nnls.auc"` and `run_stacked = TRUE`) |
 
+### Multiclass Outputs
+
+| Method | What it returns | Where to access |
+|---|---|---|
+| Single-layer (per omics layer) | Layer-wise multiclass probability and class predictions | `fit$prob.train[[layer_name]]`, `fit$class.train[, layer_name]`, plus validation analogs `fit$prob.test[[layer_name]]`, `fit$class.test[, layer_name]` |
+| Early fusion (concatenated) | One multiclass model on concatenated features | Enable with `run_concat = TRUE`; outputs in `fit$prob.train$concatenated`, `fit$class.train[, "concatenated"]`, `fit$model_fits$model_concat` |
+| Late fusion (stacked) | Multiclass meta-model over OOF layer probabilities | Enable with `run_stacked = TRUE`; outputs in `fit$prob.train$stacked`, `fit$class.train[, "stacked"]`, `fit$model_fits$model_stacked` |
+| Multiclass performance metrics | Accuracy, balanced accuracy, and log-loss | `fit$metrics.train` and `fit$metrics.test` (if validation provided) |
+| Screened feature sets | Features retained by multiclass screeners | `fit$selected_features_by_layer`, `fit$selected_features_concat` |
+
 ### Survival Outputs (Single/Early/Late/Intermediate)
 
 | Method | Training outputs | Validation outputs |
@@ -264,12 +331,15 @@ This section summarizes the outputs produced by each integration method and wher
 | Late fusion | `fit$train_out$late$weights`, `fit$train_out$late$train_cindex`, `fit$train_out$late$train_auc` | `fit$valid_out$late$valid_cindex`, `fit$valid_out$late$valid_auc` |
 | Intermediate fusion | `fit$train_out$intermediate` (per learner listed in `intermediate_learners`) | `fit$valid_out$intermediate` |
 
-### Importance Outputs (Conbin and Survival)
+### Importance Outputs (Conbin, Multiclass, and Survival)
 
 | Importance type | Where to access | Notes |
 |---|---|---|
 | Conbin signed global feature importance | `fit$feature_importance_signed` | Always returned for non-survival fits; named numeric vector sorted by effect magnitude/sign. |
 | Conbin signed per-layer importance | `fit$feature_importance_signed_by_layer` | List split by `featureType`. |
+| Multiclass signed global feature importance | `fit$feature_importance_global` | Global score aggregated across multiclass contrasts. |
+| Multiclass signed importance by class | `fit$feature_importance_signed_by_class` | List with one signed vector per class. |
+| Multiclass signed importance by layer and class | `fit$feature_importance_signed_by_layer_by_class` | Nested list by layer then class. |
 | Survival early-fusion combined importance | `fit$train_out$early$combined_importance` | Available when `do_early_fusion = TRUE`. |
 | Survival late-fusion combined importance | `fit$train_out$late$combined_importance` | Weighted signed importance; names are prefixed like `layer::feature`. |
 | BART-specific layer importance (optional) | `bartMachine::investigate_var_importance(fit$model_fits$model_layers[[layer]], plot = FALSE)` | Only for BART-based conbin fits (`base_learner = "SL.BART"`). |
@@ -282,6 +352,15 @@ fit$weights
 head(fit$feature_importance_signed, 20)
 names(fit$feature_importance_signed_by_layer)
 head(fit$feature_importance_signed_by_layer[[1]], 20)
+
+# ---- Multiclass: metrics + class probabilities + importance ----
+fit_mc$metrics.train
+fit_mc$metrics.test
+head(fit_mc$class.train)
+head(fit_mc$class.test)
+head(fit_mc$prob.train$stacked)
+head(fit_mc$feature_importance_global, 20)
+head(fit_mc$feature_importance_signed_by_class[[1]], 20)
 
 # ---- Survival: late-fusion weights + top combined features ----
 fit_surv$train_out$late$weights
@@ -354,7 +433,7 @@ PCL_valid <- list(
 fit <- IntegratedLearner(
   PCL_train = PCL_train,
   PCL_valid = PCL_valid,
-  folds = 5,
+  folds = 2,
   base_learner = "SL.randomForest",
   meta_learner = "SL.nnls.auc",
   verbose = TRUE,
@@ -427,13 +506,34 @@ PCL_train <- list(
 
 ### Step 3: Fit Continuous Model
 
-For this example, we use BART base learners (`SL.BART`) with leave-one-subject-out style CV (`folds = 17`).
+For this example, we use BART base learners (`SL.BART`).
 
-```{r, warning=FALSE}
+If you hit:
+
+`java.lang.UnsupportedClassVersionError ... class file version 65.0 ... recognizes up to 61.0`
+
+your Java runtime is older than the version used by your installed `bartMachine` build (typically Java 17 runtime vs Java 21 bytecode). In that case, either:
+
+- upgrade Java runtime to 21 and restart R, or
+- use a non-Java learner (example fallback shown below).
+
+```{r, warning=FALSE, eval=use_sl_bart}
 fit <- IntegratedLearner(
   PCL_train = PCL_train,
-  folds = 17,
+  folds = 2,
   base_learner = "SL.BART",
+  meta_learner = "SL.nnls.auc",
+  family = gaussian()
+)
+```
+
+Fallback (non-Java) run:
+
+```{r, eval=!use_sl_bart}
+fit <- IntegratedLearner(
+  PCL_train = PCL_train,
+  folds = 2,
+  base_learner = "SL.randomForest",
   meta_learner = "SL.nnls.auc",
   family = gaussian()
 )
@@ -454,8 +554,9 @@ plot.obj <- IntegratedLearner:::plot.learner(fit)
 ### Step 5: Uncertainty and Feature-Level Interpretation (BART)
 
 When using `SL.BART`, you can inspect posterior predictive distributions and derive weighted posterior summaries.
+`r if (!use_sl_bart) "This section is skipped in this session because Java < 21 (or bartMachine is unavailable)." else ""`
 
-```{r}
+```{r, eval=use_sl_bart}
 weights <- fit$weights
 
 dataX <- fit$X_train_layers
@@ -465,7 +566,7 @@ post.samples <- vector("list", length(weights))
 names(post.samples) <- names(dataX)
 
 for (i in seq_along(post.samples)) {
-  post.samples[[i]] <- bart_machine_get_posterior(
+  post.samples[[i]] <- bartMachine::bart_machine_get_posterior(
     fit$model_fits$model_layers[[i]],
     dataX[[i]]
   )$y_hat_posterior_samples
@@ -478,7 +579,7 @@ names(dataY) <- rownames(dataX[[1]])
 
 Visualize 68% and 95% credible intervals for observations:
 
-```{r fig.width=9, fig.height=7}
+```{r fig.width=9, fig.height=7, eval=use_sl_bart}
 ord_names <- names(sort(rowMeans(weighted.post.samples), decreasing = TRUE))
 
 mcmc_intervals(t(weighted.post.samples), prob = 0.68, prob_outer = 0.95) +
@@ -495,7 +596,7 @@ mcmc_intervals(t(weighted.post.samples), prob = 0.68, prob_outer = 0.95) +
 
 Layer weights and feature-level inclusion proportions can also be examined for biological interpretation.
 
-```{r}
+```{r, eval=use_sl_bart}
 omicsEye_theme <- function() {
   angle <- 45
   hjust <- 1
@@ -577,7 +678,7 @@ p5 <- VIMP %>%
   xlab("")
 ```
 
-```{r fig.width=7, fig.height=4}
+```{r fig.width=7, fig.height=4, eval=use_sl_bart}
 plot_grid(
   p4,
   ncol = 1,
@@ -587,7 +688,7 @@ plot_grid(
 ) + theme(plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm"))
 ```
 
-```{r fig.width=9, fig.height=7}
+```{r fig.width=9, fig.height=7, eval=use_sl_bart}
 plot_grid(
   p5,
   ncol = 1,
@@ -597,7 +698,38 @@ plot_grid(
 ) + theme(plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm"))
 ```
 
-## Example 3: Survival Outcome (Time-to-event)
+## Example 3: Multiclass Outcome (Franzosa MAE with External Validation)
+
+This section shows a full multiclass MAE workflow using `diseaseCat` as `Y`, with training/validation feature alignment and Python-style class balancing on the training set.
+
+```{r}
+
+load(url("https://github.com/himelmallick/IntegratedLearner/blob/master/data/FranzosaE_2019_Train_Validation.RData?raw=true"))
+fit <- IntegratedLearner::IntegratedLearner(
+  MAE_train = MAE_train,
+  MAE_valid = MAE_valid,
+  experiment = c("metabolome", "species"),
+  assay.type = c("abundance", "abundance"),
+  family = stats::binomial(),
+  base_learner = "mbart",
+  meta_learner = "mbart",
+  run_stacked = TRUE,
+  run_concat = TRUE,
+  folds = 2,
+  verbose = TRUE
+)
+
+```
+
+Useful multiclass outputs:
+
+- `fit$metrics.train`
+- `fit$metrics.test`
+- `fit$class.train`
+- `fit$class.test`
+- `fit$feature_importance_signed_by_class`
+
+## Example 4: Survival Outcome (Time-to-event)
 
 For survival tasks, `IntegratedLearner` dispatches to `ILsurv` when survival metadata are detected. The expected fields are:
 
@@ -609,97 +741,30 @@ This path uses the package-native survival backend (no `mlr3` dependency require
 
 This section provides a complete MAE workflow, followed by an equivalent PCL sketch.
 
-### Step 1: Construct MAE Survival Inputs from TCGA_BRCA
-
-```{r,eval = F}
 
 
-load(url("https://github.com/himelmallick/IntegratedLearner/blob/master/data/Survival/TCGA_BRCA.RData?raw=true"))
-# Objects loaded: gene_all, mir_all
+```{r}
 
-# Keep deterministic ordering
-gene_all <- gene_all[order(gene_all$patient_id), ]
-mir_all  <- mir_all[order(mir_all$patient_id), ]
-rownames(gene_all) <- gene_all$patient_id
-rownames(mir_all)  <- mir_all$patient_id
 
-# Sample metadata
-sample_ids <- rownames(gene_all)
-sample_metadata <- data.frame(
-  subjectID = sample_ids,
-  time = gene_all$OS.time,
-  event = gene_all$OS,
-  Y = Surv(gene_all$OS.time, gene_all$OS),
-  row.names = sample_ids
-)
-
-# Feature matrices (features in rows)
-drop_cols <- c("patient_id", "age", "stage_i", "stage_ii", "race_white", "OS.time", "OS")
-mat_gene <- t(as.data.frame(gene_all[, setdiff(names(gene_all), drop_cols)]))
-mat_mirna <- t(as.data.frame(mir_all[, setdiff(names(mir_all), drop_cols)]))
-
-# Per-layer SummarizedExperiments
-se_gene <- SummarizedExperiment(
-  assays = list(relative_abundance = mat_gene),
-  colData = S4Vectors::DataFrame(sample_metadata[colnames(mat_gene), ])
-)
-
-se_mirna <- SummarizedExperiment(
-  assays = list(pathway_abundance = mat_mirna),
-  colData = S4Vectors::DataFrame(sample_metadata[colnames(mat_mirna), ])
-)
-
-mae <- MultiAssayExperiment(
-  experiments = list(taxonomy = se_gene, pathway = se_mirna),
-  colData = S4Vectors::DataFrame(sample_metadata)
-)
-```
-
-### Step 2: Split MAE into Training and Validation
-
-```{r,eval = F}
-set.seed(1)
-idx <- sample(seq_along(sample_ids), size = floor(0.7 * length(sample_ids)))
-mae_train <- mae[, idx, ]
-mae_valid <- mae[, -idx, ]
-
-# Utility to keep Y/time/event present in every experiment colData after subsetting
-propagate_Y <- function(mae_obj) {
-  exps <- MultiAssayExperiment::experiments(mae_obj)
-  for (nm in names(exps)) {
-    se <- exps[[nm]]
-    if (!"Y" %in% colnames(SummarizedExperiment::colData(se))) {
-      cd <- as.data.frame(MultiAssayExperiment::colData(mae_obj))[colnames(se), , drop = FALSE]
-      SummarizedExperiment::colData(se) <- S4Vectors::DataFrame(cd)
-    }
-    exps[[nm]] <- se
-  }
-  MultiAssayExperiment::experiments(mae_obj) <- exps
-  mae_obj
-}
-
-mae_train <- propagate_Y(mae_train)
-mae_valid <- propagate_Y(mae_valid)
-```
-
-### Step 3: Fit Survival Model (MAE Mode)
-
-```{r,warning=FALSE,eval = F}
+load(url("https://github.com/himelmallick/IntegratedLearner/blob/master/data/TCGA_BRCA.RData?raw=true"))
 fit_surv_mae <- IntegratedLearner(
   MAE_train = mae_train,
   MAE_valid = mae_valid,
   experiment = c("taxonomy", "pathway"),
   assay.type = c("relative_abundance", "pathway_abundance"),
   folds = 2,
-  base_learner = "surv.coxboost",  # alternatives include surv.coxph/surv.ranger/surv.xgboost.cox/...
+  base_learner = "surv.xgboost.cox",  # alternatives include surv.coxph/surv.ranger/surv.xgboost.cox/...
   weight_method = "COX",           # alternative: "IBS"
   verbose = TRUE
 )
 ```
 
-### Step 4: Interpret Survival Outputs
 
-```{r,eval = F}
+
+
+### Interpret Survival Outputs
+
+```{r}
 # Single-layer training metrics
 # fit_surv_mae$train_out$single$metrics
 
@@ -718,27 +783,9 @@ fit_surv_mae$valid_out$late$valid_auc
 fit_surv_mae$valid_out$single$valid_cindex
 ```
 
-### Equivalent PCL Survival Pattern (Same Data)
+### Equivalent PCL Survival 
 
-```{r,warning =FALSE,eval = F}
-# Convert to PCL-style objects if preferred:
-feature_table <- as.data.frame(rbind(mat_gene, mat_mirna))
-feature_metadata <- rbind(
-  data.frame(featureID = rownames(mat_gene), featureType = "gene", row.names = rownames(mat_gene)),
-  data.frame(featureID = rownames(mat_mirna), featureType = "mirna", row.names = rownames(mat_mirna))
-)
-
-PCL_train <- list(
-  feature_table = feature_table[, rownames(sample_metadata)[idx], drop = FALSE],
-  sample_metadata = sample_metadata[rownames(sample_metadata)[idx], , drop = FALSE],
-  feature_metadata = feature_metadata
-)
-
-PCL_valid <- list(
-  feature_table = feature_table[, rownames(sample_metadata)[-idx], drop = FALSE],
-  sample_metadata = sample_metadata[rownames(sample_metadata)[-idx], , drop = FALSE],
-  feature_metadata = feature_metadata
-)
+```{r,warning =FALSE}
 
 fit_surv_pcl <- IntegratedLearner(
   PCL_train = PCL_train,
