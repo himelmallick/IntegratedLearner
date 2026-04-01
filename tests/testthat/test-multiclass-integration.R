@@ -356,7 +356,7 @@ test_that("credint.learner supports multiclass mbart concatenated uncertainty", 
   expect_s3_class(p, "ggplot")
 })
 
-test_that("multiclass base_screener performs feature filtering", {
+test_that("multiclass screening keeps top X% features", {
   skip_if_not_installed("glmnet")
 
   pcl <- make_toy_multiclass_pcl(n_samples = 36, n_features = 24, seed = 2044)
@@ -368,22 +368,125 @@ test_that("multiclass base_screener performs feature filtering", {
     seed = 2044,
     base_learner = "glmnet",
     meta_learner = "glmnet",
-    base_screener = "anova",
+    run_screening = TRUE,
+    screen_pct = 25,
     run_stacked = FALSE,
     run_concat = TRUE,
     print_learner = FALSE,
-    family = stats::binomial(),
-    screen_keep_n = 3
+    family = stats::binomial()
   ))
 
-  expect_identical(fit$base_screener_used, "anova")
+  expect_true(isTRUE(fit$screening_used))
+  expect_identical(fit$base_screener_used, "glmnet")
+  expect_identical(fit$screen_method, "glmnet")
+  expect_identical(fit$screen_pct, 25)
   expect_true(is.list(fit$selected_features_by_layer))
   expect_true(all(names(fit$selected_features_by_layer) %in% names(full_by_layer)))
 
   for (lay in names(fit$model_fits$model_layers)) {
-    expect_lte(length(fit$model_fits$model_layers[[lay]]$feature_names), 3L)
-    expect_lt(length(fit$model_fits$model_layers[[lay]]$feature_names), full_by_layer[[lay]])
+    expect_lt(length(fit$model_fits$model_layers[[lay]]$feature_names), as.integer(full_by_layer[[lay]]))
   }
 
-  expect_lte(length(fit$model_fits$model_concat$feature_names), 6L)
+  expect_lt(length(fit$model_fits$model_concat$feature_names), nrow(pcl$feature_table))
+})
+
+test_that("multiclass prevalence_pct keeps top X% features by prevalence", {
+  skip_if_not_installed("glmnet")
+
+  pcl <- make_toy_multiclass_pcl(n_samples = 36, n_features = 24, seed = 2045)
+
+  # force low-prevalence features
+  pcl$feature_table[1:4, ] <- 0
+  pcl$feature_table[5, ] <- 0
+  pcl$feature_table[5, 1:2] <- 1
+
+  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl,
+    folds = 3,
+    seed = 2045,
+    base_learner = "glmnet",
+    meta_learner = "glmnet",
+    run_stacked = FALSE,
+    run_concat = TRUE,
+    print_learner = FALSE,
+    family = stats::binomial(),
+    prevalence_pct = 20
+  ))
+
+  expect_identical(fit$prevalence_pct, 20)
+  expect_true(!("F001" %in% fit$feature.names))
+  expect_true(!("F002" %in% fit$feature.names))
+  expect_true(!("F003" %in% fit$feature.names))
+  expect_true(!("F004" %in% fit$feature.names))
+  expect_true(!("F005" %in% fit$feature.names))
+  expect_equal(length(fit$feature.names), as.integer(ceiling(0.20 * nrow(pcl$feature_table))))
+})
+
+test_that("multiclass filter_method='prevalence' with filter_pct keeps top X% features", {
+  skip_if_not_installed("glmnet")
+
+  pcl <- make_toy_multiclass_pcl(n_samples = 36, n_features = 24, seed = 2046)
+
+  # force low-prevalence features
+  pcl$feature_table[1:4, ] <- 0
+  pcl$feature_table[5, ] <- 0
+  pcl$feature_table[5, 1:2] <- 1
+
+  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl,
+    folds = 3,
+    seed = 2046,
+    base_learner = "glmnet",
+    meta_learner = "glmnet",
+    run_stacked = FALSE,
+    run_concat = TRUE,
+    print_learner = FALSE,
+    family = stats::binomial(),
+    filter_method = "prevalence",
+    filter_pct = 20
+  ))
+
+  expect_identical(fit$filter_method, "prevalence")
+  expect_identical(fit$filter_pct, 20)
+  expect_identical(fit$prevalence_pct, 20)
+  expect_true(!("F001" %in% fit$feature.names))
+  expect_true(!("F002" %in% fit$feature.names))
+  expect_true(!("F003" %in% fit$feature.names))
+  expect_true(!("F004" %in% fit$feature.names))
+  expect_true(!("F005" %in% fit$feature.names))
+  expect_equal(length(fit$feature.names), as.integer(ceiling(0.20 * nrow(pcl$feature_table))))
+})
+
+test_that("multiclass filter_method='variance' keeps top X% features by caret variance ranking", {
+  skip_if_not_installed("glmnet")
+
+  pcl <- make_toy_multiclass_pcl(n_samples = 36, n_features = 24, seed = 2047)
+
+  # force near-zero variance features
+  pcl$feature_table[1:4, ] <- 0
+  pcl$feature_table[5, ] <- 1
+
+  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl,
+    folds = 3,
+    seed = 2047,
+    base_learner = "glmnet",
+    meta_learner = "glmnet",
+    run_stacked = FALSE,
+    run_concat = TRUE,
+    print_learner = FALSE,
+    family = stats::binomial(),
+    filter_method = "variance",
+    filter_pct = 20
+  ))
+
+  expect_identical(fit$filter_method, "variance")
+  expect_identical(fit$filter_pct, 20)
+  expect_null(fit$prevalence_pct)
+  expect_true(!("F001" %in% fit$feature.names))
+  expect_true(!("F002" %in% fit$feature.names))
+  expect_true(!("F003" %in% fit$feature.names))
+  expect_true(!("F004" %in% fit$feature.names))
+  expect_true(!("F005" %in% fit$feature.names))
+  expect_equal(length(fit$feature.names), as.integer(ceiling(0.20 * nrow(pcl$feature_table))))
 })
