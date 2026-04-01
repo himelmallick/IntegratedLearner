@@ -7,6 +7,26 @@ utils::globalVariables(c(
 ))
 NULL
 
+# Build an evaluation environment for SuperLearner where:
+# - built-in SuperLearner learners/screeners are available (parent namespace)
+# - IntegratedLearner custom wrappers (e.g., SL.BART, SL.nnls.auc) are available
+.make_sl_env <- function() {
+  sl_ns <- asNamespace("SuperLearner")
+  il_ns <- asNamespace("IntegratedLearner")
+  env <- new.env(parent = sl_ns)
+
+  il_objects <- ls(il_ns, all.names = TRUE)
+  keep <- il_objects[grepl("^(SL\\.|screen\\.|method\\.)", il_objects)]
+  if ("All" %in% il_objects) keep <- c(keep, "All")
+  keep <- unique(keep)
+
+  for (nm in keep) {
+    assign(nm, get(nm, envir = il_ns, inherits = FALSE), envir = env)
+  }
+
+  env
+}
+
 ###############################
 #### Print learner summary ####
 ###############################
@@ -2033,6 +2053,363 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
   if (inherits(fam, "family")) return(tolower(fam$family))
   if (is.character(fam) && length(fam) > 0) return(tolower(fam[1]))
   NA_character_
+}
+
+.resolve_screening_args <- function(run_screening = FALSE,
+                                    screen_pct = NULL,
+                                    base_screener = NULL,
+                                    context = "IntegratedLearner") {
+  screen_flag <- isTRUE(run_screening)
+  base_key <- if (is.null(base_screener)) "all" else tolower(as.character(base_screener[1]))
+  via_base <- !(base_key %in% c("all", "none", "noscreen", "noscreener", "off", "false", "0"))
+
+  enabled <- screen_flag || via_base
+  if (!enabled && !is.null(screen_pct)) {
+    warning(
+      "'screen_pct' was provided; enabling screening.",
+      call. = FALSE
+    )
+    enabled <- TRUE
+  }
+
+  if (!enabled) {
+    return(list(
+      enabled = FALSE,
+      screen_pct = NULL,
+      via_base_screener = via_base
+    ))
+  }
+
+  if (is.null(screen_pct)) {
+    stop(
+      "'", context, "': screening is enabled but 'screen_pct' is NULL. ",
+      "Please provide the percentage of features to keep in (0,100].",
+      call. = FALSE
+    )
+  }
+
+  p <- suppressWarnings(as.numeric(screen_pct[1]))
+  if (!is.finite(p)) {
+    stop("'screen_pct' must be numeric in (0,100].", call. = FALSE)
+  }
+  if (p > 0 && p <= 1) {
+    warning(
+      "'screen_pct' was in (0,1]; interpreting as a proportion and converting to percent.",
+      call. = FALSE
+    )
+    p <- p * 100
+  }
+  if (p <= 0 || p > 100) {
+    stop("'screen_pct' must be in (0,100].", call. = FALSE)
+  }
+
+  list(
+    enabled = TRUE,
+    screen_pct = p,
+    via_base_screener = via_base
+  )
+}
+
+.make_glmnet_screen_screener <- function(keep_pct = 20, seed = 1234) {
+  keep_pct <- as.numeric(keep_pct[1])
+  seed <- as.integer(seed[1])
+
+  function(Y, X, family, obsWeights, id, ...) {
+    X_df <- as.data.frame(X, check.names = FALSE)
+    p <- ncol(X_df)
+    if (p <= 1L) return(rep(TRUE, p))
+
+    X_mat <- as.matrix(X_df)
+    storage.mode(X_mat) <- "double"
+    X_mat[!is.finite(X_mat)] <- 0
+
+    fam_name <- .safe_family_name(family)
+    if (is.na(fam_name)) fam_name <- "gaussian"
+    if (!(fam_name %in% c("gaussian", "binomial"))) fam_name <- "gaussian"
+
+    y <- Y
+    if (identical(fam_name, "binomial")) {
+      if (is.factor(y) || is.character(y)) {
+        y <- as.numeric(factor(as.character(y))) - 1
+      }
+      y <- as.numeric(y)
+      y[!is.finite(y)] <- 0
+      y <- ifelse(y > 0, 1, 0)
+      if (length(unique(y)) < 2L) {
+        vars <- apply(X_mat, 2, stats::var, na.rm = TRUE)
+        vars[!is.finite(vars)] <- 0
+        score <- vars
+      } else {
+        set.seed(seed)
+        fit <- tryCatch({
+          nobs <- nrow(X_mat)
+          inner_folds <- min(5L, max(2L, nobs - 1L))
+          glmnet::cv.glmnet(
+            x = X_mat,
+            y = y,
+            family = "binomial",
+            type.measure = "deviance",
+            nfolds = inner_folds,
+            weights = obsWeights
+          )
+        }, error = function(e) NULL)
+
+        if (is.null(fit)) {
+          vars <- apply(X_mat, 2, stats::var, na.rm = TRUE)
+          vars[!is.finite(vars)] <- 0
+          score <- vars
+        } else {
+          cc <- stats::coef(fit, s = "lambda.min")
+          vals <- abs(as.numeric(cc[-1, 1]))
+          names(vals) <- rownames(cc)[-1]
+          score <- stats::setNames(rep(0, p), colnames(X_mat))
+          score[names(vals)] <- vals
+        }
+      }
+    } else {
+      y <- as.numeric(y)
+      y[!is.finite(y)] <- stats::median(y[is.finite(y)], na.rm = TRUE)
+      if (!all(is.finite(y))) y[!is.finite(y)] <- 0
+
+      set.seed(seed)
+      fit <- tryCatch({
+        nobs <- nrow(X_mat)
+        inner_folds <- min(5L, max(2L, nobs - 1L))
+        glmnet::cv.glmnet(
+          x = X_mat,
+          y = y,
+          family = "gaussian",
+          type.measure = "mse",
+          nfolds = inner_folds,
+          weights = obsWeights
+        )
+      }, error = function(e) NULL)
+
+      if (is.null(fit)) {
+        vars <- apply(X_mat, 2, stats::var, na.rm = TRUE)
+        vars[!is.finite(vars)] <- 0
+        score <- vars
+      } else {
+        cc <- stats::coef(fit, s = "lambda.min")
+        vals <- abs(as.numeric(cc[-1, 1]))
+        names(vals) <- rownames(cc)[-1]
+        score <- stats::setNames(rep(0, p), colnames(X_mat))
+        score[names(vals)] <- vals
+      }
+    }
+
+    score[!is.finite(score)] <- 0
+    n_keep <- max(1L, as.integer(ceiling((keep_pct / 100) * p)))
+    ord <- order(score, decreasing = TRUE, na.last = NA)
+    if (length(ord) == 0L) {
+      keep <- rep(TRUE, p)
+      return(keep)
+    }
+    keep <- rep(FALSE, p)
+    keep[ord[seq_len(min(n_keep, length(ord)))]] <- TRUE
+    keep
+  }
+}
+
+.resolve_feature_filter_args <- function(filter_method = NULL,
+                                         filter_pct = NULL,
+                                         prevalence_pct = NULL) {
+  method <- filter_method
+  pct <- filter_pct
+
+  if (!is.null(prevalence_pct) && !is.null(pct)) {
+    stop(
+      "Provide only one of 'filter_pct' or legacy 'prevalence_pct', not both.",
+      call. = FALSE
+    )
+  }
+
+  if (!is.null(prevalence_pct)) {
+    warning(
+      "'prevalence_pct' is deprecated; use 'filter_method = \"prevalence\"' and 'filter_pct'.",
+      call. = FALSE
+    )
+    pct <- prevalence_pct
+    if (is.null(method)) method <- "prevalence"
+  }
+
+  if (is.null(pct)) {
+    return(list(
+      enabled = FALSE,
+      filter_method = NULL,
+      filter_pct = NULL,
+      prevalence_pct = NULL
+    ))
+  }
+
+  p <- suppressWarnings(as.numeric(pct[1]))
+  if (!is.finite(p)) {
+    stop("'filter_pct' must be numeric in (0,100].", call. = FALSE)
+  }
+  if (p > 0 && p <= 1) {
+    warning(
+      "'filter_pct' was in (0,1]; interpreting as a proportion and converting to percent.",
+      call. = FALSE
+    )
+    p <- p * 100
+  }
+  if (p <= 0 || p > 100) {
+    stop("'filter_pct' must be in (0,100].", call. = FALSE)
+  }
+
+  if (is.null(method)) method <- "prevalence"
+  method <- tolower(as.character(method[1]))
+  method <- switch(
+    method,
+    prevalence = "prevalence",
+    prev = "prevalence",
+    variance = "variance",
+    var = "variance",
+    caret_variance = "variance",
+    nzv = "variance",
+    nearzerovar = "variance",
+    stop(
+      "Unknown 'filter_method'. Supported values are 'prevalence' and 'variance'.",
+      call. = FALSE
+    )
+  )
+
+  list(
+    enabled = TRUE,
+    filter_method = method,
+    filter_pct = p,
+    prevalence_pct = if (identical(method, "prevalence")) p else NULL
+  )
+}
+
+.filter_features_by_method <- function(feature_table,
+                                       feature_metadata,
+                                       feature_table_valid = NULL,
+                                       filter_method = NULL,
+                                       filter_pct = NULL,
+                                       prevalence_pct = NULL,
+                                       verbose = FALSE) {
+  resolved <- .resolve_feature_filter_args(
+    filter_method = filter_method,
+    filter_pct = filter_pct,
+    prevalence_pct = prevalence_pct
+  )
+
+  if (!isTRUE(resolved$enabled)) {
+    return(list(
+      feature_table = feature_table,
+      feature_metadata = feature_metadata,
+      feature_table_valid = feature_table_valid,
+      filter_method = NULL,
+      filter_pct = NULL,
+      prevalence_pct = NULL,
+      kept = rownames(feature_table)
+    ))
+  }
+
+  x <- as.matrix(feature_table)
+  n_total <- nrow(feature_table)
+  n_keep <- max(1L, as.integer(ceiling((resolved$filter_pct / 100) * n_total)))
+
+  if (identical(resolved$filter_method, "prevalence")) {
+    detected <- is.finite(x) & (x != 0)
+    score <- rowMeans(detected)
+    ord <- order(-score, rownames(feature_table))
+  } else {
+    var_score <- apply(x, 1, function(v) stats::var(v, na.rm = TRUE))
+    var_score[!is.finite(var_score)] <- -Inf
+
+    metrics <- as.data.frame(caret::nearZeroVar(t(x), saveMetrics = TRUE))
+    if (nrow(metrics) != nrow(feature_table)) {
+      stop(
+        "caret::nearZeroVar returned an unexpected number of rows.",
+        call. = FALSE
+      )
+    }
+    if (is.null(rownames(metrics))) {
+      rownames(metrics) <- rownames(feature_table)
+    }
+    if (!all(rownames(feature_table) %in% rownames(metrics))) {
+      stop(
+        "Could not align caret variance metrics to feature names.",
+        call. = FALSE
+      )
+    }
+    metrics <- metrics[rownames(feature_table), , drop = FALSE]
+
+    if (!"nzv" %in% names(metrics)) metrics$nzv <- FALSE
+    if (!"zeroVar" %in% names(metrics)) metrics$zeroVar <- FALSE
+    if (!"percentUnique" %in% names(metrics)) metrics$percentUnique <- 0
+
+    ord <- order(
+      metrics$nzv,
+      metrics$zeroVar,
+      -var_score,
+      -metrics$percentUnique,
+      rownames(feature_table),
+      na.last = TRUE
+    )
+  }
+
+  keep_idx <- ord[seq_len(n_keep)]
+  kept_ids <- rownames(feature_table)[keep_idx]
+  ft <- feature_table[kept_ids, , drop = FALSE]
+  fm <- feature_metadata[kept_ids, , drop = FALSE]
+
+  ft_valid <- feature_table_valid
+  if (!is.null(feature_table_valid)) {
+    if (!all(kept_ids %in% rownames(feature_table_valid))) {
+      stop(
+        "Validation feature table is missing one or more retained training features after filtering.",
+        call. = FALSE
+      )
+    }
+    ft_valid <- feature_table_valid[kept_ids, , drop = FALSE]
+  }
+
+  if (isTRUE(verbose)) {
+    msg <- if (identical(resolved$filter_method, "prevalence")) {
+      "prevalence ranking"
+    } else {
+      "caret variance ranking"
+    }
+    message(
+      "Feature filter (",
+      msg,
+      ", top ",
+      sprintf("%.2f", resolved$filter_pct),
+      "%): kept ",
+      nrow(ft),
+      "/",
+      nrow(feature_table),
+      " features."
+    )
+  }
+
+  list(
+    feature_table = ft,
+    feature_metadata = fm,
+    feature_table_valid = ft_valid,
+    filter_method = resolved$filter_method,
+    filter_pct = resolved$filter_pct,
+    prevalence_pct = resolved$prevalence_pct,
+    kept = kept_ids
+  )
+}
+
+.filter_features_by_prevalence <- function(feature_table,
+                                           feature_metadata,
+                                           feature_table_valid = NULL,
+                                           prevalence_pct = NULL,
+                                           verbose = FALSE) {
+  .filter_features_by_method(
+    feature_table = feature_table,
+    feature_metadata = feature_metadata,
+    feature_table_valid = feature_table_valid,
+    filter_method = "prevalence",
+    filter_pct = prevalence_pct,
+    verbose = verbose
+  )
 }
 
 .is_survival_outcome <- function(fam_name, sample_metadata) {

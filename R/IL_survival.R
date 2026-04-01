@@ -167,6 +167,74 @@
   colnames(X)[keep_idx]
 }
 
+.extract_survival_screen_cfg <- function(method_args = list()) {
+  out <- list(
+    enabled = FALSE,
+    screen_pct = NULL,
+    screen_method = "cox",
+    model_args = method_args
+  )
+  if (!is.list(method_args) || length(method_args) == 0L) return(out)
+
+  if (!"screen_pct" %in% names(method_args)) return(out)
+  p <- suppressWarnings(as.numeric(method_args$screen_pct[[1]]))
+  method_args$screen_pct <- NULL
+  if (!is.finite(p)) return(out)
+  if (p > 0 && p <= 1) p <- p * 100
+  if (p <= 0 || p > 100) return(out)
+
+  m <- method_args$screen_method
+  method_args$screen_method <- NULL
+  if (!is.null(m)) {
+    m <- tolower(as.character(m[[1]]))
+    if (m %in% c("cox", "coxph")) {
+      m <- "cox"
+    } else if (m %in% c("variance", "var")) {
+      m <- "variance"
+    } else {
+      m <- "cox"
+    }
+  } else {
+    m <- "cox"
+  }
+
+  out$enabled <- TRUE
+  out$screen_pct <- p
+  out$screen_method <- m
+  out$model_args <- method_args
+  out
+}
+
+.screen_survival_matrix <- function(X_train, X_test, time_train, event_train, screen_pct, screen_method = "cox") {
+  X_train <- as.matrix(X_train)
+  X_test <- as.matrix(X_test)
+  p <- ncol(X_train)
+  if (p <= 1L) {
+    return(list(
+      X_train = X_train,
+      X_test = X_test,
+      selected = colnames(X_train)
+    ))
+  }
+  n_keep <- max(1L, as.integer(ceiling((screen_pct / 100) * p)))
+  keep <- .select_top_features(
+    X = X_train,
+    times = time_train,
+    events = event_train,
+    max_features = n_keep,
+    method = screen_method
+  )
+  keep <- intersect(colnames(X_train), keep)
+  if (length(keep) == 0L) {
+    keep <- colnames(X_train)[seq_len(max(1L, n_keep))]
+  }
+  list(
+    X_train = X_train[, keep, drop = FALSE],
+    X_test = X_test[, keep, drop = FALSE],
+    selected = keep
+  )
+}
+
 .select_event_grid <- function(times, events, max_events = NULL) {
   if (is.null(max_events) || !is.finite(max_events) || max_events <= 0) return(NULL)
   ev <- sort(unique(as.numeric(times[events == 1 & is.finite(times)])))
@@ -598,6 +666,9 @@
 }
 
 .fit_oof <- function(method, X, times, events, fold_id, method_args = list()) {
+  screen_cfg <- .extract_survival_screen_cfg(method_args)
+  method_args_fit <- screen_cfg$model_args
+
   n <- nrow(X)
   oof <- rep(NA_real_, n)
   imp_list <- vector("list", length(unique(fold_id)))
@@ -605,14 +676,30 @@
   for (f in sort(unique(fold_id))) {
     train_idx <- which(fold_id != f)
     test_idx <- which(fold_id == f)
+
+    X_train <- X[train_idx, , drop = FALSE]
+    X_test <- X[test_idx, , drop = FALSE]
+    if (isTRUE(screen_cfg$enabled)) {
+      screened <- .screen_survival_matrix(
+        X_train = X_train,
+        X_test = X_test,
+        time_train = times[train_idx],
+        event_train = events[train_idx],
+        screen_pct = screen_cfg$screen_pct,
+        screen_method = screen_cfg$screen_method
+      )
+      X_train <- screened$X_train
+      X_test <- screened$X_test
+    }
+
     fit_obj <- .fit_surv_model(
       method = method,
-      x_train = X[train_idx, , drop = FALSE],
+      x_train = X_train,
       time_train = times[train_idx],
       event_train = events[train_idx],
-      method_args = method_args
+      method_args = method_args_fit
     )
-    pred <- .predict_surv_risk(method, fit_obj, X[test_idx, , drop = FALSE])
+    pred <- .predict_surv_risk(method, fit_obj, X_test)
     oof[test_idx] <- pred
     imp_list[[f]] <- .extract_importance(method, fit_obj)
     fold_models[[f]] <- fit_obj
@@ -622,7 +709,21 @@
 }
 
 .train_full <- function(method, X, times, events, method_args = list()) {
-  .fit_surv_model(method, X, times, events, method_args = method_args)
+  screen_cfg <- .extract_survival_screen_cfg(method_args)
+  method_args_fit <- screen_cfg$model_args
+  X_use <- as.matrix(X)
+  if (isTRUE(screen_cfg$enabled)) {
+    screened <- .screen_survival_matrix(
+      X_train = X_use,
+      X_test = X_use,
+      time_train = times,
+      event_train = events,
+      screen_pct = screen_cfg$screen_pct,
+      screen_method = screen_cfg$screen_method
+    )
+    X_use <- screened$X_train
+  }
+  .fit_surv_model(method, X_use, times, events, method_args = method_args_fit)
 }
 
 .safe_scale <- function(M) {
@@ -1034,6 +1135,8 @@
     base_learner = "surv.coxph",
     folds = 5,
     seed = 123,
+    run_screening = FALSE,
+    screen_pct = NULL,
     do_early_fusion = TRUE,
     weight_method = c("COX", "UNIFORM", "IBS"),
     ibs_grid_n = 30,
@@ -1088,6 +1191,12 @@
   weight_method <- match.arg(weight_method)
   cox_layer_score <- match.arg(cox_layer_score)
   cox_weight_penalty <- match.arg(cox_weight_penalty)
+  screening <- .resolve_screening_args(
+    run_screening = run_screening,
+    screen_pct = screen_pct,
+    base_screener = NULL,
+    context = "ILsurv"
+  )
   model_args <- validated$model_args
   feature_metadata <- validated$feature_metadata
   layers <- validated$layers
@@ -1101,6 +1210,11 @@
   .vmsg("  folds: ", folds, " | seed: ", seed)
   .vmsg("  samples: ", nrow(sample_metadata), " | features: ", nrow(feature_table))
   .vmsg("  layers: ", paste(layers, collapse = ", "))
+  if (isTRUE(screening$enabled)) {
+    .vmsg("  screening: cox (", sprintf("%.2f", screening$screen_pct), "%)")
+  } else {
+    .vmsg("  screening: off")
+  }
 
   preds_list <- list()
   importance_list <- list()
@@ -1117,6 +1231,12 @@
     .vmsg("[", lay, "] fitting OOF + full model (", ncol(X), " features)")
     method_opts <- model_args[[base_learner]]
     if (is.null(method_opts)) method_opts <- list()
+    if (isTRUE(screening$enabled)) {
+      method_opts <- utils::modifyList(
+        method_opts,
+        list(screen_pct = screening$screen_pct, screen_method = "cox")
+      )
+    }
     oof_out <- .fit_oof(base_learner, X, times, events, fold_id = fold_id, method_args = method_opts)
     preds_list[[lay]] <- as.numeric(oof_out$oof_risk)
     importance_list[[lay]] <- oof_out$importance
@@ -1150,6 +1270,12 @@
     X_all <- t(feature_table[all_features, , drop = FALSE])
     method_opts <- model_args[[base_learner]]
     if (is.null(method_opts)) method_opts <- list()
+    if (isTRUE(screening$enabled)) {
+      method_opts <- utils::modifyList(
+        method_opts,
+        list(screen_pct = screening$screen_pct, screen_method = "cox")
+      )
+    }
     early_oof <- .fit_oof(base_learner, X_all, times, events, fold_id = fold_id, method_args = method_opts)
     early_met <- .compute_auc_cindex(times, events, early_oof$oof_risk)
     signs_all <- .get_univariate_signs(as.data.frame(X_all), times, events)
@@ -1409,7 +1535,10 @@
     backend = "bioc_prototype",
     base_learner = base_learner,
     supported_learners = supported,
-    fold_id = fold_id
+    fold_id = fold_id,
+    screening_used = isTRUE(screening$enabled),
+    screen_method = if (isTRUE(screening$enabled)) "cox" else NULL,
+    screen_pct = screening$screen_pct
   )
 }
 
@@ -1460,6 +1589,8 @@ ILsurv <- function(
     base_learner = "surv.rfsrc",
     folds = 5,
     seed = 123,
+    run_screening = FALSE,
+    screen_pct = NULL,
     verbose = FALSE,
     do_early_fusion = TRUE,
     weight_method = c("IBS", "COX"),
@@ -1505,6 +1636,8 @@ ILsurv <- function(
     base_learner = base_learner,
     folds = folds,
     seed = seed,
+    run_screening = run_screening,
+    screen_pct = screen_pct,
     do_early_fusion = do_early_fusion,
     weight_method = weight_method,
     ibs_grid_n = 30,
@@ -1525,7 +1658,10 @@ ILsurv <- function(
 
   list(
     train_out = res$train_out,
-    valid_out = res$valid_out
+    valid_out = res$valid_out,
+    screening_used = res$screening_used,
+    screen_method = res$screen_method,
+    screen_pct = res$screen_pct
   )
 }
 

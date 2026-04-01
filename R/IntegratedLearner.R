@@ -50,11 +50,21 @@
 #'   Check out the
 #'   \href{https://cran.r-project.org/web/packages/SuperLearner/vignettes/Guide-to-SuperLearner.html}{SuperLearner user manual}
 #'   for all available options. Default is \code{`SL.BART`}.
-#' @param base_screener Whether to screen variables before fitting base models?
-#'   \code{All} means no screening which is the default.
-#'   Check out the
-#'   \href{https://cran.r-project.org/web/packages/SuperLearner/vignettes/Guide-to-SuperLearner.html}{SuperLearner user manual}
-#'   for all available options.
+#' @param base_screener Deprecated for \code{IL_conbin} and \code{IL_multiclass};
+#'   kept for backward compatibility and currently ignored in those backends.
+#' @param run_screening Logical; if \code{TRUE}, run supervised screening on
+#'   training data within each CV fold (and again on full training data before
+#'   final fitting), then apply the same selected features to fold-validation
+#'   or external validation data.
+#' @param screen_pct Percentage of features to retain during screening
+#'   (\code{(0,100]}).
+#' @param filter_method Optional feature-filter method for non-survival runs.
+#'   Supported values: \code{"prevalence"} and \code{"variance"}.
+#' @param filter_pct Optional retention percentage (in \code{(0,100]}) for the
+#'   selected \code{filter_method}. Keeps the top \code{filter_pct}\% features.
+#' @param prevalence_pct Optional retention percentage (in \code{(0,100]}) for
+#'   prevalence-based feature filtering before model fitting. Deprecated alias
+#'   of \code{filter_pct} with \code{filter_method = "prevalence"}.
 #' @param meta_learner Meta-learner for late fusion (stacked generalization).
 #'   Defaults to \code{`SL.nnls.auc`}.
 #'   Check out the
@@ -99,6 +109,11 @@ IntegratedLearner <- function(
     seed        = 1234,
     base_learner = "SL.BART",
     base_screener = "All",
+    run_screening = FALSE,
+    screen_pct = NULL,
+    filter_method = NULL,
+    filter_pct = NULL,
+    prevalence_pct = NULL,
     meta_learner  = "SL.nnls.auc",
     run_concat    = TRUE,
     run_stacked   = TRUE,
@@ -173,6 +188,19 @@ IntegratedLearner <- function(
   ## 3. Dispatch to IL_conbin() or IL_survival()
   ## ------------------------------------------------------------
   if (is_survival) {
+    filtered_surv <- .filter_features_by_method(
+      feature_table = feature_table,
+      feature_metadata = feature_metadata,
+      feature_table_valid = feature_table_valid,
+      filter_method = filter_method,
+      filter_pct = filter_pct,
+      prevalence_pct = prevalence_pct,
+      verbose = verbose
+    )
+    feature_table <- filtered_surv$feature_table
+    feature_metadata <- filtered_surv$feature_metadata
+    feature_table_valid <- filtered_surv$feature_table_valid
+
     res <- ILsurv(
       feature_table        = feature_table,
       sample_metadata      = sample_metadata,
@@ -182,11 +210,16 @@ IntegratedLearner <- function(
       base_learner         = base_learner,
       folds                = folds,
       seed                 = seed,
+      run_screening        = run_screening,
+      screen_pct           = screen_pct,
       verbose              = verbose,
       ...
     )
     res$family <- "survival"
     res$feature.names <- rownames(feature_table)
+    res$filter_method <- filtered_surv$filter_method
+    res$filter_pct <- filtered_surv$filter_pct
+    res$prevalence_pct <- filtered_surv$prevalence_pct
   } else if (is_multiclass) {
     res <- IL_multiclass(
       feature_table         = feature_table,
@@ -198,6 +231,11 @@ IntegratedLearner <- function(
       seed                  = seed,
       base_learner          = base_learner,
       base_screener         = base_screener,
+      run_screening         = run_screening,
+      screen_pct            = screen_pct,
+      filter_method         = filter_method,
+      filter_pct            = filter_pct,
+      prevalence_pct        = prevalence_pct,
       meta_learner          = meta_learner,
       run_concat            = run_concat,
       run_stacked           = run_stacked,
@@ -217,6 +255,11 @@ IntegratedLearner <- function(
       seed                 = seed,
       base_learner         = base_learner,
       base_screener        = base_screener,
+      run_screening        = run_screening,
+      screen_pct           = screen_pct,
+      filter_method        = filter_method,
+      filter_pct           = filter_pct,
+      prevalence_pct       = prevalence_pct,
       meta_learner         = meta_learner,
       run_concat           = run_concat,
       run_stacked          = run_stacked,

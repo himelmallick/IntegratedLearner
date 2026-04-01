@@ -18,6 +18,11 @@ IL_multiclass <- function(feature_table,
                           seed = 1234,
                           base_learner = "glmnet",
                           base_screener = "All",
+                          run_screening = FALSE,
+                          screen_pct = NULL,
+                          filter_method = NULL,
+                          filter_pct = NULL,
+                          prevalence_pct = NULL,
                           meta_learner = "glmnet",
                           run_concat = TRUE,
                           run_stacked = TRUE,
@@ -39,13 +44,46 @@ IL_multiclass <- function(feature_table,
     is_survival = FALSE
   )
 
+  filtered <- .filter_features_by_method(
+    feature_table = feature_table,
+    feature_metadata = feature_metadata,
+    feature_table_valid = feature_table_valid,
+    filter_method = filter_method,
+    filter_pct = filter_pct,
+    prevalence_pct = prevalence_pct,
+    verbose = verbose
+  )
+  feature_table <- filtered$feature_table
+  feature_metadata <- filtered$feature_metadata
+  feature_table_valid <- filtered$feature_table_valid
+
   validated <- .validate_multiclass_training_inputs(sample_metadata = sample_metadata, folds = folds)
   Y <- validated$Y
   class_levels <- validated$class_levels
 
   learner_id <- .map_multiclass_learner(base_learner)
   meta_id <- .map_multiclass_meta_learner(meta_learner)
-  screener_id <- .map_multiclass_screener(base_screener)
+  screening <- .resolve_screening_args(
+    run_screening = run_screening,
+    screen_pct = screen_pct,
+    base_screener = base_screener,
+    context = "IL_multiclass"
+  )
+  if (isTRUE(screening$enabled) && isTRUE(screening$via_base_screener)) {
+    warning(
+      "'base_screener' is deprecated; use run_screening/screen_pct.",
+      call. = FALSE
+    )
+  }
+  screener_id <- if (isTRUE(screening$enabled)) "glmnet" else "all"
+  screener_args <- if (isTRUE(screening$enabled)) {
+    list(
+      keep_prop = screening$screen_pct / 100,
+      min_features = 1
+    )
+  } else {
+    list()
+  }
 
   set.seed(seed)
   subjectID <- validated$subjectID
@@ -92,10 +130,7 @@ IL_multiclass <- function(feature_table,
     names(X_test_layers) <- name_layers
   }
 
-  dots_raw <- list(...)
-  parsed_args <- .extract_multiclass_screen_args(dots_raw)
-  dots <- parsed_args$model_args
-  screener_args <- parsed_args$screener_args
+  dots <- list(...)
 
   for (i in seq_along(name_layers)) {
     if (isTRUE(verbose)) cat("Running multiclass base model for layer", i, "...\n")
@@ -109,7 +144,7 @@ IL_multiclass <- function(feature_table,
       X = dat_slice_all,
       y = Y,
       screener_id = screener_id,
-      seed = seed + 100 + i,
+      seed = seed + 250 + i,
       screener_args = screener_args
     )
     dat_slice <- dat_slice_all[, layer_screen$feature_names, drop = FALSE]
@@ -350,8 +385,14 @@ IL_multiclass <- function(feature_table,
     meta_learner = meta_learner,
     meta_learner_used = meta_id,
     base_screener = base_screener,
-    base_screener_used = screener_id,
-    screener_args_used = screener_args,
+    base_screener_used = if (isTRUE(screening$enabled)) "glmnet" else "none",
+    screener_args_used = if (isTRUE(screening$enabled)) list(screen_pct = screening$screen_pct) else list(),
+    screening_used = isTRUE(screening$enabled),
+    screen_method = if (isTRUE(screening$enabled)) "glmnet" else NULL,
+    screen_pct = screening$screen_pct,
+    filter_method = filtered$filter_method,
+    filter_pct = filtered$filter_pct,
+    prevalence_pct = filtered$prevalence_pct,
     selected_features_by_layer = selected_features_by_layer,
     selected_features_concat = concat_selected_features,
     run_concat = run_concat,

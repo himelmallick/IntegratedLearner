@@ -50,8 +50,23 @@
 #' @param seed Specify the seed for reproducibility. Default is 1234.
 #' @param base_learner Base learner for late fusion and early fusion. Default: 
 #'   \code{SL.BART}.
-#' @param base_screener Whether to screen variables before fitting base models? 
-#'   \code{All} means no screening (default).
+#' @param base_screener Deprecated for this backend; currently ignored and kept
+#'   only for backward compatibility.
+#' @param run_screening Logical; if \code{TRUE}, run supervised screening
+#'   within each training fold (and again on full training data) before fitting
+#'   base models.
+#' @param screen_pct Percentage of features to retain during screening
+#'   (\code{(0,100]}). Applied after any optional filtering.
+#' @param filter_method Optional feature-filter method before model fitting.
+#'   Supported values are \code{"prevalence"} (top detected features by
+#'   prevalence) and \code{"variance"} (top features by caret-based variance
+#'   ranking via \code{nearZeroVar} + empirical variance). If \code{NULL},
+#'   defaults to \code{"prevalence"} when filtering is requested.
+#' @param filter_pct Optional retention percentage (in \code{(0,100]}) for the
+#'   selected \code{filter_method}. Keeps the top \code{filter_pct}\% features.
+#' @param prevalence_pct Optional retention percentage (in \code{(0,100]}) for
+#'   prevalence-based filtering before model fitting. Deprecated alias of
+#'   \code{filter_pct} with \code{filter_method = "prevalence"}.
 #' @param meta_learner Meta-learner for late fusion (stacked generalization). 
 #'   Defaults to \code{SL.nnls.auc}.
 #' @param run_concat Should early fusion be run? Default is TRUE.
@@ -85,6 +100,11 @@ IL_conbin<-function(feature_table,
                             seed = 1234, 
                             base_learner = 'SL.BART',
                             base_screener = 'All', 
+                            run_screening = FALSE,
+                            screen_pct = NULL,
+                            filter_method = NULL,
+                            filter_pct = NULL,
+                            prevalence_pct = NULL,
                             meta_learner = 'SL.nnls.auc',
                             run_concat = TRUE, 
                             run_stacked = TRUE, 
@@ -109,6 +129,49 @@ IL_conbin<-function(feature_table,
     family_name = .safe_family_name(family),
     is_survival = FALSE
   )
+
+  filtered <- .filter_features_by_method(
+    feature_table = feature_table,
+    feature_metadata = feature_metadata,
+    feature_table_valid = feature_table_valid,
+    filter_method = filter_method,
+    filter_pct = filter_pct,
+    prevalence_pct = prevalence_pct,
+    verbose = verbose
+  )
+  feature_table <- filtered$feature_table
+  feature_metadata <- filtered$feature_metadata
+  feature_table_valid <- filtered$feature_table_valid
+
+  screening <- .resolve_screening_args(
+    run_screening = run_screening,
+    screen_pct = screen_pct,
+    base_screener = base_screener,
+    context = "IL_conbin"
+  )
+
+  if (isTRUE(screening$enabled) && isTRUE(screening$via_base_screener)) {
+    warning(
+      "'base_screener' is deprecated; use run_screening/screen_pct.",
+      call. = FALSE
+    )
+  }
+
+  sl_env <- .make_sl_env()
+
+  base_library <- base_learner
+  if (isTRUE(screening$enabled)) {
+    screen_fun_name <- "screen.il.glmnet"
+    assign(
+      screen_fun_name,
+      .make_glmnet_screen_screener(
+        keep_pct = screening$screen_pct,
+        seed = seed
+      ),
+      envir = sl_env
+    )
+    base_library <- list(c(base_learner, screen_fun_name))
+  }
   
   
   #############################################################################################
@@ -204,8 +267,9 @@ IL_conbin<-function(feature_table,
                                                      X = X,
                                                      cvControl = cvControl,    
                                                      verbose = verbose, 
-                                                     SL.library = list(c(base_learner,base_screener)),
-                                                     family = family)
+                                                     SL.library = base_library,
+                                                     family = family,
+                                                     env = sl_env)
     
     ###################################################
     # Append the corresponding y and X to the results #
@@ -285,7 +349,8 @@ IL_conbin<-function(feature_table,
                                                cvControl = cvControl,    
                                                verbose = verbose, 
                                                SL.library = meta_learner,
-                                               family=family)
+                                               family=family,
+                                               env = sl_env)
                                                 
     
     # Extract the fit object from SuperLearner
@@ -335,8 +400,9 @@ IL_conbin<-function(feature_table,
                                               X = fulldat, 
                                               cvControl = cvControl,    
                                               verbose = verbose, 
-                                              SL.library = list(c(base_learner,base_screener)),
-                                              family=family)
+                                              SL.library = base_library,
+                                              family=family,
+                                              env = sl_env)
     
     # Extract the fit object from superlearner
     model_concat <- SL_fit_concat$fitLibrary[[1]]$object
@@ -582,6 +648,13 @@ IL_conbin<-function(feature_table,
   res$base_learner <- base_learner
   res$meta_learner <- meta_learner
   res$base_screener <- base_screener
+  res$base_screener_used <- if (isTRUE(screening$enabled)) "glmnet" else "none"
+  res$screening_used <- isTRUE(screening$enabled)
+  res$screen_method <- if (isTRUE(screening$enabled)) "glmnet" else NULL
+  res$screen_pct <- screening$screen_pct
+  res$filter_method <- filtered$filter_method
+  res$filter_pct <- filtered$filter_pct
+  res$prevalence_pct <- filtered$prevalence_pct
   res$run_concat <- run_concat
   res$run_stacked <- run_stacked
   res$family <- family$family

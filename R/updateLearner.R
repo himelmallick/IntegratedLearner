@@ -43,6 +43,7 @@ update.learner <- function(object,
   } else {
     stop("fit$family must be 'gaussian' or 'binomial'.", call. = FALSE)
   }
+  sl_env <- .make_sl_env()
   
   # extract validation Y (if provided)
   if (!is.null(sample_metadata_valid)) {
@@ -142,7 +143,8 @@ update.learner <- function(object,
       cvControl = fit$cvControl,
       verbose = verbose,
       SL.library = fit$meta_learner,
-      family = family
+      family = family,
+      env = sl_env
     )
     
     model_stacked <- SL_fit_stacked$fitLibrary[[1]]$object
@@ -181,8 +183,9 @@ update.learner <- function(object,
       X = fulldat,
       cvControl = fit$cvControl,
       verbose = verbose,
-      SL.library = list(c(fit$base_learner, fit$base_screener)),
-      family = family
+      SL.library = fit$base_learner,
+      family = family,
+      env = sl_env
     )
     
     model_concat <- SL_fit_concat$fitLibrary[[1]]$object
