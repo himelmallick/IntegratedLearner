@@ -29,8 +29,10 @@ library(IntegratedLearner)
 * Supports binary, multiclass, continuous, and survival outcomes
 * Supports early, late, and intermediate fusion in one interface
 * Integrates with [SuperLearner](https://cran.r-project.org/web/packages/SuperLearner/index.html) for binary/continuous models (`SL.*`)
-* Includes a native multiclass backend with multiclass learners (`glmnet`, `randomforest`, `ranger`, `xgboost`, `mbart`, `multinom`) and optional multiclass screening
+* Includes a native multiclass backend with multiclass learners (`glmnet`, `randomforest`, `ranger`, `xgboost`, `mbart`, `multinom`)
 * Uses a native BioC-friendly survival backend (`ILsurv`) for `surv.*` models
+* Supports optional feature filtering (`filter_method`, `filter_pct`) and supervised screening (`run_screening`, `screen_pct`)
+* Applies screening in a fold-safe way (fit on fold-training only; apply to fold-validation) to avoid leakage
 * Visualization using built-in plotting
 * Built-in layer weights and feature-importance outputs for interpretability
 * Nested cross-validation to estimate prediction performance
@@ -46,11 +48,15 @@ The package vignette demonstrates binary, multiclass, continuous, survival, `PCL
 
 For binary/continuous outcomes, late fusion proceeds by 1) fitting a machine learning algorithm (`base_learner`) per layer and 2) combining layer-wise cross-validated predictions using a meta model (`meta_learner`). A common default is [BART](https://arxiv.org/abs/0806.3286) as base learner (`base_learner = "SL.BART"`) with `SL.nnls.auc` as the meta-learner.
 
-For multiclass outcomes (`family = binomial()` with `length(unique(Y)) > 2`), `IntegratedLearner` dispatches to a native multiclass backend that performs multiclass probability modeling at layer, stacked, and concatenated levels. Optional screening is available via `base_screener` (for example: `anova`, `glmnet`, `randomforest`, `ranger`, `xgboost`) with `screen_*` arguments.
+For multiclass outcomes (`family = binomial()` with `length(unique(Y)) > 2`), `IntegratedLearner` dispatches to a native multiclass backend that performs multiclass probability modeling at layer, stacked, and concatenated levels. Optional filtering and screening are supported via `filter_method`/`filter_pct` and `run_screening`/`screen_pct`.
 
 For survival outcomes, `IntegratedLearner` dispatches to the native survival engine (`ILsurv`) with configurable late-fusion weighting (`COX`/`IBS`) and optional intermediate fusion. Supported survival learners include Cox, penalized Cox, tree ensembles, boosting, and XGBoost-based survival variants (see full list below).
 
 For binary/continuous non-survival tasks, learners should use the `SL.` prefix (for example, `SL.randomForest`, `SL.BART`, `SL.glmnet`). For multiclass, use multiclass learner IDs such as `randomforest`, `ranger`, `xgboost`, `glmnet`, `mbart`, or `multinom`.
+
+Feature workflow (when enabled):
+1. Filtering happens first (`filter_method`, `filter_pct`) on the training feature table.
+2. Screening happens second (`run_screening = TRUE`, `screen_pct`) within CV folds and again for final model fit.
 
 ## Basic Usage
 
@@ -62,6 +68,10 @@ IntegratedLearner(
   folds = 5,
   base_learner = "SL.randomForest",
   meta_learner = "SL.nnls.auc",
+  filter_method = "prevalence",
+  filter_pct = 40,
+  run_screening = TRUE,
+  screen_pct = 30,
   family = binomial()
 )
 
@@ -74,6 +84,10 @@ IntegratedLearner(
   folds = 5,
   base_learner = "randomforest",
   meta_learner = "randomforest",
+  filter_method = "variance",
+  filter_pct = 50,
+  run_screening = TRUE,
+  screen_pct = 25,
   family = binomial()
 )
 
@@ -85,6 +99,10 @@ IntegratedLearner(
   assay.type = c("relative_abundance", "pathway_abundance"),
   folds = 5,
   base_learner = "surv.coxph",
+  filter_method = "variance",
+  filter_pct = 40,
+  run_screening = TRUE,
+  screen_pct = 25,
   weight_method = "COX"
 )
 ```
@@ -98,13 +116,18 @@ IntegratedLearner(
 * `folds`: Integer. Number of folds for cross-validation. Default is `5`.
 * `seed`: Integer seed for reproducibility. Default is `1234`.
 * `base_learner`: Binary/continuous uses `SL.*`; multiclass uses native multiclass learners; survival uses supported `surv.*` learners.
-* `base_screener`: Optional pre-screening method before multiclass base/concat model fits (`All`, `anova`, `glmnet`, `randomforest`, `ranger`, `xgboost`).
+* `base_screener`: Deprecated. Kept for backward compatibility.
+* `filter_method`: Optional feature filtering method (`"prevalence"` or `"variance"`).
+* `filter_pct`: Optional retention percentage in `(0,100]` for filtering.
+* `run_screening`: Logical flag to enable supervised screening (`FALSE` by default).
+* `screen_pct`: Retention percentage in `(0,100]` for screening.
+* `prevalence_pct`: Deprecated alias of `filter_pct` when `filter_method = "prevalence"`.
 * `meta_learner`: Meta learner for non-survival late fusion. Defaults to `"SL.nnls.auc"` in binary/continuous; multiclass supports native learners (for example `glmnet`, `randomforest`, `xgboost`).
 * `run_concat`: Logical; include early-fusion (concatenated) model for non-survival.
 * `run_stacked`: Logical; include late-fusion stacked model for non-survival.
 * `family`: `gaussian()` (continuous), `binomial()` (binary or multiclass, auto-detected from `Y`), or survival family/metadata.
 * `verbose`: Logical progress flag.
-* `...`: Additional backend parameters. For multiclass screening, use `screen_*` arguments (for example `screen_keep_n`, `screen_keep_prop`, `screen_max_features`). For survival, includes options such as `weight_method`, `do_early_fusion`, `intermediate_learners`, and learner-specific hyperparameters (or `model_args`).
+* `...`: Additional backend parameters. For survival, includes options such as `weight_method`, `do_early_fusion`, `intermediate_learners`, and learner-specific hyperparameters (or `model_args`).
 
 Supported model families:
 
@@ -140,7 +163,7 @@ For multiclass fits (`IL_multiclass` path):
 * `prob.train` / `prob.test`: Per-model class-probability matrices.
 * `class.train` / `class.test`: Predicted class labels.
 * `metrics.train` / `metrics.test`: Accuracy, balanced accuracy, and multiclass log-loss.
-* `selected_features_by_layer`, `selected_features_concat`: Features retained by multiclass screeners (when used).
+* `selected_features_by_layer`, `selected_features_concat`: Features retained by screening (when used).
 * `feature_importance_signed_by_class`: Signed importance by class.
 
 For survival fits (`ILsurv` path):
