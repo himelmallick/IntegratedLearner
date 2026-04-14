@@ -87,12 +87,13 @@ library(SuperLearner)
 library(caret)
 library(cowplot)
 library(bayesplot)
+library(S4Vectors)
 library(curatedMetagenomicData)
 library(TreeSummarizedExperiment)
 library(SummarizedExperiment)
 library(MultiAssayExperiment)
 library(survival)
-library(S4Vectors)
+
 if (use_sl_bart) {
   library(bartMachine)
 }
