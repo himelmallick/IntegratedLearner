@@ -2308,51 +2308,74 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
   }
 
   x <- as.matrix(feature_table)
-  n_total <- nrow(feature_table)
-  n_keep <- max(1L, as.integer(ceiling((resolved$filter_pct / 100) * n_total)))
+  feature_ids <- rownames(feature_table)
 
-  if (identical(resolved$filter_method, "prevalence")) {
-    detected <- is.finite(x) & (x != 0)
-    score <- rowMeans(detected)
-    ord <- order(-score, rownames(feature_table))
-  } else {
-    var_score <- apply(x, 1, function(v) stats::var(v, na.rm = TRUE))
-    var_score[!is.finite(var_score)] <- -Inf
-
-    metrics <- as.data.frame(caret::nearZeroVar(t(x), saveMetrics = TRUE))
-    if (nrow(metrics) != nrow(feature_table)) {
-      stop(
-        "caret::nearZeroVar returned an unexpected number of rows.",
-        call. = FALSE
-      )
-    }
-    if (is.null(rownames(metrics))) {
-      rownames(metrics) <- rownames(feature_table)
-    }
-    if (!all(rownames(feature_table) %in% rownames(metrics))) {
-      stop(
-        "Could not align caret variance metrics to feature names.",
-        call. = FALSE
-      )
-    }
-    metrics <- metrics[rownames(feature_table), , drop = FALSE]
-
-    if (!"nzv" %in% names(metrics)) metrics$nzv <- FALSE
-    if (!"zeroVar" %in% names(metrics)) metrics$zeroVar <- FALSE
-    if (!"percentUnique" %in% names(metrics)) metrics$percentUnique <- 0
-
-    ord <- order(
-      metrics$nzv,
-      metrics$zeroVar,
-      -var_score,
-      -metrics$percentUnique,
-      rownames(feature_table),
-      na.last = TRUE
+  if (!all(feature_ids %in% rownames(feature_metadata))) {
+    stop(
+      "Could not align feature metadata to feature table rownames.",
+      call. = FALSE
     )
   }
 
-  keep_idx <- ord[seq_len(n_keep)]
-  kept_ids <- rownames(feature_table)[keep_idx]
+  layer_vec <- rep("all", length(feature_ids))
+  if ("featureType" %in% colnames(feature_metadata)) {
+    layer_tmp <- as.character(feature_metadata[feature_ids, "featureType", drop = TRUE])
+    layer_tmp[is.na(layer_tmp) | !nzchar(layer_tmp)] <- "unknown"
+    layer_vec <- layer_tmp
+  }
+  layer_fac <- factor(layer_vec, levels = unique(layer_vec))
+  layer_groups <- split(feature_ids, layer_fac)
+
+  .rank_layer_keep <- function(ids) {
+    x_sub <- x[ids, , drop = FALSE]
+    n_total_sub <- nrow(x_sub)
+    n_keep_sub <- max(1L, as.integer(ceiling((resolved$filter_pct / 100) * n_total_sub)))
+
+    if (identical(resolved$filter_method, "prevalence")) {
+      detected <- is.finite(x_sub) & (x_sub != 0)
+      score <- rowMeans(detected)
+      ord <- order(-score, rownames(x_sub))
+    } else {
+      var_score <- apply(x_sub, 1, function(v) stats::var(v, na.rm = TRUE))
+      var_score[!is.finite(var_score)] <- -Inf
+
+      metrics <- tryCatch(
+        as.data.frame(caret::nearZeroVar(t(x_sub), saveMetrics = TRUE)),
+        error = function(e) NULL
+      )
+      if (is.null(metrics) || nrow(metrics) != nrow(x_sub)) {
+        ord <- order(-var_score, rownames(x_sub), na.last = TRUE)
+      } else {
+        if (is.null(rownames(metrics))) {
+          rownames(metrics) <- rownames(x_sub)
+        }
+        if (all(rownames(x_sub) %in% rownames(metrics))) {
+          metrics <- metrics[rownames(x_sub), , drop = FALSE]
+        } else {
+          rownames(metrics) <- rownames(x_sub)
+        }
+
+        if (!"nzv" %in% names(metrics)) metrics$nzv <- FALSE
+        if (!"zeroVar" %in% names(metrics)) metrics$zeroVar <- FALSE
+        if (!"percentUnique" %in% names(metrics)) metrics$percentUnique <- 0
+
+        ord <- order(
+          metrics$nzv,
+          metrics$zeroVar,
+          -var_score,
+          -metrics$percentUnique,
+          rownames(x_sub),
+          na.last = TRUE
+        )
+      }
+    }
+
+    keep_idx <- ord[seq_len(min(n_keep_sub, length(ord)))]
+    rownames(x_sub)[keep_idx]
+  }
+
+  kept_ids <- unlist(lapply(layer_groups, .rank_layer_keep), use.names = FALSE)
+  kept_ids <- unique(kept_ids)
   ft <- feature_table[kept_ids, , drop = FALSE]
   fm <- feature_metadata[kept_ids, , drop = FALSE]
 
@@ -2373,16 +2396,28 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
     } else {
       "caret variance ranking"
     }
+    keep_by_layer <- table(factor(layer_vec[feature_ids %in% kept_ids], levels = levels(layer_fac)))
+    total_by_layer <- table(layer_fac)
+    layer_msg <- paste0(
+      names(total_by_layer),
+      "=",
+      as.integer(keep_by_layer[names(total_by_layer)]),
+      "/",
+      as.integer(total_by_layer),
+      collapse = ", "
+    )
     message(
       "Feature filter (",
       msg,
       ", top ",
       sprintf("%.2f", resolved$filter_pct),
-      "%): kept ",
+      "% per layer): kept ",
       nrow(ft),
       "/",
       nrow(feature_table),
-      " features."
+      " features. Layer breakdown: ",
+      layer_msg,
+      "."
     )
   }
 
