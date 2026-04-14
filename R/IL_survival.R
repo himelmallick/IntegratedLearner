@@ -37,7 +37,95 @@
   }, error = function(e) {
     data.frame(time = auc_times, AUC = NA_real_)
   })
-  list(cindex = as.numeric(cindex), auc = auc_df)
+  auc_vals <- suppressWarnings(as.numeric(auc_df$AUC))
+  auc_mean <- if (any(is.finite(auc_vals))) {
+    mean(auc_vals[is.finite(auc_vals)], na.rm = TRUE)
+  } else {
+    NA_real_
+  }
+  surv_mat <- tryCatch(
+    .risk_to_surv_matrix(
+      risk_train = marker,
+      time_train = times,
+      event_train = events,
+      risk_new = marker,
+      time_grid = auc_times
+    ),
+    error = function(e) NULL
+  )
+  brier_df <- if (is.null(surv_mat)) {
+    data.frame(time = auc_times, Brier = NA_real_)
+  } else {
+    .compute_ipcw_brier(times = times, events = events, surv_mat = surv_mat, time_grid = auc_times)
+  }
+  ibs <- .integrated_brier(brier_df$time, brier_df$Brier)
+  list(
+    cindex = as.numeric(cindex),
+    auc = auc_df,
+    auc_mean = as.numeric(auc_mean),
+    brier = brier_df,
+    ibs = as.numeric(ibs)
+  )
+}
+
+.compute_ipcw_brier <- function(times, events, surv_mat, time_grid) {
+  times <- as.numeric(times)
+  events <- as.numeric(events)
+  time_grid <- as.numeric(time_grid)
+  if (length(time_grid) == 0L) {
+    return(data.frame(time = numeric(0), Brier = numeric(0)))
+  }
+
+  cens_fit <- tryCatch(
+    survival::survfit(survival::Surv(times, events == 0) ~ 1),
+    error = function(e) NULL
+  )
+  if (is.null(cens_fit)) {
+    return(data.frame(time = time_grid, Brier = rep(NA_real_, length(time_grid))))
+  }
+
+  ot <- order(times)
+  time_sorted <- times[ot]
+  event_sorted <- events[ot]
+  surv_ord <- surv_mat[ot, , drop = FALSE]
+
+  csurv <- suppressWarnings(summary(cens_fit, times = time_sorted, extend = TRUE)$surv)
+  csurv[!is.finite(csurv) | csurv <= 0] <- Inf
+
+  csurv_btime <- suppressWarnings(summary(cens_fit, times = time_grid, extend = TRUE)$surv)
+  if (anyNA(csurv_btime)) {
+    min_v <- suppressWarnings(min(csurv_btime[is.finite(csurv_btime)], na.rm = TRUE))
+    if (!is.finite(min_v)) min_v <- 1
+    csurv_btime[is.na(csurv_btime)] <- min_v
+  }
+  csurv_btime[!is.finite(csurv_btime) | csurv_btime <= 0] <- Inf
+
+  brier <- vapply(seq_along(time_grid), function(j) {
+    t0 <- time_grid[j]
+    help1 <- as.integer(time_sorted <= t0 & event_sorted == 1)
+    help2 <- as.integer(time_sorted > t0)
+    mean(((0 - surv_ord[, j])^2 * help1 / csurv) +
+           ((1 - surv_ord[, j])^2 * help2 / csurv_btime[j]))
+  }, numeric(1))
+
+  data.frame(time = time_grid, Brier = as.numeric(brier))
+}
+
+.integrated_brier <- function(time_grid, brier_vec) {
+  keep <- is.finite(time_grid) & is.finite(brier_vec)
+  if (sum(keep) < 2L) return(NA_real_)
+  tt <- as.numeric(time_grid[keep])
+  bb <- as.numeric(brier_vec[keep])
+  ord <- order(tt)
+  tt <- tt[ord]
+  bb <- bb[ord]
+  uniq <- !duplicated(tt)
+  tt <- tt[uniq]
+  bb <- bb[uniq]
+  if (length(tt) < 2L) return(NA_real_)
+  span <- diff(range(tt))
+  if (!is.finite(span) || span <= 0) return(NA_real_)
+  as.numeric(sum(diff(tt) * ((bb[-length(bb)] + bb[-1L]) / 2)) / span)
 }
 
 .make_stratified_folds <- function(time_vec, event_vec, folds, seed = 123) {
@@ -1285,6 +1373,9 @@
       train_risk = early_oof$oof_risk,
       train_cindex = early_met$cindex,
       train_auc = early_met$auc,
+      train_auc_mean = early_met$auc_mean,
+      train_brier = early_met$brier,
+      train_ibs = early_met$ibs,
       combined_importance = imp_all_signed,
       full_model = .train_full(base_learner, X_all, times, events, method_args = method_opts)
     )
@@ -1393,7 +1484,10 @@
       met <- .compute_auc_cindex(times, events, inter_oof$oof_risk)
       intermediate_train[[learner_id]] <- list(
         train_cindex = met$cindex,
-        train_auc = met$auc
+        train_auc = met$auc,
+        train_auc_mean = met$auc_mean,
+        train_brier = met$brier,
+        train_ibs = met$ibs
       )
       intermediate_models[[learner_id]] <- .train_full(
         method = learner_id,
@@ -1487,7 +1581,10 @@
         mv <- .compute_auc_cindex(V_times, V_events, rv)
         intermediate_valid[[learner_id]] <- list(
           valid_cindex = mv$cindex,
-          valid_auc = mv$auc
+          valid_auc = mv$auc,
+          valid_auc_mean = mv$auc_mean,
+          valid_brier = mv$brier,
+          valid_ibs = mv$ibs
         )
         .vmsg("  [valid intermediate:", learner_id, "] cindex=", .fmt(mv$cindex))
       }
@@ -1496,15 +1593,24 @@
     valid_out_formatted <- list(
       single = list(
         valid_cindex = lapply(single_valid_metrics, function(x) x$cindex),
-        valid_auc = lapply(single_valid_metrics, function(x) x$auc)
+        valid_auc = lapply(single_valid_metrics, function(x) x$auc),
+        valid_auc_mean = lapply(single_valid_metrics, function(x) x$auc_mean),
+        valid_brier = lapply(single_valid_metrics, function(x) x$brier),
+        valid_ibs = lapply(single_valid_metrics, function(x) x$ibs)
       ),
       early = if (is.null(early_valid)) NULL else list(
         valid_cindex = early_valid$cindex,
-        valid_auc = early_valid$auc
+        valid_auc = early_valid$auc,
+        valid_auc_mean = early_valid$auc_mean,
+        valid_brier = early_valid$brier,
+        valid_ibs = early_valid$ibs
       ),
       late = list(
         valid_cindex = late_valid$cindex,
-        valid_auc = late_valid$auc
+        valid_auc = late_valid$auc,
+        valid_auc_mean = late_valid$auc_mean,
+        valid_brier = late_valid$brier,
+        valid_ibs = late_valid$ibs
       ),
       intermediate = intermediate_valid
     )
@@ -1517,12 +1623,18 @@
     early = if (is.null(early_fusion_out)) NULL else list(
       train_cindex = early_fusion_out$train_cindex,
       train_auc = early_fusion_out$train_auc,
+      train_auc_mean = early_fusion_out$train_auc_mean,
+      train_brier = early_fusion_out$train_brier,
+      train_ibs = early_fusion_out$train_ibs,
       combined_importance = early_fusion_out$combined_importance
     ),
     late = list(
       weights = weights,
       train_cindex = late_train$cindex,
       train_auc = late_train$auc,
+      train_auc_mean = late_train$auc_mean,
+      train_brier = late_train$brier,
+      train_ibs = late_train$ibs,
       combined_importance = combined_importance
     ),
     intermediate = intermediate_train

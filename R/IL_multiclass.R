@@ -307,6 +307,7 @@ IL_multiclass <- function(feature_table,
       model = nm,
       accuracy = unname(met["accuracy"]),
       balanced_accuracy = unname(met["balanced_accuracy"]),
+      auc = unname(met["auc"]),
       logloss = unname(met["logloss"]),
       stringsAsFactors = FALSE,
       check.names = FALSE
@@ -349,6 +350,7 @@ IL_multiclass <- function(feature_table,
           model = nm,
           accuracy = unname(met["accuracy"]),
           balanced_accuracy = unname(met["balanced_accuracy"]),
+          auc = unname(met["auc"]),
           logloss = unname(met["logloss"]),
           stringsAsFactors = FALSE,
           check.names = FALSE
@@ -442,8 +444,41 @@ IL_multiclass <- function(feature_table,
   y_idx <- match(yy, cls)
   p_true <- prob_mat[cbind(seq_along(y_idx), y_idx)]
   logloss <- -mean(log(pmax(p_true, eps)))
+  auc <- .multiclass_ovr_auc(prob_mat = prob_mat, y_true = yy)
 
-  c(accuracy = acc, balanced_accuracy = bal_acc, logloss = logloss)
+  c(accuracy = acc, balanced_accuracy = bal_acc, auc = auc, logloss = logloss)
+}
+
+.multiclass_ovr_auc <- function(prob_mat, y_true) {
+  cls <- colnames(prob_mat)
+  if (is.null(cls) || length(cls) == 0L) return(NA_real_)
+
+  auc_by_class <- vapply(cls, function(cl) {
+    y_bin <- as.integer(y_true == cl)
+    if (sum(y_bin == 1L) == 0L || sum(y_bin == 0L) == 0L) return(NA_real_)
+
+    score <- as.numeric(prob_mat[, cl])
+    if (!any(is.finite(score))) return(NA_real_)
+    score[!is.finite(score)] <- stats::median(score[is.finite(score)], na.rm = TRUE)
+
+    pred_obj <- tryCatch(
+      ROCR::prediction(predictions = score, labels = y_bin),
+      error = function(e) NULL
+    )
+    if (is.null(pred_obj)) return(NA_real_)
+
+    perf_obj <- tryCatch(
+      ROCR::performance(pred_obj, measure = "auc"),
+      error = function(e) NULL
+    )
+    if (is.null(perf_obj) || length(perf_obj@y.values) == 0L) return(NA_real_)
+
+    auc_val <- suppressWarnings(as.numeric(perf_obj@y.values[[1]]))
+    if (!is.finite(auc_val)) NA_real_ else auc_val
+  }, numeric(1))
+
+  if (all(is.na(auc_by_class))) return(NA_real_)
+  mean(auc_by_class, na.rm = TRUE)
 }
 
 .class_from_prob <- function(prob_mat) {
@@ -1316,6 +1351,7 @@ predict_multiclass.learner <- function(object,
           model = nm,
           accuracy = unname(met["accuracy"]),
           balanced_accuracy = unname(met["balanced_accuracy"]),
+          auc = unname(met["auc"]),
           logloss = unname(met["logloss"]),
           stringsAsFactors = FALSE,
           check.names = FALSE

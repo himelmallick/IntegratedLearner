@@ -16,6 +16,11 @@ IntegratedLearner(
   seed = 1234,
   base_learner = "SL.BART",
   base_screener = "All",
+  run_screening = FALSE,
+  screen_pct = NULL,
+  filter_method = NULL,
+  filter_pct = NULL,
+  prevalence_pct = NULL,
   meta_learner = "SL.nnls.auc",
   run_concat = TRUE,
   run_stacked = TRUE,
@@ -67,11 +72,26 @@ Check out the
 \href{https://cran.r-project.org/web/packages/SuperLearner/vignettes/Guide-to-SuperLearner.html}{SuperLearner user manual}
 for all available options. Default is \code{`SL.BART`}.}
 
-\item{base_screener}{Whether to screen variables before fitting base models?
-\code{All} means no screening which is the default.
-Check out the
-\href{https://cran.r-project.org/web/packages/SuperLearner/vignettes/Guide-to-SuperLearner.html}{SuperLearner user manual}
-for all available options.}
+\item{base_screener}{Deprecated for \code{IL_conbin} and \code{IL_multiclass};
+kept for backward compatibility and currently ignored in those backends.}
+
+\item{run_screening}{Logical; if \code{TRUE}, run supervised screening on
+training data within each CV fold (and again on full training data before
+final fitting), then apply the same selected features to fold-validation
+or external validation data.}
+
+\item{screen_pct}{Percentage of features to retain during screening
+(\code{(0,100]}).}
+
+\item{filter_method}{Optional feature-filter method for non-survival runs.
+Supported values: \code{"prevalence"} and \code{"variance"}.}
+
+\item{filter_pct}{Optional retention percentage (in \code{(0,100]}) for the
+selected \code{filter_method}. Keeps the top \code{filter_pct}\\% features.}
+
+\item{prevalence_pct}{Optional retention percentage (in \code{(0,100]}) for
+prevalence-based feature filtering before model fitting. Deprecated alias
+of \code{filter_pct} with \code{filter_method = "prevalence"}.}
 
 \item{meta_learner}{Meta-learner for late fusion (stacked generalization).
 Defaults to \code{`SL.nnls.auc`}.

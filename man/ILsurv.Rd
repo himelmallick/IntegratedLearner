@@ -14,6 +14,8 @@ ILsurv(
   base_learner = "surv.rfsrc",
   folds = 5,
   seed = 123,
+  run_screening = FALSE,
+  screen_pct = NULL,
   verbose = FALSE,
   do_early_fusion = TRUE,
   weight_method = c("IBS", "COX"),
@@ -40,6 +42,8 @@ IL_survival(
   base_learner = "surv.rfsrc",
   folds = 5,
   seed = 123,
+  run_screening = FALSE,
+  screen_pct = NULL,
   verbose = FALSE,
   do_early_fusion = TRUE,
   weight_method = c("IBS", "COX"),
@@ -89,6 +93,13 @@ and \code{event}.}
 is 5.}
 
 \item{seed}{Specify the seed for reproducibility. Default is 1234.}
+
+\item{run_screening}{Logical; if \code{TRUE}, run supervised screening
+within each training fold (and again on full training data) before fitting
+base models.}
+
+\item{screen_pct}{Percentage of features to retain during screening
+(\code{(0,100]}). Applied after any optional filtering.}
 
 \item{verbose}{logical; TRUE for printing SuperLearner progress. Default FALSE.}
 

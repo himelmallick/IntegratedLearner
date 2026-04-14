@@ -14,6 +14,11 @@ IL_multiclass(
   seed = 1234,
   base_learner = "glmnet",
   base_screener = "All",
+  run_screening = FALSE,
+  screen_pct = NULL,
+  filter_method = NULL,
+  filter_pct = NULL,
+  prevalence_pct = NULL,
   meta_learner = "glmnet",
   run_concat = TRUE,
   run_stacked = TRUE,
@@ -61,8 +66,28 @@ is 5.}
 \item{base_learner}{Base learner for late fusion and early fusion. Default:
 \code{SL.BART}.}
 
-\item{base_screener}{Whether to screen variables before fitting base models?
-\code{All} means no screening (default).}
+\item{base_screener}{Deprecated for this backend; currently ignored and kept
+only for backward compatibility.}
+
+\item{run_screening}{Logical; if \code{TRUE}, run supervised screening
+within each training fold (and again on full training data) before fitting
+base models.}
+
+\item{screen_pct}{Percentage of features to retain during screening
+(\code{(0,100]}). Applied after any optional filtering.}
+
+\item{filter_method}{Optional feature-filter method before model fitting.
+Supported values are \code{"prevalence"} (top detected features by
+prevalence) and \code{"variance"} (top features by caret-based variance
+ranking via \code{nearZeroVar} + empirical variance). If \code{NULL},
+defaults to \code{"prevalence"} when filtering is requested.}
+
+\item{filter_pct}{Optional retention percentage (in \code{(0,100]}) for the
+selected \code{filter_method}. Keeps the top \code{filter_pct}\\% features.}
+
+\item{prevalence_pct}{Optional retention percentage (in \code{(0,100]}) for
+prevalence-based filtering before model fitting. Deprecated alias of
+\code{filter_pct} with \code{filter_method = "prevalence"}.}
 
 \item{meta_learner}{Meta-learner for late fusion (stacked generalization).
 Defaults to \code{SL.nnls.auc}.}
