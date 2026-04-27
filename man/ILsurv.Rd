@@ -149,3 +149,34 @@ time-to-event outcomes. This preserves the historical \code{ILsurv()}
 interface while using model fitting and fusion routines that do not depend on
 \pkg{mlr3proba}/\pkg{mlr3extralearners}.
 }
+\examples{
+if (requireNamespace("timeROC", quietly = TRUE)) {
+  feature_table <- data.frame(matrix(rnorm(60), nrow = 10, ncol = 6))
+  rownames(feature_table) <- paste0("f", seq_len(nrow(feature_table)))
+  colnames(feature_table) <- paste0("s", seq_len(ncol(feature_table)))
+
+  sample_metadata <- data.frame(
+    time = c(5, 8, 4, 10, 7, 9),
+    event = c(1, 0, 1, 0, 1, 0),
+    subjectID = colnames(feature_table),
+    row.names = colnames(feature_table)
+  )
+
+  feature_metadata <- data.frame(
+    featureID = rownames(feature_table),
+    featureType = rep(c("omics1", "omics2"), each = 5),
+    row.names = rownames(feature_table)
+  )
+
+  fit <- IL_survival(
+    feature_table = feature_table,
+    sample_metadata = sample_metadata,
+    feature_metadata = feature_metadata,
+    folds = 2,
+    base_learner = "surv.coxph",
+    do_early_fusion = FALSE,
+    verbose = FALSE
+  )
+  names(fit$train_out)
+}
+}

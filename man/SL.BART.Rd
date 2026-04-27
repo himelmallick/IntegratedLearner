@@ -56,7 +56,7 @@ nonterminal or not.}
 
 \item{k}{For regression, k determines the prior probability that E(Y|X) is
 contained in the interval \eqn{(y_{min}, y_{max})}, based on a normal
-distribution. For example, when k=2, the prior probability is 95\\%. For
+distribution. For example, when k=2, the prior probability is 95 percent. For
 classification, k determines the prior probability that E(Y|X) is between
 (-3,3). Note that a larger value of k results in more shrinkage and a more
 conservative fit.}
@@ -79,6 +79,31 @@ will require additional RAM.}
 
 \item{...}{Additional arguments (not used)}
 }
+\value{
+A list with elements \code{pred} and \code{fit} following
+the SuperLearner learner interface.
+}
 \description{
 Support bayesian additive regression trees via the bartMachine package.
+}
+\examples{
+x <- data.frame(x1 = rnorm(12), x2 = rnorm(12))
+y <- as.numeric(x$x1 + x$x2 + rnorm(12, sd = 0.1))
+newx <- x[1:3, , drop = FALSE]
+
+if (requireNamespace("bartMachine", quietly = TRUE)) {
+  fit <- SL.BART(
+    Y = y,
+    X = x,
+    newX = newx,
+    family = stats::gaussian(),
+    obsWeights = rep(1, nrow(x)),
+    id = seq_len(nrow(x)),
+    num_trees = 5,
+    num_burn_in = 10,
+    num_iterations_after_burn_in = 20,
+    serialize = FALSE
+  )
+  head(fit$pred)
+}
 }

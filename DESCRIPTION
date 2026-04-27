@@ -6,12 +6,9 @@ Authors@R: c(
     person("Nalin", "Arora", email = "naa4050@med.cornell.edu", role = "aut"),
     person("Anupreet", "Porwal", role = "aut"),
     person("Himel", "Mallick", email = "him4004@med.cornell.edu",
-        role = c("aut", "cre", "cph"))
+        role = c("aut", "cre", "cph"),
+        comment = c(ORCID = "0000-0003-4956-2429"))
     )
-Author: Nalin Arora [aut],
-    Anupreet Porwal [aut],
-    Himel Mallick [aut, cre, cph]
-Maintainer: Himel Mallick <him4004@med.cornell.edu>
 Description: IntegratedLearner provides a unified interface for multi-omics
     prediction using early, late, and intermediate fusion for continuous,
     binary, multiclass, and survival outcomes. It supports both
@@ -23,11 +20,12 @@ URL: https://github.com/himelmallick/IntegratedLearner
 BugReports: https://github.com/himelmallick/IntegratedLearner/issues
 Encoding: UTF-8
 Depends:
-    R (>= 4.4.0)
+    R (>= 4.5.0)
 Imports:
     methods,
     stats,
     utils,
+    nnet,
     SuperLearner,
     survival,
     glmnet,
@@ -72,7 +70,6 @@ biocViews:
     Software,
     Classification,
     Survival,
-    MultiOmics,
     Microbiome
 Config/testthat/edition: 3
 Roxygen: list(markdown = TRUE)

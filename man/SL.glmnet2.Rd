@@ -53,6 +53,9 @@ binomial can also be "auc" or "class" (misclassification error).}
 
 \item{...}{Any additional arguments are passed through to cv.glmnet.}
 }
+\value{
+A list with elements \code{pred} and \code{fit} (SuperLearner convention).
+}
 \description{
 Penalized regression using elastic net. Alpha = 0 corresponds to ridge
 regression and alpha = 1 corresponds to Lasso.
@@ -66,8 +69,6 @@ if (requireNamespace("mlbench", quietly = TRUE)) {
   dat <- stats::na.omit(PimaIndiansDiabetes2)
   Y <- as.numeric(dat$diabetes == "pos")
   X <- subset(dat, select = -diabetes)
-}
-\dontrun{
   sl <- SuperLearner::SuperLearner(
     Y, X,
     family = stats::binomial(),

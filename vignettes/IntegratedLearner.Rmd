@@ -78,7 +78,6 @@ Optional feature selection workflow used in this vignette:
 
 ```{r, warning=FALSE, message=FALSE}
 # Main package
-devtools::install_github("himelmallick/IntegratedLearner")
 library(IntegratedLearner)
 
 # Tutorial dependencies
@@ -850,10 +849,24 @@ sessionInfo()
 
 ## References
 
-Franzosa EA et al. (2019). [Gut microbiome structure and metabolic activity in inflammatory bowel disease](https://www.ncbi.nlm.nih.gov/pubmed/30531976). *Nature Microbiology* 4(2):293-305.
+Franzosa EA et al. (2019).
+[Gut microbiome structure and metabolic activity in inflammatory bowel disease](
+https://www.ncbi.nlm.nih.gov/pubmed/30531976
+).
+*Nature Microbiology* 4(2):293-305.
 
-Ghaemi MS et al. (2019). [Multiomics modeling of the immunome, transcriptome, microbiome, proteome and metabolome adaptations during human pregnancy](https://pubmed.ncbi.nlm.nih.gov/30561547/). *Bioinformatics* 35(1):95-103.
+Ghaemi MS et al. (2019).
+[Multiomics modeling of the immunome, transcriptome, microbiome, proteome and
+metabolome adaptations during human pregnancy](
+https://pubmed.ncbi.nlm.nih.gov/30561547/
+).
+*Bioinformatics* 35(1):95-103.
 
 ## Citation
 
-Mallick et al. (2024). [An integrated Bayesian framework for multi-omics prediction and classification](https://pubmed.ncbi.nlm.nih.gov/38146838/). *Statistics in Medicine* 43(5):983-1002.
+Mallick et al. (2024).
+[An integrated Bayesian framework for multi-omics prediction and
+classification](
+https://pubmed.ncbi.nlm.nih.gov/38146838/
+).
+*Statistics in Medicine* 43(5):983-1002.

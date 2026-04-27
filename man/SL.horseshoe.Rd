@@ -45,3 +45,17 @@ SL object
 \description{
 Horseshoe regression
 }
+\examples{
+x <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
+y <- x$x1 - 0.5 * x$x2 + rnorm(20, sd = 0.2)
+
+if (requireNamespace("bayesreg", quietly = TRUE)) {
+  fit <- SL.horseshoe(
+    Y = y,
+    X = x,
+    newX = x[1:3, , drop = FALSE],
+    family = stats::gaussian()
+  )
+  head(fit$pred)
+}
+}

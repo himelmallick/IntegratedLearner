@@ -83,7 +83,7 @@ ranking via \code{nearZeroVar} + empirical variance). If \code{NULL},
 defaults to \code{"prevalence"} when filtering is requested.}
 
 \item{filter_pct}{Optional retention percentage (in \code{(0,100]}) for the
-selected \code{filter_method}. Keeps the top \code{filter_pct}\\% features.}
+selected \code{filter_method}. Keeps the top \code{filter_pct} percent features.}
 
 \item{prevalence_pct}{Optional retention percentage (in \code{(0,100]}) for
 prevalence-based filtering before model fitting. Deprecated alias of
@@ -137,6 +137,37 @@ Although \code{IL_conbin()} is typically called internally by
 \code{MultiAssayExperiment} objects, advanced users may call
 \code{IL_conbin()} directly when they already have multiview feature tables
 and metadata in matrix/data.frame form.
+}
+\examples{
+feature_table <- data.frame(matrix(rnorm(36), nrow = 9, ncol = 4))
+rownames(feature_table) <- paste0("f", seq_len(nrow(feature_table)))
+colnames(feature_table) <- paste0("s", seq_len(ncol(feature_table)))
+
+sample_metadata <- data.frame(
+  Y = c(0, 1, 0, 1),
+  subjectID = colnames(feature_table),
+  row.names = colnames(feature_table)
+)
+
+feature_metadata <- data.frame(
+  featureID = rownames(feature_table),
+  featureType = rep(c("omics1", "omics2", "omics3"), each = 3),
+  row.names = rownames(feature_table)
+)
+
+fit <- IL_conbin(
+  feature_table = feature_table,
+  sample_metadata = sample_metadata,
+  feature_metadata = feature_metadata,
+  folds = 2,
+  base_learner = "SL.glm",
+  run_concat = FALSE,
+  run_stacked = FALSE,
+  print_learner = FALSE,
+  verbose = FALSE,
+  family = stats::binomial()
+)
+fit$family
 }
 \seealso{
 \code{\link{IntegratedLearner}}, IL_survival()
