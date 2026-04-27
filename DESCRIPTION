@@ -1,19 +1,23 @@
 Package: IntegratedLearner
 Type: Package
-Title: Integrated Multi-Omics Learner for Survival and Non-Survival Outcomes
-Version: 0.1.1
+Title: Integrated Multi-Omics Learning for Survival and Other Outcomes
+Version: 0.99.0
 Authors@R: c(
     person("Nalin", "Arora", email = "naa4050@med.cornell.edu", role = "aut"),
     person("Anupreet", "Porwal", role = "aut"),
     person("Himel", "Mallick", email = "him4004@med.cornell.edu",
-        role = c("aut", "cre"))
+        role = c("aut", "cre", "cph"))
     )
+Author: Nalin Arora [aut],
+    Anupreet Porwal [aut],
+    Himel Mallick [aut, cre, cph]
+Maintainer: Himel Mallick <him4004@med.cornell.edu>
 Description: IntegratedLearner provides a unified interface for multi-omics
     prediction using early, late, and intermediate fusion for continuous,
-    binary, and survival outcomes. It wraps SuperLearner for non-survival
-    tasks and a BioC-friendly native survival backend (no mlr3 dependency)
-    for time-to-event modeling, handling both MultiAssayExperiment and PCL
-    inputs with automated validation and feature alignment across layers.
+    binary, multiclass, and survival outcomes. It supports both
+    MultiAssayExperiment and PCL-style inputs, performs input validation and
+    feature/sample harmonization across layers, and provides model fitting,
+    prediction, plotting, and variable-importance utilities.
 License: MIT + file LICENSE
 URL: https://github.com/himelmallick/IntegratedLearner
 BugReports: https://github.com/himelmallick/IntegratedLearner/issues
@@ -21,44 +25,45 @@ Encoding: UTF-8
 Depends:
     R (>= 4.4.0)
 Imports:
+    methods,
+    stats,
+    utils,
     SuperLearner,
     survival,
     glmnet,
-    randomForest,
     ranger,
-    randomForestSRC,
-    CoxBoost,
     SummarizedExperiment,
     MultiAssayExperiment,
-    BART,
-    gbm,
-    xgboost,
-    glmnetUtils,
-    timeROC,
+    caret,
+    ROCR,
     dplyr,
     stringr,
     tibble,
-    tidyr,
-    methods,
-    stats,
-    caret,
-    ROCR
+    tidyr
 Suggests:
+    BART,
+    BiocStyle,
+    CoxBoost,
     bayesplot,
+    bayesreg,
+    bartMachine,
     cowplot,
     ggplot2,
+    gbm,
+    glmnetUtils,
+    mlbench,
     mboost,
-    S4Vectors,
     nloptr,
     prediction,
     quadprog,
-    testthat,
+    randomForest,
+    randomForestSRC,
+    S4Vectors,
+    testthat (>= 3.0.0),
+    timeROC,
     knitr,
     rmarkdown,
-    curatedMetagenomicData,
-    mlbench,
-    bayesreg,
-    bartMachine
+    xgboost
 SystemRequirements:
     Java (optional; required for SL.BART / bartMachine workflows)
 VignetteBuilder:
@@ -66,7 +71,8 @@ VignetteBuilder:
 biocViews:
     Software,
     Classification,
-    Multiomics,
+    Survival,
+    MultiOmics,
     Microbiome
 Config/testthat/edition: 3
 Roxygen: list(markdown = TRUE)
