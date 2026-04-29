@@ -84,3 +84,54 @@ test_that("IntegratedLearner runs on an iHMP subset with validation set", {
   expect_true(all(is.finite(fit$AUC.test)))
   expect_true(all(fit$AUC.test >= 0 & fit$AUC.test <= 1))
 })
+
+test_that("IntegratedLearner supports custom outcome and subject columns in PCL mode", {
+  skip_if_not_installed("SuperLearner")
+  suppressPackageStartupMessages(library(SuperLearner))
+
+  pcl <- make_toy_pcl(n_samples = 24, n_features = 12, seed = 101, binary = TRUE)
+  colnames(pcl$sample_metadata)[colnames(pcl$sample_metadata) == "Y"] <- "disease_status"
+  colnames(pcl$sample_metadata)[colnames(pcl$sample_metadata) == "subjectID"] <- "participant_id"
+
+  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl,
+    outcome_col = "disease_status",
+    subject_id_col = "participant_id",
+    folds = 2,
+    seed = 2026,
+    base_learner = "SL.glm",
+    run_stacked = FALSE,
+    run_concat = FALSE,
+    print_learner = FALSE,
+    verbose = FALSE,
+    family = stats::binomial()
+  ))
+
+  expect_identical(fit$input_mode, "PCL")
+  expect_identical(fit$column_map$outcome_col, "disease_status")
+  expect_identical(fit$column_map$subject_id_col, "participant_id")
+  expect_true(all(fit$Y_train %in% c(0, 1)))
+})
+
+test_that("IntegratedLearner auto-coerces gaussian outcomes to numeric", {
+  skip_if_not_installed("SuperLearner")
+  suppressPackageStartupMessages(library(SuperLearner))
+
+  pcl <- make_toy_pcl(n_samples = 24, n_features = 12, seed = 102, binary = FALSE)
+  pcl$sample_metadata$Y <- as.character(round(pcl$sample_metadata$Y, 3))
+
+  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl,
+    folds = 2,
+    seed = 2026,
+    base_learner = "SL.glm",
+    run_stacked = FALSE,
+    run_concat = FALSE,
+    print_learner = FALSE,
+    verbose = FALSE,
+    family = stats::gaussian()
+  ))
+
+  expect_true(is.numeric(fit$Y_train))
+  expect_true(all(is.finite(fit$Y_train)))
+})

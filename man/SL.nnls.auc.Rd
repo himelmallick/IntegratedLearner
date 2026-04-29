@@ -27,17 +27,3 @@ Estimated meta-learner coefficients and predictions
 \description{
 Combined SuperLearner function for both NNLS/AUC maximization
 }
-\examples{
-if (requireNamespace("quadprog", quietly = TRUE)) {
-  Y <- c(0, 0, 1, 1)
-  X <- data.frame(layer1 = c(0.1, 0.3, 0.7, 0.8), layer2 = c(0.2, 0.4, 0.6, 0.9))
-  out <- SL.nnls.auc(
-    Y = Y,
-    X = X,
-    newX = X,
-    family = stats::binomial(),
-    obsWeights = rep(1, length(Y))
-  )
-  head(out$pred)
-}
-}

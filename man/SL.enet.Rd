@@ -26,10 +26,10 @@ SL.enet(
 
 \item{newX}{Dataframe to predict the outcome}
 
-\item{family}{"gaussian" for regression, "binomial" for binary
-classification. Untested options: "multinomial" for multiple classification
-or "mgaussian" for multiple response, "poisson" for non-negative outcome
-with proportional mean and variance, "cox".}
+\item{family}{'gaussian' for regression, 'binomial' for binary
+classification. Untested options: 'multinomial' for multiple classification
+or 'mgaussian' for multiple response, 'poisson' for non-negative outcome
+with proportional mean and variance, 'cox'.}
 
 \item{obsWeights}{Optional observation-level weights}
 
@@ -48,19 +48,16 @@ standard-error rule which chooses a higher penalty with performance within
 one standard error of the minimum (see Breiman et al. 1984 on CART for
 background).}
 
-\item{loss}{Loss function, can be "deviance", "mse", or "mae". If family =
-binomial can also be "auc" or "class" (misclassification error).}
+\item{loss}{Loss function, can be 'deviance', 'mse', or 'mae'. If family =
+binomial can also be 'auc' or 'class' (misclassification error).}
 
 \item{...}{Any additional arguments are passed through to cv.glmnet.}
-}
-\value{
-A list with elements \code{pred} and \code{fit} (SuperLearner convention).
 }
 \description{
 Penalized regression using elastic net. Alpha = 0 corresponds to ridge
 regression and alpha = 1 corresponds to Lasso.
 
-See \code{vignette("glmnet_beta", package = "glmnet")} for a nice tutorial on
+See \code{vignette('glmnet_beta', package = 'glmnet')} for a nice tutorial on
 glmnet.
 }
 \examples{
@@ -69,11 +66,13 @@ if (requireNamespace("mlbench", quietly = TRUE)) {
   dat <- stats::na.omit(PimaIndiansDiabetes2)
   Y <- as.numeric(dat$diabetes == "pos")
   X <- subset(dat, select = -diabetes)
-  sl <- SuperLearner::SuperLearner(
-    Y, X,
-    family = stats::binomial(),
-    SL.library = c("SL.mean", "SL.glm", "SL.glmnet")
-  )
+}
+\dontrun{
+sl <- SuperLearner::SuperLearner(
+  Y, X,
+  family = stats::binomial(),
+  SL.library = c("SL.mean", "SL.glm", "SL.glmnet")
+)
 }
 
 }

@@ -106,7 +106,7 @@ base models.}
 \item{do_early_fusion}{Logical; run early fusion model.}
 
 \item{weight_method}{Late-fusion weighting method. Supported:
-\code{"IBS"}, \code{"COX"}.}
+\code{'IBS'}, \code{'COX'}.}
 
 \item{t_vec}{Optional explicit time points for COX-based late-fusion feature
 construction.}
@@ -114,15 +114,15 @@ construction.}
 \item{t_vec_probs}{Quantiles used to derive \code{t_vec} when \code{t_vec}
 is \code{NULL}.}
 
-\item{layer_score}{Layer summary on cumhaz increments: \code{"sum"},
-\code{"mean"}, or \code{"l2"}.}
+\item{layer_score}{Layer summary on cumhaz increments: \code{'sum'},
+\code{'mean'}, or \code{'l2'}.}
 
 \item{eps}{Numerical lower bound for survival probabilities.}
 
 \item{weight_lambda}{COX-weight optimization regularization strength.}
 
 \item{weight_penalty}{COX-weight optimization regularizer:
-\code{"l2_to_uniform"} or \code{"entropy"}.}
+\code{'l2_to_uniform'} or \code{'entropy'}.}
 
 \item{weight_cap}{Optional cap on any one layer weight (COX method).}
 
@@ -148,35 +148,4 @@ BioC-friendly survival backend used by \code{IntegratedLearner()} for
 time-to-event outcomes. This preserves the historical \code{ILsurv()}
 interface while using model fitting and fusion routines that do not depend on
 \pkg{mlr3proba}/\pkg{mlr3extralearners}.
-}
-\examples{
-if (requireNamespace("timeROC", quietly = TRUE)) {
-  feature_table <- data.frame(matrix(rnorm(60), nrow = 10, ncol = 6))
-  rownames(feature_table) <- paste0("f", seq_len(nrow(feature_table)))
-  colnames(feature_table) <- paste0("s", seq_len(ncol(feature_table)))
-
-  sample_metadata <- data.frame(
-    time = c(5, 8, 4, 10, 7, 9),
-    event = c(1, 0, 1, 0, 1, 0),
-    subjectID = colnames(feature_table),
-    row.names = colnames(feature_table)
-  )
-
-  feature_metadata <- data.frame(
-    featureID = rownames(feature_table),
-    featureType = rep(c("omics1", "omics2"), each = 5),
-    row.names = rownames(feature_table)
-  )
-
-  fit <- IL_survival(
-    feature_table = feature_table,
-    sample_metadata = sample_metadata,
-    feature_metadata = feature_metadata,
-    folds = 2,
-    base_learner = "surv.coxph",
-    do_early_fusion = FALSE,
-    verbose = FALSE
-  )
-  names(fit$train_out)
-}
 }

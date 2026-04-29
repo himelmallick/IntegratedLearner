@@ -6,6 +6,11 @@
 #' @param feature_table_valid Feature table from validation set. It should be a data frame with features in rows and samples in columns. Feature names should be a subset of training data feature names.
 #' @param sample_metadata_valid OPTIONAL (can provide feature_table_valid and not this):  Sample-specific metadata table from independent validation set. If provided, it must have the exact same structure as sample_metadata. Default is NULL.
 #' @param feature_metadata_valid Matrix containing feature names and their corresponding layers. Must be subset of feature_metadata provided in IntegratedLearner object.
+#' @param outcome_col Optional outcome column name in \code{sample_metadata_valid}.
+#'   If \code{NULL}, uses \code{object$column_map$outcome_col} (or \code{"Y"}).
+#' @param subject_id_col Optional subject ID column name in
+#'   \code{sample_metadata_valid}. If \code{NULL}, uses
+#'   \code{object$column_map$subject_id_col} (or \code{"subjectID"}).
 #' @param seed Seed for reproducibility. Default is 1234.
 #' @param verbose Should a summary of fits/ results be printed. Default is FALSE
 #' @param ... Additional arguments (unused)
@@ -14,7 +19,8 @@
 #' @export
 update.learner <- function(
   object, feature_table_valid, sample_metadata_valid = NULL,
-  feature_metadata_valid, seed = 1234, verbose = FALSE, ...
+  feature_metadata_valid, outcome_col = NULL, subject_id_col = NULL, seed = 1234,
+  verbose = FALSE, ...
 ) {
   fit <- object
 
@@ -38,6 +44,30 @@ update.learner <- function(
     stop("fit$family must be 'gaussian' or 'binomial'.", call. = FALSE)
   }
   sl_env <- .make_sl_env()
+
+  if (!is.null(sample_metadata_valid)) {
+    if (is.null(outcome_col)) {
+      outcome_col <- fit$column_map$outcome_col %||% "Y"
+    }
+    if (is.null(subject_id_col)) {
+      subject_id_col <- fit$column_map$subject_id_col %||% "subjectID"
+    }
+    sample_metadata_valid <- .normalize_sample_metadata_columns(
+      sample_metadata = sample_metadata_valid,
+      outcome_col = outcome_col,
+      subject_id_col = subject_id_col,
+      context = "sample_metadata_valid",
+      require_outcome = TRUE
+    )
+
+    coerced_valid <- .coerce_outcome_by_family(
+      sample_metadata = sample_metadata_valid,
+      family_name = fit$family,
+      context = "sample_metadata_valid",
+      binary_levels = fit$column_map$binary_levels
+    )
+    sample_metadata_valid <- coerced_valid$sample_metadata
+  }
 
   # extract validation Y (if provided)
   if (!is.null(sample_metadata_valid)) {

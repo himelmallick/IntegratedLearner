@@ -6,13 +6,19 @@
 #' @param feature_table_valid Feature table from validation set. Must have the exact same structure as feature_table.
 #' @param sample_metadata_valid OPTIONAL (can provide feature_table_valid and not this):  Sample-specific metadata table from independent validation set. If provided, it must have the exact same structure as sample_metadata.
 #' @param feature_metadata Matrix containing feature names and their corresponding layers. Must be same as that provided in IntegratedLearner object.
+#' @param outcome_col Optional outcome column name in \code{sample_metadata_valid}.
+#'   If \code{NULL}, uses the mapping stored in \code{object$column_map} (or
+#'   falls back to \code{"Y"}).
+#' @param subject_id_col Optional subject identifier column name in
+#'   \code{sample_metadata_valid}. If \code{NULL}, uses the mapping stored in
+#'   \code{object$column_map} (or falls back to \code{"subjectID"}).
 #' @param ... Additional arguments (currently unused)
 #'
 #' @return Predicted values
 #' @export
 predict.learner <- function(
   object, feature_table_valid = NULL, sample_metadata_valid = NULL,
-  feature_metadata = NULL, ...
+  feature_metadata = NULL, outcome_col = NULL, subject_id_col = NULL, ...
 ) {
   fit <- object
 
@@ -46,6 +52,28 @@ predict.learner <- function(
       FALSE) {
       stop("Row names of sample_metadata_valid must match the column names of feature_table_valid")
     }
+
+    if (is.null(outcome_col)) {
+      outcome_col <- fit$column_map$outcome_col %||% "Y"
+    }
+    if (is.null(subject_id_col)) {
+      subject_id_col <- fit$column_map$subject_id_col %||% "subjectID"
+    }
+    sample_metadata_valid <- .normalize_sample_metadata_columns(
+      sample_metadata = sample_metadata_valid,
+      outcome_col = outcome_col,
+      subject_id_col = subject_id_col,
+      context = "sample_metadata_valid",
+      require_outcome = TRUE
+    )
+
+    coerced_valid <- .coerce_outcome_by_family(
+      sample_metadata = sample_metadata_valid,
+      family_name = fit$family,
+      context = "sample_metadata_valid",
+      binary_levels = fit$column_map$binary_levels
+    )
+    sample_metadata_valid <- coerced_valid$sample_metadata
   }
 
   if (!"featureID" %in% colnames(feature_metadata)) {

@@ -19,10 +19,3 @@ Solution of the quadratic programming problem
 \description{
 NNLS function to optimize weights of several base learners
 }
-\examples{
-if (requireNamespace("quadprog", quietly = TRUE)) {
-  x <- matrix(c(0.2, 0.4, 0.3, 0.7, 0.6, 0.9), ncol = 2)
-  y <- c(0.3, 0.5, 0.8)
-  NNLS(x, y, wt = rep(1, length(y)))
-}
-}

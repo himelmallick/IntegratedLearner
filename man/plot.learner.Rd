@@ -15,7 +15,7 @@
 )
 }
 \arguments{
-\item{x}{Fitted "IntegratedLearner" object}
+\item{x}{Fitted 'IntegratedLearner' object}
 
 \item{y}{Unused (required for S3 signature)}
 

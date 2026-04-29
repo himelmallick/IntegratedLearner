@@ -23,13 +23,13 @@ SL.horseshoe(
 
 \item{newX}{Dataframe to predict the outcome}
 
-\item{family}{"gaussian" for regression, "binomial" for binary
-classification. Untested options: "poisson" for for integer or count data}
+\item{family}{'gaussian' for regression, 'binomial' for binary
+classification. Untested options: 'poisson' for for integer or count data}
 
-\item{prior}{prior for regression coefficients to use. "Horseshoe" by default.
-Untested options: ridge regression (prior="rr" or prior="ridge"),
-lasso regression (prior="lasso") and horseshoe+ regression (prior="hs+"
-or prior="horseshoe+")}
+\item{prior}{prior for regression coefficients to use. 'Horseshoe' by default.
+Untested options: ridge regression (prior='rr' or prior='ridge'),
+lasso regression (prior='lasso') and horseshoe+ regression (prior='hs+'
+or prior='horseshoe+')}
 
 \item{N}{Number of posterior samples to generate.}
 
@@ -44,18 +44,4 @@ SL object
 }
 \description{
 Horseshoe regression
-}
-\examples{
-x <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
-y <- x$x1 - 0.5 * x$x2 + rnorm(20, sd = 0.2)
-
-if (requireNamespace("bayesreg", quietly = TRUE)) {
-  fit <- SL.horseshoe(
-    Y = y,
-    X = x,
-    newX = x[1:3, , drop = FALSE],
-    family = stats::gaussian()
-  )
-  head(fit$pred)
-}
 }

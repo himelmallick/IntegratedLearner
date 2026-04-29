@@ -91,7 +91,7 @@ test_that("get_data_from_MAE handles survival fallback and required colData colu
         "relative_abundance",
         "pathway_abundance"
       ), outcome.col = "Y"
-    ), "colData(se) must contain a 'subjectID' column.",
+    ), "subject ID column 'subjectID'",
     fixed = TRUE
   )
 })
@@ -135,4 +135,34 @@ test_that("prepare_from_MAE returns canonical objects and validates feature iden
     ), "Feature sets differ between mae_train and mae_valid in experiment 'taxonomy' - they must match exactly.",
     fixed = TRUE
   )
+})
+
+test_that("prepare_from_MAE supports custom outcome and subject columns", {
+  mae <- make_toy_mae(
+    n_samples = 12, n_features_layer1 = 5, n_features_layer2 = 4,
+    seed = 37
+  )
+
+  exps <- MultiAssayExperiment::experiments(mae)
+  for (nm in names(exps)) {
+    cd <- as.data.frame(SummarizedExperiment::colData(exps[[nm]]))
+    cd$clinical_outcome <- cd$Y
+    cd$participant_id <- cd$subjectID
+    cd$Y <- NULL
+    cd$subjectID <- NULL
+    SummarizedExperiment::colData(exps[[nm]]) <- S4Vectors::DataFrame(cd)
+  }
+  MultiAssayExperiment::experiments(mae) <- exps
+
+  out <- IntegratedLearner:::.prepare_from_MAE(
+    mae_train = mae,
+    experiment = c("taxonomy", "pathway"),
+    assay.type = c("relative_abundance", "pathway_abundance"),
+    outcome_col = "clinical_outcome",
+    subject_id_col = "participant_id",
+    na.rm = FALSE
+  )
+
+  expect_true(all(c("Y", "subjectID") %in% colnames(out$sample_metadata)))
+  expect_true(all(rownames(out$sample_metadata) == colnames(out$feature_table)))
 })

@@ -24,8 +24,9 @@
 #'   Each experiment corresponds to one view (omics layer), usually stored as a
 #'   \code{SummarizedExperiment} or \code{TreeSummarizedExperiment}.
 #'   The \code{colData} of every selected experiment must contain a column
-#'   named \code{'Y'} describing the outcome of interest (binary, continuous,
-#'   or survival-encoded).
+#'   named by \code{outcome_col} describing the outcome of interest (binary,
+#'   continuous, or survival-encoded), and a subject identifier column named by
+#'   \code{subject_id_col}.
 #' @param MAE_valid Optional \code{MultiAssayExperiment} containing an
 #'   independent validation/test set for which prediction is desired.
 #'   It must contain the same set of experiments used for training, with
@@ -40,6 +41,10 @@
 #' @param assay.type Optional character vector of assay names, one per
 #'   experiment. If \code{NULL}, each selected experiment must contain exactly
 #'   one assay; otherwise, the user must supply \code{assay.type}.
+#' @param outcome_col Outcome column name in MAE/PCL sample metadata. Defaults
+#'   to \code{"Y"} for backward compatibility.
+#' @param subject_id_col Subject identifier column name in MAE/PCL sample
+#'   metadata. Defaults to \code{"subjectID"} for backward compatibility.
 #' @param na.rm Logical; if \code{TRUE}, features with missing values are
 #'   dropped after extraction.
 #' @param folds How many folds in the V-fold nested cross-validation?
@@ -99,12 +104,20 @@
 #' @export
 IntegratedLearner <- function(
   MAE_train = NULL, MAE_valid = NULL, PCL_train = NULL,
-  PCL_valid = NULL, experiment = NULL, assay.type = NULL, na.rm = FALSE, folds = 5,
+  PCL_valid = NULL, experiment = NULL, assay.type = NULL, outcome_col = "Y",
+  subject_id_col = "subjectID", na.rm = FALSE, folds = 5,
   seed = 1234, base_learner = "SL.BART", base_screener = "All", run_screening = FALSE,
   screen_pct = NULL, filter_method = NULL, filter_pct = NULL, prevalence_pct = NULL,
   meta_learner = "SL.nnls.auc", run_concat = TRUE, run_stacked = TRUE, verbose = FALSE,
   print_learner = TRUE, refit.stack = FALSE, family = stats::gaussian(), ...
 ) {
+  if (!.is_a_string(outcome_col)) {
+    stop("'outcome_col' must be a single character value.", call. = FALSE)
+  }
+  if (!.is_a_string(subject_id_col)) {
+    stop("'subject_id_col' must be a single character value.", call. = FALSE)
+  }
+
   ## ------------------------------------------------------------ 1. Detect
   ## input mode (MAE vs PCL)
   ## ------------------------------------------------------------
@@ -118,13 +131,14 @@ IntegratedLearner <- function(
   if (mode == "MAE") {
     prepared <- .prepare_from_MAE(
       mae_train = MAE_train, mae_valid = MAE_valid,
-      experiment = experiment, assay.type = assay.type, na.rm = na.rm, verbose = verbose
+      experiment = experiment, assay.type = assay.type, na.rm = na.rm, verbose = verbose,
+      outcome_col = outcome_col, subject_id_col = subject_id_col
     )
   } else {
     # mode == 'PCL'
     prepared <- .prepare_from_PCL(
       PCL_train = PCL_train, PCL_valid = PCL_valid,
-      na.rm = na.rm
+      na.rm = na.rm, outcome_col = outcome_col, subject_id_col = subject_id_col
     )
   }
 
@@ -134,6 +148,25 @@ IntegratedLearner <- function(
   feature_metadata <- prepared$feature_metadata
   feature_table_valid <- prepared$feature_table_valid
   sample_metadata_valid <- prepared$sample_metadata_valid
+
+  fam_name <- .safe_family_name(family)
+
+  coerced_train <- .coerce_outcome_by_family(
+    sample_metadata = sample_metadata,
+    family_name = fam_name,
+    context = "training sample_metadata"
+  )
+  sample_metadata <- coerced_train$sample_metadata
+  binary_levels <- coerced_train$binary_levels
+  if (!is.null(sample_metadata_valid)) {
+    coerced_valid <- .coerce_outcome_by_family(
+      sample_metadata = sample_metadata_valid,
+      family_name = fam_name,
+      context = "validation sample_metadata",
+      binary_levels = binary_levels
+    )
+    sample_metadata_valid <- coerced_valid$sample_metadata
+  }
 
   # Align validation feature order to training if the sets match
   if (!is.null(feature_table_valid)) {
@@ -147,7 +180,6 @@ IntegratedLearner <- function(
     }
   }
 
-  fam_name <- .safe_family_name(family)
   is_survival <- .is_survival_outcome(fam_name, sample_metadata)
   is_multiclass <- FALSE
   if (!is_survival && identical(fam_name, "binomial")) {
@@ -217,5 +249,10 @@ IntegratedLearner <- function(
   }
 
   res$input_mode <- mode
+  res$column_map <- list(
+    outcome_col = outcome_col,
+    subject_id_col = subject_id_col,
+    binary_levels = binary_levels
+  )
   return(res)
 }

@@ -1350,8 +1350,124 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
   list(experiment = experiment, assay.type = assay.type)
 }
 
+# Normalize caller-provided metadata column names to canonical internals.
+.normalize_sample_metadata_columns <- function(
+  sample_metadata,
+  outcome_col = "Y",
+  subject_id_col = "subjectID",
+  context = "sample_metadata",
+  require_outcome = TRUE
+) {
+  if (is.null(sample_metadata)) {
+    return(NULL)
+  }
+
+  if (!is.data.frame(sample_metadata)) {
+    stop("'", context, "' must be a data.frame.", call. = FALSE)
+  }
+
+  if (!.is_a_string(subject_id_col)) {
+    stop("'subject_id_col' must be a single character value.", call. = FALSE)
+  }
+  if (!.is_a_string(outcome_col)) {
+    stop("'outcome_col' must be a single character value.", call. = FALSE)
+  }
+
+  if (!subject_id_col %in% colnames(sample_metadata)) {
+    stop("'", context, "' must contain subject identifier column '", subject_id_col, "'.",
+      call. = FALSE
+    )
+  }
+
+  if (isTRUE(require_outcome) && !outcome_col %in% colnames(sample_metadata)) {
+    stop("'", context, "' must contain outcome column '", outcome_col, "'.",
+      call. = FALSE
+    )
+  }
+
+  sample_metadata$subjectID <- as.character(sample_metadata[[subject_id_col]])
+  if (isTRUE(require_outcome)) {
+    sample_metadata$Y <- sample_metadata[[outcome_col]]
+  }
+
+  sample_metadata
+}
+
+.coerce_outcome_by_family <- function(
+  sample_metadata,
+  family_name = NULL,
+  context = "sample_metadata",
+  binary_levels = NULL
+) {
+  if (is.null(sample_metadata)) {
+    return(list(sample_metadata = NULL, binary_levels = binary_levels))
+  }
+
+  if (!"Y" %in% colnames(sample_metadata)) {
+    return(list(sample_metadata = sample_metadata, binary_levels = binary_levels))
+  }
+
+  y <- sample_metadata$Y
+
+  if (identical(family_name, "gaussian")) {
+    y_num <- suppressWarnings(as.numeric(as.character(y)))
+    if (any(!is.finite(y_num))) {
+      stop("'", context, "': outcome could not be converted to numeric for gaussian family.",
+        call. = FALSE
+      )
+    }
+    sample_metadata$Y <- y_num
+    return(list(sample_metadata = sample_metadata, binary_levels = binary_levels))
+  }
+
+  if (identical(family_name, "binomial")) {
+    # Survival-like representations are handled elsewhere.
+    if (inherits(y, "Surv") || (is.matrix(y) && ncol(y) >= 2)) {
+      return(list(sample_metadata = sample_metadata, binary_levels = binary_levels))
+    }
+
+    y_chr <- as.character(y)
+    if (any(is.na(y_chr) | !nzchar(y_chr))) {
+      stop("'", context, "': outcome contains missing/empty values.", call. = FALSE)
+    }
+
+    lvls <- sort(unique(y_chr))
+    if (length(lvls) == 2L) {
+      if (is.null(binary_levels)) {
+        binary_levels <- if (setequal(lvls, c("0", "1"))) {
+          c("0", "1")
+        } else {
+          lvls
+        }
+      }
+
+      if (!all(y_chr %in% binary_levels)) {
+        stop("'", context, "': outcome has classes not seen in training data.",
+          call. = FALSE
+        )
+      }
+
+      sample_metadata$Y <- as.numeric(match(y_chr, binary_levels) - 1L)
+      return(list(sample_metadata = sample_metadata, binary_levels = binary_levels))
+    }
+
+    if (length(lvls) > 2L) {
+      sample_metadata$Y <- factor(y_chr, levels = lvls)
+      return(list(sample_metadata = sample_metadata, binary_levels = binary_levels))
+    }
+  }
+
+  list(sample_metadata = sample_metadata, binary_levels = binary_levels)
+}
+
 # Extract long-form data from a MAE for the chosen experiments/assays
-.get_data_from_MAE <- function(mae, experiment, assay.type, outcome.col = "Y") {
+.get_data_from_MAE <- function(
+  mae,
+  experiment,
+  assay.type,
+  outcome.col = "Y",
+  subject_id_col = "subjectID"
+) {
   .require_package("MultiAssayExperiment")
   .require_package("SummarizedExperiment")
   .require_package("tidyr")
@@ -1396,8 +1512,8 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
     cd <- as.data.frame(SummarizedExperiment::colData(se))
     cd$sampleID <- rownames(cd)
 
-    if (!"subjectID" %in% colnames(cd)) {
-      stop("colData(se) must contain a 'subjectID' column.")
+    if (!subject_id_col %in% colnames(cd)) {
+      stop("colData(se) must contain subject ID column '", subject_id_col, "'.")
     }
 
     if (!outcome.col %in% colnames(cd)) {
@@ -1411,7 +1527,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
     }
 
     extra_surv_cols <- intersect(c("time", "event"), colnames(cd))
-    keep_cols <- c("sampleID", "subjectID", outcome.col, extra_surv_cols)
+    keep_cols <- c("sampleID", subject_id_col, outcome.col, extra_surv_cols)
 
     df_long <- merge(df_long, cd[, keep_cols, drop = FALSE],
       by = "sampleID",
@@ -1434,7 +1550,12 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
 
 # Turn long-form data into: - feature_table (features x samples) -
 # sample_metadata (Y in column 'Y') - feature_metadata (view in column 'view')
-.wrangle_data <- function(long_data, outcome.col = "Y", na.rm = FALSE) {
+.wrangle_data <- function(
+  long_data,
+  outcome.col = "Y",
+  subject_id_col = "subjectID",
+  na.rm = FALSE
+) {
   .require_package("tidyr")
 
   if (nrow(long_data) == 0) {
@@ -1443,9 +1564,10 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
 
   # sample metadata
   sample_metadata <- unique(long_data[, c(
-    "sampleID", "subjectID", outcome.col,
+    "sampleID", subject_id_col, outcome.col,
     intersect(c("time", "event"), colnames(long_data))
   )])
+  colnames(sample_metadata)[colnames(sample_metadata) == subject_id_col] <- "subjectID"
   colnames(sample_metadata)[colnames(sample_metadata) == outcome.col] <- "Y"
   rownames(sample_metadata) <- sample_metadata$sampleID
 
@@ -1493,7 +1615,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
 
 .prepare_from_MAE <- function(
   mae_train, mae_valid = NULL, experiment = NULL, assay.type = NULL,
-  na.rm = FALSE, verbose = FALSE
+  na.rm = FALSE, verbose = FALSE, outcome_col = "Y", subject_id_col = "subjectID"
 ) {
   .require_package("MultiAssayExperiment")
   .require_package("SummarizedExperiment")
@@ -1506,17 +1628,17 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
 
   experiment <- defaults$experiment
   assay.type <- defaults$assay.type
-  outcome.col <- "Y"
+  outcome.col <- outcome_col
 
   mae_train_sub <- mae_train[, , experiment, drop = FALSE]
 
   long_train <- .get_data_from_MAE(
     mae = mae_train_sub, experiment = experiment,
-    assay.type = assay.type, outcome.col = outcome.col
+    assay.type = assay.type, outcome.col = outcome.col, subject_id_col = subject_id_col
   )
 
   wr_train <- .wrangle_data(
-    long_data = long_train, outcome.col = outcome.col,
+    long_data = long_train, outcome.col = outcome.col, subject_id_col = subject_id_col,
     na.rm = na.rm
   )
 
@@ -1572,11 +1694,11 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
 
     long_valid <- .get_data_from_MAE(
       mae = mae_valid_sub, experiment = experiment,
-      assay.type = assay.type, outcome.col = outcome.col
+      assay.type = assay.type, outcome.col = outcome.col, subject_id_col = subject_id_col
     )
 
     wr_valid <- .wrangle_data(
-      long_data = long_valid, outcome.col = outcome.col,
+      long_data = long_valid, outcome.col = outcome.col, subject_id_col = subject_id_col,
       na.rm = na.rm
     )
 
@@ -1600,7 +1722,13 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
 }
 
 
-.prepare_from_PCL <- function(PCL_train, PCL_valid = NULL, na.rm = FALSE) {
+.prepare_from_PCL <- function(
+  PCL_train,
+  PCL_valid = NULL,
+  na.rm = FALSE,
+  outcome_col = "Y",
+  subject_id_col = "subjectID"
+) {
   required <- c("feature_table", "sample_metadata", "feature_metadata")
 
   # ---- A: Check PCL_train structure ----
@@ -1627,9 +1755,13 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
     stop("Column names of PCL_train$feature_table must equal row names of PCL_train$sample_metadata.")
   }
 
-  if (!"Y" %in% colnames(sample_metadata)) {
-    stop("PCL_train$sample_metadata must contain a column 'Y' for the outcome.")
-  }
+  sample_metadata <- .normalize_sample_metadata_columns(
+    sample_metadata = sample_metadata,
+    outcome_col = outcome_col,
+    subject_id_col = subject_id_col,
+    context = "PCL_train$sample_metadata",
+    require_outcome = TRUE
+  )
 
   # ---- C: Handle missing values ----
   if (na.rm && anyNA(feature_table)) {
@@ -1669,9 +1801,13 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
       stop("In PCL_valid, rownames(sample_metadata_valid) must match colnames(feature_table_valid).")
     }
 
-    if (!"Y" %in% colnames(sample_metadata_valid)) {
-      stop("PCL_valid$sample_metadata must contain a column 'Y'.")
-    }
+    sample_metadata_valid <- .normalize_sample_metadata_columns(
+      sample_metadata = sample_metadata_valid,
+      outcome_col = outcome_col,
+      subject_id_col = subject_id_col,
+      context = "PCL_valid$sample_metadata",
+      require_outcome = TRUE
+    )
   }
 
   # ---- E: Return canonical format ----

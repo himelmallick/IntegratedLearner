@@ -1,5 +1,5 @@
 ---
-title: "Using IntegratedLearner for Multi-omics Prediction and Classification"
+title: "IntegratedLearner"
 author: "Nalin Arora, Anupreet Porwal and Himel Mallick"
 date: "2026-03-10"
 output: rmarkdown::html_vignette
@@ -112,8 +112,8 @@ For the `PCL_*` interface used in this tutorial, each dataset is a list with:
 
 - `feature_table`: data frame with features in rows and samples in columns.
 - `sample_metadata`: data frame with samples in rows. Must include:
-  - `subjectID`: subject identifier (can repeat for longitudinal data).
-  - `Y`: outcome (binary, continuous, or survival-encoded).
+  - one subject identifier column (default name: `subjectID`).
+  - one outcome column (default name: `Y`).
 - `feature_metadata`: data frame with features in rows. Must include:
   - `featureID`: unique feature identifier.
   - `featureType`: layer label (for example, species, metabolites).
@@ -126,6 +126,23 @@ Required alignments:
 If you provide a validation set, it must use the same feature set and ordering as training.
 
 For survival workflows, include `time` and `event` columns in `sample_metadata` (with `event` coded as 0/1). You can also provide `Y` as a `Surv(time, event)` object.
+
+You can keep your own column names and map them in the wrapper:
+
+```r
+fit <- IntegratedLearner(
+  PCL_train = pcl_train,
+  outcome_col = "disease_status",
+  subject_id_col = "participant_id",
+  family = stats::binomial()
+)
+```
+
+Automatic coercion in the wrapper:
+
+- `family = gaussian()`: outcome is coerced to numeric (errors if conversion fails).
+- binary `family = binomial()`: two classes are mapped internally to `{0,1}`.
+- multiclass `family = binomial()`: class labels are retained.
 
 ## Alternative Input Mode: MAE (Complete Binary Example)
 
@@ -247,6 +264,8 @@ The returned object is the same style as `PCL` mode, so downstream interpretatio
 | `PCL_train`, `PCL_valid` | `NULL` | all | PCL-mode inputs (training and optional validation). |
 | `experiment` | `NULL` | MAE mode | Selected MAE experiment names/indices; defaults to all experiments. |
 | `assay.type` | `NULL` | MAE mode | Assay names per selected experiment. |
+| `outcome_col` | `"Y"` | all | Outcome column name in PCL `sample_metadata` / MAE `colData`. |
+| `subject_id_col` | `"subjectID"` | all | Subject identifier column name in PCL `sample_metadata` / MAE `colData`. |
 | `na.rm` | `FALSE` | all | Drop features with missing values after extraction/prep. |
 | `folds` | `5` | all | Outer CV folds. |
 | `seed` | `1234` | all | Reproducibility seed. |
@@ -257,7 +276,7 @@ The returned object is the same style as `PCL` mode, so downstream interpretatio
 | `screen_pct` | `NULL` | all | Retention percentage in `(0,100]` for screening. Required when screening is enabled. |
 | `prevalence_pct` | `NULL` | all | Deprecated alias for prevalence filtering (`filter_method = "prevalence"`). |
 | `verbose` | `FALSE` | all | Print progress. |
-| `family` | `gaussian()` | all | Non-survival: `gaussian()`/`binomial()`. Multiclass is auto-detected when `family = binomial()` and `Y` has more than two classes. Survival is auto-detected from metadata or family. |
+| `family` | `gaussian()` | all | Non-survival: `gaussian()`/`binomial()`. Multiclass is auto-detected when `family = binomial()` and outcome has more than two classes. Survival is auto-detected from metadata or family. |
 | `...` | — | all | Passed to the selected backend (`IL_conbin` or `ILsurv`). |
 
 ### Conbin-Specific Parameters (Continuous/Binary Path)
@@ -394,7 +413,7 @@ fit_surv$train_out$intermediate
 
 ## Example 1: Binary Outcome (IBD Classification)
 
-This section uses the PRISM dataset (Franzosa et al., 2019) for classifying IBD status. The binary target is coded in `sample_metadata$Y`.
+This section uses the PRISM dataset (Franzosa et al., 2019) for classifying IBD status. In these fixtures the binary target is in `sample_metadata$Y` (default `outcome_col` behavior).
 
 ### Step 1: Load and Inspect Training and Validation Data
 
@@ -488,7 +507,7 @@ In this PRISM setting, you can compare which single layer is strongest and wheth
 
 ## Example 2: Continuous Outcome (Gestational Age)
 
-This section uses the pregnancy dataset (Ghaemi et al., 2019), where `Y` is continuous gestational age.
+This section uses the pregnancy dataset (Ghaemi et al., 2019), where `Y` is continuous gestational age (default `outcome_col` behavior).
 
 ### Step 1: Load and Inspect Data
 
@@ -731,7 +750,7 @@ plot_grid(
 
 ## Example 3: Multiclass Outcome (Franzosa MAE with External Validation)
 
-This section shows a full multiclass MAE workflow using `diseaseCat` as `Y`, with training/validation feature alignment and Python-style class balancing on the training set.
+This section shows a full multiclass MAE workflow where the outcome is already available in `Y` in MAE `colData`, with training/validation feature alignment and Python-style class balancing on the training set.
 
 ```{r}
 

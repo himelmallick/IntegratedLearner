@@ -14,7 +14,7 @@ SL.BART(
   id,
   num_trees = 50,
   num_burn_in = 250,
-  verbose = F,
+  verbose = FALSE,
   alpha = 0.95,
   beta = 2,
   k = 2,
@@ -33,7 +33,7 @@ SL.BART(
 
 \item{newX}{Optional dataframe to predict the outcome}
 
-\item{family}{"gaussian" for regression, "binomial" for binary
+\item{family}{'gaussian' for regression, 'binomial' for binary
 classification}
 
 \item{obsWeights}{Optional observation-level weights (supported but not tested)}
@@ -43,7 +43,7 @@ currently).}
 
 \item{num_trees}{The number of trees to be grown in the sum-of-trees model.}
 
-\item{num_burn_in}{Number of MCMC samples to be discarded as "burn-in".}
+\item{num_burn_in}{Number of MCMC samples to be discarded as 'burn-in'.}
 
 \item{verbose}{Prints information about progress of the algorithm to the
 screen.}
@@ -79,31 +79,6 @@ will require additional RAM.}
 
 \item{...}{Additional arguments (not used)}
 }
-\value{
-A list with elements \code{pred} and \code{fit} following
-the SuperLearner learner interface.
-}
 \description{
 Support bayesian additive regression trees via the bartMachine package.
-}
-\examples{
-x <- data.frame(x1 = rnorm(12), x2 = rnorm(12))
-y <- as.numeric(x$x1 + x$x2 + rnorm(12, sd = 0.1))
-newx <- x[1:3, , drop = FALSE]
-
-if (requireNamespace("bartMachine", quietly = TRUE)) {
-  fit <- SL.BART(
-    Y = y,
-    X = x,
-    newX = newx,
-    family = stats::gaussian(),
-    obsWeights = rep(1, nrow(x)),
-    id = seq_len(nrow(x)),
-    num_trees = 5,
-    num_burn_in = 10,
-    num_iterations_after_burn_in = 20,
-    serialize = FALSE
-  )
-  head(fit$pred)
-}
 }

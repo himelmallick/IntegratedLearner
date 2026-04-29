@@ -77,17 +77,17 @@ base models.}
 (\code{(0,100]}). Applied after any optional filtering.}
 
 \item{filter_method}{Optional feature-filter method before model fitting.
-Supported values are \code{"prevalence"} (top detected features by
-prevalence) and \code{"variance"} (top features by caret-based variance
+Supported values are \code{'prevalence'} (top detected features by
+prevalence) and \code{'variance'} (top features by caret-based variance
 ranking via \code{nearZeroVar} + empirical variance). If \code{NULL},
-defaults to \code{"prevalence"} when filtering is requested.}
+defaults to \code{'prevalence'} when filtering is requested.}
 
 \item{filter_pct}{Optional retention percentage (in \code{(0,100]}) for the
 selected \code{filter_method}. Keeps the top \code{filter_pct} percent features.}
 
 \item{prevalence_pct}{Optional retention percentage (in \code{(0,100]}) for
 prevalence-based filtering before model fitting. Deprecated alias of
-\code{filter_pct} with \code{filter_method = "prevalence"}.}
+\code{filter_pct} with \code{filter_method = 'prevalence'}.}
 
 \item{meta_learner}{Meta-learner for late fusion (stacked generalization).
 Defaults to \code{SL.nnls.auc}.}
@@ -116,35 +116,4 @@ Native multiclass backend used by \code{IntegratedLearner()} when
 \code{family = binomial()} and the outcome has more than two classes.
 This backend preserves the existing API while using multiclass-native
 probability modeling and multiclass stacking.
-}
-\examples{
-feature_table <- data.frame(matrix(rnorm(54), nrow = 9, ncol = 6))
-rownames(feature_table) <- paste0("f", seq_len(nrow(feature_table)))
-colnames(feature_table) <- paste0("s", seq_len(ncol(feature_table)))
-
-sample_metadata <- data.frame(
-  Y = factor(rep(c("A", "B", "C"), each = 2)),
-  subjectID = colnames(feature_table),
-  row.names = colnames(feature_table)
-)
-
-feature_metadata <- data.frame(
-  featureID = rownames(feature_table),
-  featureType = rep(c("omics1", "omics2", "omics3"), each = 3),
-  row.names = rownames(feature_table)
-)
-
-fit <- IL_multiclass(
-  feature_table = feature_table,
-  sample_metadata = sample_metadata,
-  feature_metadata = feature_metadata,
-  folds = 2,
-  base_learner = "glmnet",
-  meta_learner = "glmnet",
-  run_concat = FALSE,
-  run_stacked = FALSE,
-  verbose = FALSE,
-  print_learner = FALSE
-)
-names(fit$metrics.train)
 }
