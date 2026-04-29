@@ -27,6 +27,7 @@ library(IntegratedLearner)
 ## Features
 * Supports both `PCL` and `MAE` input modes
 * Supports binary, multiclass, continuous, and survival outcomes
+* Supports custom outcome/subject column names via `outcome_col` and `subject_id_col`
 * Supports early, late, and intermediate fusion in one interface
 * Integrates with [SuperLearner](https://cran.r-project.org/web/packages/SuperLearner/index.html) for binary/continuous models (`SL.*`)
 * Includes a native multiclass backend with multiclass learners (`glmnet`, `randomforest`, `ranger`, `xgboost`, `mbart`, `multinom`)
@@ -48,7 +49,7 @@ The package vignette demonstrates binary, multiclass, continuous, survival, `PCL
 
 For binary/continuous outcomes, late fusion proceeds by 1) fitting a machine learning algorithm (`base_learner`) per layer and 2) combining layer-wise cross-validated predictions using a meta model (`meta_learner`). A common default is [BART](https://arxiv.org/abs/0806.3286) as base learner (`base_learner = "SL.BART"`) with `SL.nnls.auc` as the meta-learner.
 
-For multiclass outcomes (`family = binomial()` with `length(unique(Y)) > 2`), `IntegratedLearner` dispatches to a native multiclass backend that performs multiclass probability modeling at layer, stacked, and concatenated levels. Optional filtering and screening are supported via `filter_method`/`filter_pct` and `run_screening`/`screen_pct`.
+For multiclass outcomes (`family = binomial()` with more than two outcome classes), `IntegratedLearner` dispatches to a native multiclass backend that performs multiclass probability modeling at layer, stacked, and concatenated levels. Optional filtering and screening are supported via `filter_method`/`filter_pct` and `run_screening`/`screen_pct`.
 
 For survival outcomes, `IntegratedLearner` dispatches to the native survival engine (`ILsurv`) with configurable late-fusion weighting (`COX`/`IBS`) and optional intermediate fusion. Supported survival learners include Cox, penalized Cox, tree ensembles, boosting, and XGBoost-based survival variants (see full list below).
 
@@ -65,6 +66,8 @@ Feature workflow (when enabled):
 IntegratedLearner(
   PCL_train = pcl_train,
   PCL_valid = pcl_valid,        # optional
+  outcome_col = "disease_status",
+  subject_id_col = "participant_id",
   folds = 5,
   base_learner = "SL.randomForest",
   meta_learner = "SL.nnls.auc",
@@ -81,6 +84,8 @@ IntegratedLearner(
   MAE_valid = mae_valid,        # optional
   experiment = c("metabolome", "species"),
   assay.type = c("abundance", "abundance"),
+  outcome_col = "diseaseCat",   # column in colData(MAE_train)
+  subject_id_col = "sample_id", # subject/sample ID column in colData(MAE_train)
   folds = 5,
   base_learner = "randomforest",
   meta_learner = "randomforest",
@@ -91,12 +96,28 @@ IntegratedLearner(
   family = binomial()
 )
 
+# MAE mode (custom metadata column names)
+IntegratedLearner(
+  MAE_train = mae_train,
+  MAE_valid = mae_valid,        # optional
+  experiment = c("metabolome", "species"),
+  assay.type = c("abundance", "abundance"),
+  outcome_col = "clinical_outcome",
+  subject_id_col = "participant_id",
+  folds = 5,
+  base_learner = "SL.randomForest",
+  meta_learner = "SL.nnls.auc",
+  family = gaussian()
+)
+
 # MAE mode (survival)
 IntegratedLearner(
   MAE_train = mae_train,
   MAE_valid = mae_valid,        # optional
   experiment = c("taxonomy", "pathway"),
   assay.type = c("relative_abundance", "pathway_abundance"),
+  outcome_col = "surv_outcome", # survival outcome column in colData(MAE_train)
+  subject_id_col = "patient_id",
   folds = 5,
   base_learner = "surv.coxph",
   filter_method = "variance",
@@ -105,13 +126,30 @@ IntegratedLearner(
   screen_pct = 25,
   weight_method = "COX"
 )
+
+# MAE mode (survival with custom metadata column names)
+IntegratedLearner(
+  MAE_train = mae_train,
+  MAE_valid = mae_valid,        # optional
+  experiment = c("taxonomy", "pathway"),
+  assay.type = c("relative_abundance", "pathway_abundance"),
+  outcome_col = "time_to_event_obj",
+  subject_id_col = "participant_id",
+  folds = 5,
+  base_learner = "surv.coxph",
+  weight_method = "COX"
+)
 ```
+
+Custom metadata names are optional. If omitted, defaults remain `outcome_col = "Y"` and `subject_id_col = "subjectID"` (backward compatible).
 ### Arguments
 
 * `MAE_train` / `MAE_valid`: `MultiAssayExperiment` inputs for training and optional validation.
 * `PCL_train` / `PCL_valid`: List inputs (`feature_table`, `sample_metadata`, `feature_metadata`) for training and optional validation.
 * `experiment`: Selected MAE experiment names/indices (optional; defaults to all in `MAE_train`).
 * `assay.type`: Assay name per selected MAE experiment.
+* `outcome_col`: Outcome column name in `sample_metadata` / `colData`. Default is `"Y"`.
+* `subject_id_col`: Subject identifier column name in `sample_metadata` / `colData`. Default is `"subjectID"`.
 * `na.rm`: Logical; drop features containing missing values after extraction/prep.
 * `folds`: Integer. Number of folds for cross-validation. Default is `5`.
 * `seed`: Integer seed for reproducibility. Default is `1234`.
@@ -125,9 +163,14 @@ IntegratedLearner(
 * `meta_learner`: Meta learner for non-survival late fusion. Defaults to `"SL.nnls.auc"` in binary/continuous; multiclass supports native learners (for example `glmnet`, `randomforest`, `xgboost`).
 * `run_concat`: Logical; include early-fusion (concatenated) model for non-survival.
 * `run_stacked`: Logical; include late-fusion stacked model for non-survival.
-* `family`: `gaussian()` (continuous), `binomial()` (binary or multiclass, auto-detected from `Y`), or survival family/metadata.
+* `family`: `gaussian()` (continuous), `binomial()` (binary or multiclass), or survival family/metadata.
 * `verbose`: Logical progress flag.
 * `...`: Additional backend parameters. For survival, includes options such as `weight_method`, `do_early_fusion`, `intermediate_learners`, and learner-specific hyperparameters (or `model_args`).
+
+Automatic outcome coercion:
+* `gaussian()`: outcome is coerced to numeric (errors if conversion fails).
+* binary `binomial()`: two classes are mapped internally to `{0,1}`.
+* multiclass `binomial()`: class labels are retained.
 
 Supported model families:
 

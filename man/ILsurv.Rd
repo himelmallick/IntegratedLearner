@@ -106,7 +106,7 @@ base models.}
 \item{do_early_fusion}{Logical; run early fusion model.}
 
 \item{weight_method}{Late-fusion weighting method. Supported:
-\code{"IBS"}, \code{"COX"}.}
+\code{'IBS'}, \code{'COX'}.}
 
 \item{t_vec}{Optional explicit time points for COX-based late-fusion feature
 construction.}
@@ -114,15 +114,15 @@ construction.}
 \item{t_vec_probs}{Quantiles used to derive \code{t_vec} when \code{t_vec}
 is \code{NULL}.}
 
-\item{layer_score}{Layer summary on cumhaz increments: \code{"sum"},
-\code{"mean"}, or \code{"l2"}.}
+\item{layer_score}{Layer summary on cumhaz increments: \code{'sum'},
+\code{'mean'}, or \code{'l2'}.}
 
 \item{eps}{Numerical lower bound for survival probabilities.}
 
 \item{weight_lambda}{COX-weight optimization regularization strength.}
 
 \item{weight_penalty}{COX-weight optimization regularizer:
-\code{"l2_to_uniform"} or \code{"entropy"}.}
+\code{'l2_to_uniform'} or \code{'entropy'}.}
 
 \item{weight_cap}{Optional cap on any one layer weight (COX method).}
 
@@ -148,4 +148,34 @@ BioC-friendly survival backend used by \code{IntegratedLearner()} for
 time-to-event outcomes. This preserves the historical \code{ILsurv()}
 interface while using model fitting and fusion routines that do not depend on
 \pkg{mlr3proba}/\pkg{mlr3extralearners}.
+}
+\examples{
+identical(IL_survival, ILsurv)
+if (FALSE) {
+  set.seed(1)
+  n <- 20
+  feature_table <- rbind(
+    matrix(rnorm(3 * n), nrow = 3, dimnames = list(paste0("L1_F", 1:3), paste0("S", 1:n))),
+    matrix(rnorm(2 * n), nrow = 2, dimnames = list(paste0("L2_F", 1:2), paste0("S", 1:n)))
+  )
+  sample_metadata <- data.frame(
+    subjectID = paste0("ID", 1:n),
+    time = rexp(n, rate = 0.1),
+    event = rbinom(n, 1, 0.6),
+    row.names = colnames(feature_table)
+  )
+  sample_metadata$Y <- survival::Surv(sample_metadata$time, sample_metadata$event)
+  feature_metadata <- data.frame(
+    featureID = rownames(feature_table),
+    featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
+    row.names = rownames(feature_table)
+  )
+  fit <- ILsurv(
+    feature_table = feature_table,
+    sample_metadata = sample_metadata,
+    feature_metadata = feature_metadata,
+    folds = 3
+  )
+  names(fit)
+}
 }

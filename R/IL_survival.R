@@ -2,9 +2,7 @@
 
 .require_pkg <- function(pkg, method) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
-    stop(
-      "Method '", method, "' requires package '", pkg, "'. ",
-      "Please install it before running this learner.",
+    stop("Method '", method, "' requires package '", pkg, "'. ", "Please install it before running this learner.",
       call. = FALSE
     )
   }
@@ -13,58 +11,52 @@
 .safe_quantile_times <- function(times, probs = c(0.25, 0.5, 0.75)) {
   tt <- as.numeric(stats::quantile(times, probs = probs, na.rm = TRUE))
   tt <- sort(unique(tt[is.finite(tt)]))
-  if (length(tt) == 0L) tt <- stats::median(times, na.rm = TRUE)
+  if (length(tt) == 0L) {
+    tt <- stats::median(times, na.rm = TRUE)
+  }
   tt
 }
 
 .compute_auc_cindex <- function(times, events, marker, probs = c(0.25, 0.5, 0.75)) {
   obj_surv <- survival::Surv(times, events)
-  cindex <- tryCatch(
-    survival::concordance(obj_surv ~ I(-marker))$concordance,
+  cindex <- tryCatch(survival::concordance(obj_surv ~ I(-marker))$concordance,
     error = function(e) NA_real_
   )
   auc_times <- .safe_quantile_times(times, probs = probs)
-  auc_df <- tryCatch({
-    roc <- timeROC::timeROC(
-      T = times,
-      delta = events,
-      marker = marker,
-      cause = 1,
-      times = auc_times,
-      iid = TRUE
-    )
-    data.frame(time = roc$times, AUC = roc$AUC)
-  }, error = function(e) {
-    data.frame(time = auc_times, AUC = NA_real_)
-  })
-  auc_vals <- suppressWarnings(as.numeric(auc_df$AUC))
+  auc_df <- tryCatch(
+    {
+      roc <- timeROC::timeROC(
+        T = times, delta = events, marker = marker, cause = 1,
+        times = auc_times, iid = TRUE
+      )
+      data.frame(time = roc$times, AUC = roc$AUC)
+    },
+    error = function(e) {
+      data.frame(time = auc_times, AUC = NA_real_)
+    }
+  )
+  auc_vals <- as.numeric(auc_df$AUC)
   auc_mean <- if (any(is.finite(auc_vals))) {
     mean(auc_vals[is.finite(auc_vals)], na.rm = TRUE)
   } else {
     NA_real_
   }
-  surv_mat <- tryCatch(
-    .risk_to_surv_matrix(
-      risk_train = marker,
-      time_train = times,
-      event_train = events,
-      risk_new = marker,
-      time_grid = auc_times
-    ),
-    error = function(e) NULL
-  )
+  surv_mat <- tryCatch(.risk_to_surv_matrix(
+    risk_train = marker, time_train = times,
+    event_train = events, risk_new = marker, time_grid = auc_times
+  ), error = function(e) NULL)
   brier_df <- if (is.null(surv_mat)) {
     data.frame(time = auc_times, Brier = NA_real_)
   } else {
-    .compute_ipcw_brier(times = times, events = events, surv_mat = surv_mat, time_grid = auc_times)
+    .compute_ipcw_brier(
+      times = times, events = events, surv_mat = surv_mat,
+      time_grid = auc_times
+    )
   }
   ibs <- .integrated_brier(brier_df$time, brier_df$Brier)
   list(
-    cindex = as.numeric(cindex),
-    auc = auc_df,
-    auc_mean = as.numeric(auc_mean),
-    brier = brier_df,
-    ibs = as.numeric(ibs)
+    cindex = as.numeric(cindex), auc = auc_df, auc_mean = as.numeric(auc_mean),
+    brier = brier_df, ibs = as.numeric(ibs)
   )
 }
 
@@ -76,8 +68,7 @@
     return(data.frame(time = numeric(0), Brier = numeric(0)))
   }
 
-  cens_fit <- tryCatch(
-    survival::survfit(survival::Surv(times, events == 0) ~ 1),
+  cens_fit <- tryCatch(survival::survfit(survival::Surv(times, events == 0) ~ 1),
     error = function(e) NULL
   )
   if (is.null(cens_fit)) {
@@ -89,13 +80,15 @@
   event_sorted <- events[ot]
   surv_ord <- surv_mat[ot, , drop = FALSE]
 
-  csurv <- suppressWarnings(summary(cens_fit, times = time_sorted, extend = TRUE)$surv)
+  csurv <- summary(cens_fit, times = time_sorted, extend = TRUE)$surv
   csurv[!is.finite(csurv) | csurv <= 0] <- Inf
 
-  csurv_btime <- suppressWarnings(summary(cens_fit, times = time_grid, extend = TRUE)$surv)
+  csurv_btime <- summary(cens_fit, times = time_grid, extend = TRUE)$surv
   if (anyNA(csurv_btime)) {
-    min_v <- suppressWarnings(min(csurv_btime[is.finite(csurv_btime)], na.rm = TRUE))
-    if (!is.finite(min_v)) min_v <- 1
+    min_v <- min(csurv_btime[is.finite(csurv_btime)], na.rm = TRUE)
+    if (!is.finite(min_v)) {
+      min_v <- 1
+    }
     csurv_btime[is.na(csurv_btime)] <- min_v
   }
   csurv_btime[!is.finite(csurv_btime) | csurv_btime <= 0] <- Inf
@@ -104,8 +97,7 @@
     t0 <- time_grid[j]
     help1 <- as.integer(time_sorted <= t0 & event_sorted == 1)
     help2 <- as.integer(time_sorted > t0)
-    mean(((0 - surv_ord[, j])^2 * help1 / csurv) +
-           ((1 - surv_ord[, j])^2 * help2 / csurv_btime[j]))
+    mean(((0 - surv_ord[, j])^2 * help1 / csurv) + ((1 - surv_ord[, j])^2 * help2 / csurv_btime[j]))
   }, numeric(1))
 
   data.frame(time = time_grid, Brier = as.numeric(brier))
@@ -113,7 +105,9 @@
 
 .integrated_brier <- function(time_grid, brier_vec) {
   keep <- is.finite(time_grid) & is.finite(brier_vec)
-  if (sum(keep) < 2L) return(NA_real_)
+  if (sum(keep) < 2L) {
+    return(NA_real_)
+  }
   tt <- as.numeric(time_grid[keep])
   bb <- as.numeric(brier_vec[keep])
   ord <- order(tt)
@@ -122,14 +116,18 @@
   uniq <- !duplicated(tt)
   tt <- tt[uniq]
   bb <- bb[uniq]
-  if (length(tt) < 2L) return(NA_real_)
+  if (length(tt) < 2L) {
+    return(NA_real_)
+  }
   span <- diff(range(tt))
-  if (!is.finite(span) || span <= 0) return(NA_real_)
+  if (!is.finite(span) || span <= 0) {
+    return(NA_real_)
+  }
   as.numeric(sum(diff(tt) * ((bb[-length(bb)] + bb[-1L]) / 2)) / span)
 }
 
 .make_stratified_folds <- function(time_vec, event_vec, folds, seed = 123) {
-  set.seed(seed)
+  .set_seed_internal(seed)
   q <- stats::quantile(time_vec, probs = seq(0, 1, length.out = 6), na.rm = TRUE)
   q <- unique(q)
   if (length(q) < 2L) {
@@ -141,7 +139,9 @@
   fold_id <- integer(length(time_vec))
   for (s in unique(stratum_id)) {
     idx <- which(stratum_id == s)
-    if (length(idx) == 0L) next
+    if (length(idx) == 0L) {
+      next
+    }
     idx <- sample(idx)
     grp <- rep(seq_len(folds), length.out = length(idx))
     for (f in seq_len(folds)) fold_id[idx[grp == f]] <- f
@@ -156,14 +156,17 @@
     x <- x[ok]
     t <- times[ok]
     e <- events[ok]
-    if (length(unique(x)) < 2L || sum(e == 1) < 2L) return(NA_real_)
-    fit <- tryCatch(
-      survival::coxph(survival::Surv(t, e) ~ x),
-      error = function(err) NULL
-    )
-    if (is.null(fit)) return(NA_real_)
+    if (length(unique(x)) < 2L || sum(e == 1) < 2L) {
+      return(NA_real_)
+    }
+    fit <- tryCatch(survival::coxph(survival::Surv(t, e) ~ x), error = function(err) NULL)
+    if (is.null(fit)) {
+      return(NA_real_)
+    }
     cf <- tryCatch(stats::coef(fit), error = function(err) NA_real_)
-    if (length(cf) == 0L || !is.finite(cf[1])) return(NA_real_)
+    if (length(cf) == 0L || !is.finite(cf[1])) {
+      return(NA_real_)
+    }
     base::sign(cf[1])
   }, numeric(1))
 }
@@ -185,7 +188,9 @@
   colnames(mat) <- all_names
   for (i in seq_along(imps)) {
     x <- imps[[i]]
-    if (length(x) == 0L) next
+    if (length(x) == 0L) {
+      next
+    }
     nm <- names(x)
     keep <- nm %in% all_names
     mat[i, nm[keep]] <- as.numeric(x[keep])
@@ -204,12 +209,13 @@
 
 .align_new_matrix <- function(x_new, feature_names) {
   x_new <- as.matrix(x_new)
-  if (is.null(feature_names) || length(feature_names) == 0L) return(x_new)
+  if (is.null(feature_names) || length(feature_names) == 0L) {
+    return(x_new)
+  }
 
   if (is.null(colnames(x_new))) {
     if (ncol(x_new) != length(feature_names)) {
-      stop(
-        "newdata has no column names and column count does not match trained features.",
+      stop("newdata has no column names and column count does not match trained features.",
         call. = FALSE
       )
     }
@@ -226,23 +232,32 @@
   out
 }
 
-.select_top_features <- function(X, times, events, max_features = 300L, method = c("variance", "cox")) {
+.select_top_features <- function(X, times, events, max_features = 300L, method = c(
+                                   "variance",
+                                   "cox"
+                                 )) {
   method <- match.arg(method)
   X <- as.matrix(X)
-  if (ncol(X) <= max_features) return(colnames(X))
+  if (ncol(X) <= max_features) {
+    return(colnames(X))
+  }
 
   if (method == "cox") {
     scores <- vapply(seq_len(ncol(X)), function(j) {
       xj <- X[, j]
       ok <- is.finite(xj) & is.finite(times) & is.finite(events)
-      if (sum(ok) < 10L || length(unique(xj[ok])) < 2L) return(0)
-      fit <- tryCatch(
-        survival::coxph(survival::Surv(times[ok], events[ok]) ~ xj[ok]),
-        error = function(e) NULL
-      )
-      if (is.null(fit)) return(0)
+      if (sum(ok) < 10L || length(unique(xj[ok])) < 2L) {
+        return(0)
+      }
+      fit <- tryCatch(survival::coxph(survival::Surv(times[ok], events[ok]) ~
+        xj[ok]), error = function(e) NULL)
+      if (is.null(fit)) {
+        return(0)
+      }
       cf <- tryCatch(stats::coef(fit), error = function(e) NA_real_)
-      if (length(cf) == 0L || !is.finite(cf[1])) return(0)
+      if (length(cf) == 0L || !is.finite(cf[1])) {
+        return(0)
+      }
       abs(cf[1])
     }, numeric(1))
   } else {
@@ -256,20 +271,30 @@
 }
 
 .extract_survival_screen_cfg <- function(method_args = list()) {
-  out <- list(
-    enabled = FALSE,
-    screen_pct = NULL,
-    screen_method = "cox",
-    model_args = method_args
-  )
-  if (!is.list(method_args) || length(method_args) == 0L) return(out)
+  out <- list(enabled = FALSE, screen_pct = NULL, screen_method = "cox", model_args = method_args)
+  if (!is.list(method_args) || length(method_args) == 0L) {
+    return(out)
+  }
 
-  if (!"screen_pct" %in% names(method_args)) return(out)
-  p <- suppressWarnings(as.numeric(method_args$screen_pct[[1]]))
+  if (!"screen_pct" %in% names(method_args)) {
+    return(out)
+  }
+  p_parsed <- type.convert(as.character(method_args$screen_pct[[1]]), as.is = TRUE)
+  p <- if (is.numeric(p_parsed)) {
+    as.numeric(p_parsed[[1]])
+  } else {
+    NA_real_
+  }
   method_args$screen_pct <- NULL
-  if (!is.finite(p)) return(out)
-  if (p > 0 && p <= 1) p <- p * 100
-  if (p <= 0 || p > 100) return(out)
+  if (!is.finite(p)) {
+    return(out)
+  }
+  if (p > 0 && p <= 1) {
+    p <- p * 100
+  }
+  if (p <= 0 || p > 100) {
+    return(out)
+  }
 
   m <- method_args$screen_method
   method_args$screen_method <- NULL
@@ -293,40 +318,39 @@
   out
 }
 
-.screen_survival_matrix <- function(X_train, X_test, time_train, event_train, screen_pct, screen_method = "cox") {
+.screen_survival_matrix <- function(
+  X_train, X_test, time_train, event_train, screen_pct,
+  screen_method = "cox"
+) {
   X_train <- as.matrix(X_train)
   X_test <- as.matrix(X_test)
   p <- ncol(X_train)
   if (p <= 1L) {
-    return(list(
-      X_train = X_train,
-      X_test = X_test,
-      selected = colnames(X_train)
-    ))
+    return(list(X_train = X_train, X_test = X_test, selected = colnames(X_train)))
   }
   n_keep <- max(1L, as.integer(ceiling((screen_pct / 100) * p)))
   keep <- .select_top_features(
-    X = X_train,
-    times = time_train,
-    events = event_train,
-    max_features = n_keep,
-    method = screen_method
+    X = X_train, times = time_train, events = event_train,
+    max_features = n_keep, method = screen_method
   )
   keep <- intersect(colnames(X_train), keep)
   if (length(keep) == 0L) {
     keep <- colnames(X_train)[seq_len(max(1L, n_keep))]
   }
   list(
-    X_train = X_train[, keep, drop = FALSE],
-    X_test = X_test[, keep, drop = FALSE],
+    X_train = X_train[, keep, drop = FALSE], X_test = X_test[, keep, drop = FALSE],
     selected = keep
   )
 }
 
 .select_event_grid <- function(times, events, max_events = NULL) {
-  if (is.null(max_events) || !is.finite(max_events) || max_events <= 0) return(NULL)
+  if (is.null(max_events) || !is.finite(max_events) || max_events <= 0) {
+    return(NULL)
+  }
   ev <- sort(unique(as.numeric(times[events == 1 & is.finite(times)])))
-  if (length(ev) <= max_events) return(ev)
+  if (length(ev) <= max_events) {
+    return(ev)
+  }
   probs <- seq(0.05, 0.95, length.out = as.integer(max_events))
   sort(unique(as.numeric(stats::quantile(ev, probs = probs, na.rm = TRUE))))
 }
@@ -335,7 +359,9 @@
   x_train <- as.matrix(x_train)
   p <- ncol(x_train)
   feat <- colnames(x_train)
-  if (is.null(feat)) feat <- paste0("V", seq_len(p))
+  if (is.null(feat)) {
+    feat <- paste0("V", seq_len(p))
+  }
   colnames(x_train) <- feat
   y <- survival::Surv(time_train, event_train)
   dat <- as.data.frame(x_train, stringsAsFactors = FALSE)
@@ -344,7 +370,8 @@
   fml <- stats::as.formula("Surv(time, event) ~ .")
 
   .cap_mtry <- function(args_list, p_dim) {
-    if (!is.null(args_list$mtry) && is.numeric(args_list$mtry) && length(args_list$mtry) >= 1L) {
+    if (!is.null(args_list$mtry) && is.numeric(args_list$mtry) && length(args_list$mtry) >=
+      1L) {
       m <- as.numeric(args_list$mtry[[1]])
       if (is.finite(m)) {
         args_list$mtry <- max(1L, min(as.integer(round(m)), as.integer(p_dim)))
@@ -365,18 +392,20 @@
     return(list(model = fit, feature_names = feat))
   }
 
-  if (method %in% c("surv.ranger", "surv.ranger.extratrees", "surv.ranger.maxstat", "surv.ranger.C")) {
+  if (method %in% c(
+    "surv.ranger", "surv.ranger.extratrees", "surv.ranger.maxstat",
+    "surv.ranger.C"
+  )) {
     method_args <- .cap_mtry(method_args, p)
-    splitrule <- switch(
-      method,
-      "surv.ranger.extratrees" = "extratrees",
-      "surv.ranger.maxstat" = "maxstat",
-      "surv.ranger.C" = "C",
+    splitrule <- switch(method,
+      surv.ranger.extratrees = "extratrees",
+      surv.ranger.maxstat = "maxstat",
+      surv.ranger.C = "C",
       "logrank"
     )
     defaults <- list(
-      x = x_train, y = y, importance = "permutation",
-      num.trees = 500, splitrule = splitrule, write.forest = TRUE
+      x = x_train, y = y, importance = "permutation", num.trees = 500,
+      splitrule = splitrule, write.forest = TRUE
     )
     fit <- do.call(ranger::ranger, utils::modifyList(defaults, method_args))
     return(list(model = fit, feature_names = feat))
@@ -399,9 +428,9 @@
   if (method == "surv.gbm") {
     .require_pkg("gbm", method)
     defaults <- list(
-      formula = fml, data = dat, distribution = "coxph",
-      n.trees = 2000, interaction.depth = 2, shrinkage = 0.01,
-      bag.fraction = 0.7, train.fraction = 1.0, n.minobsinnode = 10, verbose = FALSE
+      formula = fml, data = dat, distribution = "coxph", n.trees = 2000,
+      interaction.depth = 2, shrinkage = 0.01, bag.fraction = 0.7, train.fraction = 1,
+      n.minobsinnode = 10, verbose = FALSE
     )
     fit <- do.call(gbm::gbm, utils::modifyList(defaults, method_args))
     return(list(model = fit, feature_names = feat))
@@ -413,24 +442,18 @@
     dtrain <- xgboost::xgb.DMatrix(data = x_train, label = label)
 
     params_default <- list(
-      objective = "survival:cox",
-      eval_metric = "cox-nloglik",
-      eta = 0.05,
-      max_depth = 4,
-      min_child_weight = 1,
-      subsample = 0.8,
-      colsample_bynode = 0.8
+      objective = "survival:cox", eval_metric = "cox-nloglik",
+      eta = 0.05, max_depth = 4, min_child_weight = 1, subsample = 0.8, colsample_bynode = 0.8
     )
     params_user <- method_args$params
     method_args$params <- NULL
-    params <- if (is.null(params_user)) params_default else utils::modifyList(params_default, params_user)
+    params <- if (is.null(params_user)) {
+      params_default
+    } else {
+      utils::modifyList(params_default, params_user)
+    }
 
-    defaults <- list(
-      params = params,
-      data = dtrain,
-      nrounds = 250,
-      verbose = 0
-    )
+    defaults <- list(params = params, data = dtrain, nrounds = 250, verbose = 0)
     fit <- do.call(xgboost::xgb.train, utils::modifyList(defaults, method_args))
     return(list(model = fit, feature_names = feat))
   }
@@ -444,26 +467,19 @@
     xgboost::setinfo(dtrain, "label_upper_bound", label_upper)
 
     params_default <- list(
-      objective = "survival:aft",
-      eval_metric = "aft-nloglik",
-      aft_loss_distribution = "normal",
-      aft_loss_distribution_scale = 1.0,
-      eta = 0.05,
-      max_depth = 4,
-      min_child_weight = 1,
-      subsample = 0.8,
-      colsample_bynode = 0.8
+      objective = "survival:aft", eval_metric = "aft-nloglik",
+      aft_loss_distribution = "normal", aft_loss_distribution_scale = 1, eta = 0.05,
+      max_depth = 4, min_child_weight = 1, subsample = 0.8, colsample_bynode = 0.8
     )
     params_user <- method_args$params
     method_args$params <- NULL
-    params <- if (is.null(params_user)) params_default else utils::modifyList(params_default, params_user)
+    params <- if (is.null(params_user)) {
+      params_default
+    } else {
+      utils::modifyList(params_default, params_user)
+    }
 
-    defaults <- list(
-      params = params,
-      data = dtrain,
-      nrounds = 250,
-      verbose = 0
-    )
+    defaults <- list(params = params, data = dtrain, nrounds = 250, verbose = 0)
     fit <- do.call(xgboost::xgb.train, utils::modifyList(defaults, method_args))
     return(list(model = fit, feature_names = feat))
   }
@@ -471,10 +487,7 @@
   if (method == "surv.mboost") {
     .require_pkg("mboost", method)
     defaults <- list(
-      x = x_train,
-      y = y,
-      family = mboost::CoxPH(),
-      center = FALSE,
+      x = x_train, y = y, family = mboost::CoxPH(), center = FALSE,
       control = mboost::boost_control(mstop = 250)
     )
     fit <- do.call(mboost::glmboost, utils::modifyList(defaults, method_args))
@@ -490,10 +503,11 @@
     method_args$feature_screen <- NULL
     method_args$max_events <- NULL
 
-    if (is.null(feature_screen)) feature_screen <- "variance"
+    if (is.null(feature_screen)) {
+      feature_screen <- "variance"
+    }
     if (is.null(max_features) && ncol(x_train) > 1000L) {
-      stop(
-        "surv.bart with ", ncol(x_train), " features is likely to exceed memory. ",
+      stop("surv.bart with ", ncol(x_train), " features is likely to exceed memory. ",
         "Use model_args = list('surv.bart' = list(max_features = 200, max_events = 75, ...)) ",
         "or use another learner.",
         call. = FALSE
@@ -501,13 +515,11 @@
     }
 
     x_train_use <- x_train
-    if (!is.null(max_features) && is.finite(max_features) && max_features > 0L && ncol(x_train) > max_features) {
+    if (!is.null(max_features) && is.finite(max_features) && max_features > 0L &&
+      ncol(x_train) > max_features) {
       keep <- .select_top_features(
-        X = x_train,
-        times = time_train,
-        events = event_train,
-        max_features = as.integer(max_features),
-        method = feature_screen
+        X = x_train, times = time_train, events = event_train,
+        max_features = as.integer(max_features), method = feature_screen
       )
       x_train_use <- x_train[, keep, drop = FALSE]
     }
@@ -515,32 +527,18 @@
     events_use <- .select_event_grid(time_train, event_train, max_events = max_events)
     # Pre-transform design to BART survival format.
     pre <- BART::surv.pre.bart(
-      times = time_train,
-      delta = event_train,
-      x.train = x_train_use,
-      x.test = x_train_use,
-      events = events_use
+      times = time_train, delta = event_train, x.train = x_train_use,
+      x.test = x_train_use, events = events_use
     )
     defaults <- list(
-      x.train = pre$tx.train,
-      y.train = pre$y.train,
-      times = pre$times,
-      K = pre$K,
-      x.test = pre$tx.test,
-      ntree = 50L,
-      ndpost = 200L,
-      nskip = 200L,
-      keepevery = 1L,
-      printevery = 100000L,
-      mc.cores = 1L
+      x.train = pre$tx.train, y.train = pre$y.train, times = pre$times,
+      K = pre$K, x.test = pre$tx.test, ntree = 50L, ndpost = 200L, nskip = 200L,
+      keepevery = 1L, printevery = 100000L, mc.cores = 1L
     )
     fit <- do.call(BART::surv.bart, utils::modifyList(defaults, method_args))
     return(list(
-      model = fit,
-      feature_names = colnames(x_train_use),
-      x_train_base = x_train_use,
-      time_train = time_train,
-      event_train = event_train
+      model = fit, feature_names = colnames(x_train_use), x_train_base = x_train_use,
+      time_train = time_train, event_train = event_train
     ))
   }
 
@@ -561,7 +559,10 @@
     return(as.numeric(pred))
   }
 
-  if (method %in% c("surv.ranger", "surv.ranger.extratrees", "surv.ranger.maxstat", "surv.ranger.C")) {
+  if (method %in% c(
+    "surv.ranger", "surv.ranger.extratrees", "surv.ranger.maxstat",
+    "surv.ranger.C"
+  )) {
     pred <- stats::predict(fit_obj$model, data = dat_new)
     if (!is.null(pred$chf)) {
       return(as.numeric(pred$chf[, ncol(pred$chf), drop = TRUE]))
@@ -574,14 +575,17 @@
 
   if (method == "surv.rfsrc") {
     pred <- stats::predict(fit_obj$model, newdata = dat_new)
-    if (!is.null(pred$predicted)) return(as.numeric(pred$predicted))
-    if (!is.null(pred$chf)) return(as.numeric(pred$chf[, ncol(pred$chf), drop = TRUE]))
+    if (!is.null(pred$predicted)) {
+      return(as.numeric(pred$predicted))
+    }
+    if (!is.null(pred$chf)) {
+      return(as.numeric(pred$chf[, ncol(pred$chf), drop = TRUE]))
+    }
     stop("Unable to extract risk from randomForestSRC prediction.", call. = FALSE)
   }
 
   if (method == "surv.coxboost") {
-    pred <- tryCatch(
-      stats::predict(fit_obj$model, newdata = x_new, type = "lp"),
+    pred <- tryCatch(stats::predict(fit_obj$model, newdata = x_new, type = "lp"),
       error = function(e) {
         stats::predict(fit_obj$model, newdata = x_new)
       }
@@ -601,7 +605,8 @@
   }
 
   if (method == "surv.xgboost.aft") {
-    # AFT returns (approx.) predicted log-time / time scale, so negate for risk direction.
+    # AFT returns (approx.) predicted log-time / time scale, so negate for
+    # risk direction.
     pred <- stats::predict(fit_obj$model, newdata = x_new)
     return(-as.numeric(pred))
   }
@@ -613,16 +618,12 @@
 
   if (method == "surv.bart") {
     pre <- BART::surv.pre.bart(
-      times = fit_obj$time_train,
-      delta = fit_obj$event_train,
-      x.train = fit_obj$x_train_base,
-      x.test = x_new
+      times = fit_obj$time_train, delta = fit_obj$event_train,
+      x.train = fit_obj$x_train_base, x.test = x_new
     )
     pred <- BART::surv.pwbart(
-      x.test = pre$tx.test,
-      treedraws = fit_obj$model$treedraws,
-      binaryOffset = fit_obj$model$offset,
-      mc.cores = 1L
+      x.test = pre$tx.test, treedraws = fit_obj$model$treedraws,
+      binaryOffset = fit_obj$model$offset, mc.cores = 1L
     )
 
     if (is.null(pred$surv.test)) {
@@ -641,112 +642,164 @@
 .extract_importance <- function(method, fit_obj) {
   if (method == "surv.coxph") {
     v <- tryCatch(stats::coef(fit_obj$model), error = function(e) NULL)
-    if (is.null(v)) return(stats::setNames(rep(NA_real_, length(fit_obj$feature_names)), fit_obj$feature_names))
+    if (is.null(v)) {
+      return(stats::setNames(
+        rep(NA_real_, length(fit_obj$feature_names)),
+        fit_obj$feature_names
+      ))
+    }
     return(abs(v))
   }
   if (method == "surv.glmnet") {
-    v <- tryCatch({
-      cf <- as.matrix(stats::coef(fit_obj$model, s = "lambda.min"))
-      out <- as.numeric(cf[, 1, drop = TRUE])
-      names(out) <- rownames(cf)
-      out <- out[names(out) != "(Intercept)"]
-      abs(out)
-    }, error = function(e) NULL)
-    if (!is.null(v)) return(v)
+    v <- tryCatch(
+      {
+        cf <- as.matrix(stats::coef(fit_obj$model, s = "lambda.min"))
+        out <- as.numeric(cf[, 1, drop = TRUE])
+        names(out) <- rownames(cf)
+        out <- out[names(out) != "(Intercept)"]
+        abs(out)
+      },
+      error = function(e) NULL
+    )
+    if (!is.null(v)) {
+      return(v)
+    }
   }
-  if (method %in% c("surv.ranger", "surv.ranger.extratrees", "surv.ranger.maxstat", "surv.ranger.C")) {
+  if (method %in% c(
+    "surv.ranger", "surv.ranger.extratrees", "surv.ranger.maxstat",
+    "surv.ranger.C"
+  )) {
     v <- fit_obj$model$variable.importance
-    if (!is.null(v)) return(v)
+    if (!is.null(v)) {
+      return(v)
+    }
   }
   if (method == "surv.rfsrc") {
     v <- fit_obj$model$importance
-    if (!is.null(v)) return(v)
+    if (!is.null(v)) {
+      return(v)
+    }
   }
   if (method == "surv.coxboost") {
-    v <- tryCatch({
-      cf <- stats::coef(fit_obj$model, at.step = fit_obj$model$stepno)
-      abs(as.numeric(cf))
-    }, error = function(e) NULL)
+    v <- tryCatch(
+      {
+        cf <- stats::coef(fit_obj$model, at.step = fit_obj$model$stepno)
+        abs(as.numeric(cf))
+      },
+      error = function(e) NULL
+    )
     if (!is.null(v)) {
       names(v) <- fit_obj$feature_names
       return(v)
     }
   }
   if (method == "surv.gbm") {
-    v <- tryCatch({
-      tab <- gbm::summary.gbm(fit_obj$model, plotit = FALSE)
-      out <- tab$rel.inf
-      names(out) <- as.character(tab$var)
-      out
-    }, error = function(e) NULL)
-    if (!is.null(v)) return(v)
+    v <- tryCatch(
+      {
+        tab <- gbm::summary.gbm(fit_obj$model, plotit = FALSE)
+        out <- tab$rel.inf
+        names(out) <- as.character(tab$var)
+        out
+      },
+      error = function(e) NULL
+    )
+    if (!is.null(v)) {
+      return(v)
+    }
   }
   if (method == "surv.xgboost.cox") {
-    v <- tryCatch({
-      imp <- xgboost::xgb.importance(model = fit_obj$model)
-      out <- stats::setNames(rep(0, length(fit_obj$feature_names)), fit_obj$feature_names)
-      if (nrow(imp) > 0L) {
-        feats <- as.character(imp$Feature)
-        if (all(grepl("^f[0-9]+$", feats))) {
-          idx <- as.integer(sub("^f", "", feats)) + 1L
-          keep_idx <- idx >= 1L & idx <= length(fit_obj$feature_names)
-          feats[keep_idx] <- fit_obj$feature_names[idx[keep_idx]]
+    v <- tryCatch(
+      {
+        imp <- xgboost::xgb.importance(model = fit_obj$model)
+        out <- stats::setNames(rep(0, length(fit_obj$feature_names)), fit_obj$feature_names)
+        if (nrow(imp) > 0L) {
+          feats <- as.character(imp$Feature)
+          if (all(grepl("^f[0-9]+$", feats))) {
+            idx <- as.integer(sub("^f", "", feats)) + 1L
+            keep_idx <- idx >= 1L & idx <= length(fit_obj$feature_names)
+            feats[keep_idx] <- fit_obj$feature_names[idx[keep_idx]]
+          }
+          keep <- feats %in% names(out)
+          out[feats[keep]] <- imp$Gain[keep]
         }
-        keep <- feats %in% names(out)
-        out[feats[keep]] <- imp$Gain[keep]
-      }
-      out
-    }, error = function(e) NULL)
-    if (!is.null(v)) return(v)
+        out
+      },
+      error = function(e) NULL
+    )
+    if (!is.null(v)) {
+      return(v)
+    }
   }
   if (method == "surv.xgboost.aft") {
-    v <- tryCatch({
-      imp <- xgboost::xgb.importance(model = fit_obj$model)
-      out <- stats::setNames(rep(0, length(fit_obj$feature_names)), fit_obj$feature_names)
-      if (nrow(imp) > 0L) {
-        feats <- as.character(imp$Feature)
-        if (all(grepl("^f[0-9]+$", feats))) {
-          idx <- as.integer(sub("^f", "", feats)) + 1L
-          keep_idx <- idx >= 1L & idx <= length(fit_obj$feature_names)
-          feats[keep_idx] <- fit_obj$feature_names[idx[keep_idx]]
+    v <- tryCatch(
+      {
+        imp <- xgboost::xgb.importance(model = fit_obj$model)
+        out <- stats::setNames(rep(0, length(fit_obj$feature_names)), fit_obj$feature_names)
+        if (nrow(imp) > 0L) {
+          feats <- as.character(imp$Feature)
+          if (all(grepl("^f[0-9]+$", feats))) {
+            idx <- as.integer(sub("^f", "", feats)) + 1L
+            keep_idx <- idx >= 1L & idx <= length(fit_obj$feature_names)
+            feats[keep_idx] <- fit_obj$feature_names[idx[keep_idx]]
+          }
+          keep <- feats %in% names(out)
+          out[feats[keep]] <- imp$Gain[keep]
         }
-        keep <- feats %in% names(out)
-        out[feats[keep]] <- imp$Gain[keep]
-      }
-      out
-    }, error = function(e) NULL)
-    if (!is.null(v)) return(v)
+        out
+      },
+      error = function(e) NULL
+    )
+    if (!is.null(v)) {
+      return(v)
+    }
   }
   if (method == "surv.mboost") {
-    v <- tryCatch({
-      cf <- stats::coef(fit_obj$model, off2int = TRUE)
-      if (is.list(cf)) cf <- unlist(cf, use.names = TRUE)
-      cf <- as.numeric(cf)
-      nm <- names(stats::coef(fit_obj$model, off2int = TRUE))
-      names(cf) <- nm
-      cf <- cf[names(cf) %in% fit_obj$feature_names]
-      abs(cf)
-    }, error = function(e) NULL)
-    if (!is.null(v)) return(v)
+    v <- tryCatch(
+      {
+        cf <- stats::coef(fit_obj$model, off2int = TRUE)
+        if (is.list(cf)) {
+          cf <- unlist(cf, use.names = TRUE)
+        }
+        cf <- as.numeric(cf)
+        nm <- names(stats::coef(fit_obj$model, off2int = TRUE))
+        names(cf) <- nm
+        cf <- cf[names(cf) %in% fit_obj$feature_names]
+        abs(cf)
+      },
+      error = function(e) NULL
+    )
+    if (!is.null(v)) {
+      return(v)
+    }
   }
   if (method == "surv.bart") {
-    v <- tryCatch({
-      vp <- fit_obj$model$varprob.mean
-      if (is.null(vp)) return(NULL)
-      vp <- as.numeric(vp)
-      nms <- names(fit_obj$model$varprob.mean)
-      names(vp) <- nms
-      vp <- vp[!(names(vp) %in% c("t", "time", ".time"))]
-      out <- stats::setNames(rep(NA_real_, length(fit_obj$feature_names)), fit_obj$feature_names)
-      keep <- names(vp) %in% names(out)
-      if (any(keep)) {
-        out[names(vp)[keep]] <- vp[keep]
-      } else if (length(vp) >= length(out)) {
-        out[] <- vp[seq_along(out)]
-      }
-      out
-    }, error = function(e) NULL)
-    if (!is.null(v)) return(v)
+    v <- tryCatch(
+      {
+        vp <- fit_obj$model$varprob.mean
+        if (is.null(vp)) {
+          return(NULL)
+        }
+        vp <- as.numeric(vp)
+        nms <- names(fit_obj$model$varprob.mean)
+        names(vp) <- nms
+        vp <- vp[!(names(vp) %in% c("t", "time", ".time"))]
+        out <- stats::setNames(
+          rep(NA_real_, length(fit_obj$feature_names)),
+          fit_obj$feature_names
+        )
+        keep <- names(vp) %in% names(out)
+        if (any(keep)) {
+          out[names(vp)[keep]] <- vp[keep]
+        } else if (length(vp) >= length(out)) {
+          out[] <- vp[seq_along(out)]
+        }
+        out
+      },
+      error = function(e) NULL
+    )
+    if (!is.null(v)) {
+      return(v)
+    }
   }
   out <- rep(NA_real_, length(fit_obj$feature_names))
   names(out) <- fit_obj$feature_names
@@ -769,11 +822,8 @@
     X_test <- X[test_idx, , drop = FALSE]
     if (isTRUE(screen_cfg$enabled)) {
       screened <- .screen_survival_matrix(
-        X_train = X_train,
-        X_test = X_test,
-        time_train = times[train_idx],
-        event_train = events[train_idx],
-        screen_pct = screen_cfg$screen_pct,
+        X_train = X_train, X_test = X_test,
+        time_train = times[train_idx], event_train = events[train_idx], screen_pct = screen_cfg$screen_pct,
         screen_method = screen_cfg$screen_method
       )
       X_train <- screened$X_train
@@ -781,11 +831,8 @@
     }
 
     fit_obj <- .fit_surv_model(
-      method = method,
-      x_train = X_train,
-      time_train = times[train_idx],
-      event_train = events[train_idx],
-      method_args = method_args_fit
+      method = method, x_train = X_train, time_train = times[train_idx],
+      event_train = events[train_idx], method_args = method_args_fit
     )
     pred <- .predict_surv_risk(method, fit_obj, X_test)
     oof[test_idx] <- pred
@@ -802,12 +849,8 @@
   X_use <- as.matrix(X)
   if (isTRUE(screen_cfg$enabled)) {
     screened <- .screen_survival_matrix(
-      X_train = X_use,
-      X_test = X_use,
-      time_train = times,
-      event_train = events,
-      screen_pct = screen_cfg$screen_pct,
-      screen_method = screen_cfg$screen_method
+      X_train = X_use, X_test = X_use, time_train = times,
+      event_train = events, screen_pct = screen_cfg$screen_pct, screen_method = screen_cfg$screen_method
     )
     X_use <- screened$X_train
   }
@@ -830,8 +873,8 @@
 }
 
 .get_cumhaz_increments <- function(Smat, time_grid, t_vec, eps = 1e-12, win_frac = 0.01) {
-  idx <- sapply(t_vec, function(t) which.min(abs(time_grid - t)))
-  Sclamped <- pmin(pmax(Smat[, idx, drop = FALSE], eps), 1 - 1e-8)
+  idx <- vapply(t_vec, function(t) which.min(abs(time_grid - t)), integer(1))
+  Sclamped <- pmin(pmax(Smat[, idx, drop = FALSE], eps), 1 - 1e-08)
   H <- -log(Sclamped)
   dH <- cbind(H[, 1], H[, -1, drop = FALSE] - H[, -ncol(H), drop = FALSE])
   if (win_frac > 0 && win_frac < 0.5) {
@@ -847,8 +890,12 @@
 
 .summarize_increments <- function(dH_mat, how = c("sum", "mean", "l2")) {
   how <- match.arg(how)
-  if (how == "sum") return(rowSums(dH_mat))
-  if (how == "mean") return(rowMeans(dH_mat))
+  if (how == "sum") {
+    return(rowSums(dH_mat))
+  }
+  if (how == "mean") {
+    return(rowMeans(dH_mat))
+  }
   sqrt(rowSums(dH_mat^2))
 }
 
@@ -857,7 +904,9 @@
   times <- times[ok]
   events <- events[ok]
   eta <- eta[ok]
-  if (sum(events == 1) < 2) return(NA_real_)
+  if (sum(events == 1) < 2) {
+    return(NA_real_)
+  }
 
   o <- order(times)
   times <- times[o]
@@ -869,7 +918,9 @@
   risk_cum <- rev(cumsum(rev(exp_eta)))
 
   event_times <- unique(times[events == 1])
-  if (length(event_times) < 2) return(NA_real_)
+  if (length(event_times) < 2) {
+    return(NA_real_)
+  }
 
   ll <- 0
   for (t in event_times) {
@@ -880,26 +931,30 @@
     sum_eta <- sum(eta[idx_time & events == 1])
     ll <- ll + sum_eta - d * log(risk_at_t)
   }
-  if (!is.finite(ll)) NA_real_ else ll
+  if (!is.finite(ll)) {
+    NA_real_
+  } else {
+    ll
+  }
 }
 
 .cox_simplex_optim_reg <- function(
-    R,
-    times,
-    events,
-    maxit = 4000,
-    lambda = 0.02,
-    penalty = c("l2_to_uniform", "entropy")
+  R, times, events, maxit = 4000, lambda = 0.02,
+  penalty = c("l2_to_uniform", "entropy")
 ) {
   penalty <- match.arg(penalty)
   K <- ncol(R)
-  if (K < 2) stop("Need >=2 layers for weight optimization.", call. = FALSE)
+  if (K < 2) {
+    stop("Need >=2 layers for weight optimization.", call. = FALSE)
+  }
 
   obj <- function(par) {
     w <- .softmax_simplex(par)
     eta <- as.numeric(R %*% w)
     ll <- .cox_loglik_breslow(times, events, eta)
-    if (!is.finite(ll)) return(1e8)
+    if (!is.finite(ll)) {
+      return(1e+08)
+    }
 
     pen <- 0
     if (penalty == "l2_to_uniform") {
@@ -911,43 +966,52 @@
   }
 
   init <- rep(0, K)
-  opt <- stats::optim(
-    par = init,
-    fn = obj,
-    method = "Nelder-Mead",
-    control = list(maxit = maxit, reltol = 1e-12)
-  )
+  opt <- stats::optim(par = init, fn = obj, method = "Nelder-Mead", control = list(
+    maxit = maxit,
+    reltol = 1e-12
+  ))
   list(weights = .softmax_simplex(opt$par), optim = opt, lambda = lambda, penalty = penalty)
 }
 
 .build_cox_risk_matrix <- function(
-    surv_mat_list,
-    layers,
-    time_grid,
-    t_vec = NULL,
-    t_vec_probs = c(0.05, 0.25, 0.50, 0.75, 0.95),
-    layer_score = c("sum", "mean", "l2"),
-    eps = 1e-12
+  surv_mat_list, layers, time_grid, t_vec = NULL,
+  t_vec_probs = c(0.05, 0.25, 0.5, 0.75, 0.95), layer_score = c(
+    "sum", "mean",
+    "l2"
+  ), eps = 1e-12
 ) {
   layer_score <- match.arg(layer_score)
   if (is.null(t_vec)) {
     t_vec <- as.numeric(stats::quantile(time_grid, probs = t_vec_probs, na.rm = TRUE))
   }
-  t_vec <- sapply(t_vec, function(t) time_grid[which.min(abs(time_grid - t))])
+  t_vec <- vapply(
+    t_vec, function(t) time_grid[which.min(abs(time_grid - t))],
+    numeric(1)
+  )
   t_vec <- unique(as.numeric(t_vec))
-  if (length(t_vec) < 2L) stop("Need >=2 distinct time points for cumhaz increments (COX method).", call. = FALSE)
+  if (length(t_vec) < 2L) {
+    stop("Need >=2 distinct time points for cumhaz increments (COX method).",
+      call. = FALSE
+    )
+  }
 
-  R_raw <- sapply(layers, function(lay) {
-    dH <- .get_cumhaz_increments(surv_mat_list[[lay]], time_grid, t_vec = t_vec, eps = eps)
+  n_obs <- nrow(surv_mat_list[[layers[[1]]]])
+  R_raw <- vapply(layers, function(lay) {
+    dH <- .get_cumhaz_increments(surv_mat_list[[lay]], time_grid,
+      t_vec = t_vec,
+      eps = eps
+    )
     .summarize_increments(dH, how = layer_score)
-  })
+  }, numeric(n_obs))
   colnames(R_raw) <- layers
 
   for (j in seq_len(ncol(R_raw))) {
     bad <- !is.finite(R_raw[, j])
     if (any(bad)) {
       med <- stats::median(R_raw[is.finite(R_raw[, j]), j], na.rm = TRUE)
-      if (!is.finite(med)) med <- 0
+      if (!is.finite(med)) {
+        med <- 0
+      }
       R_raw[bad, j] <- med
     }
   }
@@ -957,8 +1021,12 @@
 
 .ibs_time_grid <- function(times, n_grid = 40L) {
   t_all <- sort(unique(as.numeric(times[is.finite(times)])))
-  if (length(t_all) <= 2L) return(t_all)
-  if (length(t_all) <= n_grid) return(t_all)
+  if (length(t_all) <= 2L) {
+    return(t_all)
+  }
+  if (length(t_all) <= n_grid) {
+    return(t_all)
+  }
   probs <- seq(0.05, 0.95, length.out = n_grid)
   sort(unique(as.numeric(stats::quantile(t_all, probs = probs, na.rm = TRUE))))
 }
@@ -971,7 +1039,9 @@
     colnames(out) <- as.character(time_grid)
     return(out)
   }
-  if (is.null(dim(sf_surv))) sf_surv <- matrix(sf_surv, ncol = 1L)
+  if (is.null(dim(sf_surv))) {
+    sf_surv <- matrix(sf_surv, ncol = 1L)
+  }
   idx <- findInterval(time_grid, sf_time)
   out <- matrix(1, nrow = ncol(sf_surv), ncol = length(time_grid))
   if (length(sf_time) > 0L) {
@@ -980,22 +1050,31 @@
       out[, valid] <- t(sf_surv[idx[valid], , drop = FALSE])
     }
   }
-  out <- pmin(pmax(out, 1e-8), 1)
+  out <- pmin(pmax(out, 1e-08), 1)
   colnames(out) <- as.character(time_grid)
   out
 }
 
-.risk_to_surv_matrix <- function(risk_train, time_train, event_train, risk_new = NULL, time_grid = NULL) {
+.risk_to_surv_matrix <- function(
+  risk_train, time_train, event_train, risk_new = NULL,
+  time_grid = NULL
+) {
   risk_train <- as.numeric(risk_train)
-  if (is.null(risk_new)) risk_new <- risk_train
+  if (is.null(risk_new)) {
+    risk_new <- risk_train
+  }
   risk_new <- as.numeric(risk_new)
 
   med_train <- stats::median(risk_train[is.finite(risk_train)], na.rm = TRUE)
-  if (!is.finite(med_train)) med_train <- 0
+  if (!is.finite(med_train)) {
+    med_train <- 0
+  }
   risk_train[!is.finite(risk_train)] <- med_train
   risk_new[!is.finite(risk_new)] <- med_train
 
-  if (is.null(time_grid)) time_grid <- .ibs_time_grid(time_train)
+  if (is.null(time_grid)) {
+    time_grid <- .ibs_time_grid(time_train)
+  }
   if (length(time_grid) < 2L) {
     t_ok <- sort(unique(as.numeric(time_train[is.finite(time_train)])))
     if (length(t_ok) >= 2L) {
@@ -1005,15 +1084,19 @@
     }
   }
 
-  fit <- tryCatch(
-    survival::coxph(survival::Surv(time_train, event_train) ~ risk_train, ties = "efron"),
-    error = function(e) NULL
-  )
+  fit <- tryCatch(survival::coxph(survival::Surv(time_train, event_train) ~ risk_train,
+    ties = "efron"
+  ), error = function(e) NULL)
   if (is.null(fit)) {
     sf0 <- survival::survfit(survival::Surv(time_train, event_train) ~ 1)
     base_surv <- summary(sf0, times = time_grid, extend = TRUE)$surv
-    if (length(base_surv) != length(time_grid)) base_surv <- rep(1, length(time_grid))
-    out <- matrix(rep(base_surv, each = length(risk_new)), nrow = length(risk_new), ncol = length(time_grid))
+    if (length(base_surv) != length(time_grid)) {
+      base_surv <- rep(1, length(time_grid))
+    }
+    out <- matrix(rep(base_surv, each = length(risk_new)),
+      nrow = length(risk_new),
+      ncol = length(time_grid)
+    )
     colnames(out) <- as.character(time_grid)
     return(out)
   }
@@ -1022,7 +1105,10 @@
   .eval_survfit_at_times(sf, time_grid)
 }
 
-.ibs_optim <- function(par, fit_list, time_grid, obj_surv, ot, csurv, csurv_btime, time_sorted) {
+.ibs_optim <- function(
+  par, fit_list, time_grid, obj_surv, ot, csurv, csurv_btime,
+  time_sorted
+) {
   w <- exp(c(par)) / (1 + sum(exp(par)))
   w <- c(w, 1 - sum(w))
 
@@ -1032,31 +1118,32 @@
   }
   survs <- rowSums(pred_arr, dims = 2)
 
-  bsc <- sapply(seq_along(time_grid), function(j) {
+  bsc <- vapply(seq_along(time_grid), function(j) {
     help1 <- as.integer(time_sorted <= time_grid[j] & obj_surv[ot, 2] == 1)
     help2 <- as.integer(time_sorted > time_grid[j])
-    mean(((0 - survs[, j])^2 * help1 / csurv) +
-           ((1 - survs[, j])^2 * help2 / csurv_btime[j]))
-  })
+    mean(((0 - survs[, j])^2 * help1 / csurv) + ((1 - survs[, j])^2 * help2 / csurv_btime[j]))
+  }, numeric(1))
 
   idx <- 2:length(time_grid)
   ret <- diff(time_grid) %*% ((bsc[idx - 1] + bsc[idx]) / 2)
   as.numeric(ret / diff(range(time_grid)))
 }
 
-.ibs_measure <- function(weights, fit_list, time_grid, obj_surv, ot, csurv, csurv_btime, time_sorted) {
+.ibs_measure <- function(
+  weights, fit_list, time_grid, obj_surv, ot, csurv, csurv_btime,
+  time_sorted
+) {
   pred_arr <- array(dim = c(nrow(fit_list[[1]]), ncol(fit_list[[1]]), length(fit_list)))
   for (i in seq_along(fit_list)) {
     pred_arr[, , i] <- fit_list[[i]] * weights[i]
   }
   survs <- rowSums(pred_arr, dims = 2)
 
-  bsc <- sapply(seq_along(time_grid), function(j) {
+  bsc <- vapply(seq_along(time_grid), function(j) {
     help1 <- as.integer(time_sorted <= time_grid[j] & obj_surv[ot, 2] == 1)
     help2 <- as.integer(time_sorted > time_grid[j])
-    mean(((0 - survs[, j])^2 * help1 / csurv) +
-           ((1 - survs[, j])^2 * help2 / csurv_btime[j]))
-  })
+    mean(((0 - survs[, j])^2 * help1 / csurv) + ((1 - survs[, j])^2 * help2 / csurv_btime[j]))
+  }, numeric(1))
 
   idx <- 2:length(time_grid)
   ret <- diff(time_grid) %*% ((bsc[idx - 1] + bsc[idx]) / 2)
@@ -1064,29 +1151,25 @@
 }
 
 .learn_weights <- function(
-    layer_risk_mat,
-    times,
-    events,
-    weight_method = c("COX", "UNIFORM", "IBS"),
-    surv_mat_list = NULL,
-    ibs_time_grid = NULL,
-    ibs_maxit = 300,
-    ibs_shrink_to_uniform = 0,
-    cox_t_vec = NULL,
-    cox_t_vec_probs = c(0.05, 0.25, 0.50, 0.75, 0.95),
-    cox_layer_score = c("sum", "mean", "l2"),
-    cox_eps = 1e-12,
-    cox_weight_lambda = 0.02,
-    cox_weight_penalty = c("l2_to_uniform", "entropy"),
-    cox_weight_cap = 1.0,
-    cox_optim_maxit = 4000
+  layer_risk_mat, times, events, weight_method = c(
+    "COX",
+    "UNIFORM", "IBS"
+  ), surv_mat_list = NULL, ibs_time_grid = NULL, ibs_maxit = 300,
+  ibs_shrink_to_uniform = 0, cox_t_vec = NULL, cox_t_vec_probs = c(
+    0.05, 0.25,
+    0.5, 0.75, 0.95
+  ), cox_layer_score = c("sum", "mean", "l2"), cox_eps = 1e-12,
+  cox_weight_lambda = 0.02, cox_weight_penalty = c("l2_to_uniform", "entropy"),
+  cox_weight_cap = 1, cox_optim_maxit = 4000
 ) {
   weight_method <- match.arg(weight_method)
   cox_layer_score <- match.arg(cox_layer_score)
   cox_weight_penalty <- match.arg(cox_weight_penalty)
   layers <- colnames(layer_risk_mat)
   n_layers <- ncol(layer_risk_mat)
-  if (n_layers == 1L) return(stats::setNames(1, layers))
+  if (n_layers == 1L) {
+    return(stats::setNames(1, layers))
+  }
 
   if (weight_method == "UNIFORM") {
     return(stats::setNames(rep(1 / n_layers, n_layers), layers))
@@ -1108,30 +1191,26 @@
     ot <- order(times)
     time_sorted <- as.numeric(times[ot])
 
-    cens_fit <- survival::survfit(survival::Surv(time_sorted, events[ot] == 0) ~ 1)
+    cens_fit <- survival::survfit(survival::Surv(time_sorted, events[ot] == 0) ~
+      1)
     csurv <- summary(cens_fit, times = time_sorted, extend = TRUE)$surv
     csurv[!is.finite(csurv) | csurv <= 0] <- Inf
 
     csurv_btime <- summary(cens_fit, times = ibs_time_grid, extend = TRUE)$surv
     if (anyNA(csurv_btime)) {
-      min_v <- suppressWarnings(min(csurv_btime[is.finite(csurv_btime)], na.rm = TRUE))
-      if (!is.finite(min_v)) min_v <- 1
+      min_v <- min(csurv_btime[is.finite(csurv_btime)], na.rm = TRUE)
+      if (!is.finite(min_v)) {
+        min_v <- 1
+      }
       csurv_btime[is.na(csurv_btime)] <- min_v
     }
     csurv_btime[!is.finite(csurv_btime) | csurv_btime <= 0] <- Inf
 
     init_par <- rep(0, n_layers - 1L)
     opt <- stats::optim(
-      par = init_par,
-      fn = .ibs_optim,
-      fit_list = fit_list,
-      time_grid = ibs_time_grid,
-      obj_surv = obj_surv,
-      ot = ot,
-      csurv = csurv,
-      csurv_btime = csurv_btime,
-      time_sorted = time_sorted,
-      method = "L-BFGS-B",
+      par = init_par, fn = .ibs_optim, fit_list = fit_list,
+      time_grid = ibs_time_grid, obj_surv = obj_surv, ot = ot, csurv = csurv,
+      csurv_btime = csurv_btime, time_sorted = time_sorted, method = "L-BFGS-B",
       control = list(maxit = ibs_maxit)
     )
     tmp <- exp(c(opt$par)) / (1 + sum(exp(opt$par)))
@@ -1139,24 +1218,24 @@
     names(w) <- layers
 
     if (ibs_shrink_to_uniform > 0) {
-      w <- (1 - ibs_shrink_to_uniform) * w + ibs_shrink_to_uniform * rep(1 / n_layers, n_layers)
+      w <- (1 - ibs_shrink_to_uniform) * w + ibs_shrink_to_uniform * rep(
+        1 / n_layers,
+        n_layers
+      )
       names(w) <- layers
     }
     return(w)
   }
 
   # COX method: original IL_survival-style weighting on cumhaz summaries.
-  if (!is.null(surv_mat_list) && !is.null(ibs_time_grid) && length(ibs_time_grid) >= 2L) {
+  if (!is.null(surv_mat_list) && !is.null(ibs_time_grid) && length(ibs_time_grid) >=
+    2L) {
     fit_list <- lapply(layers, function(lay) surv_mat_list[[lay]])
     if (all(vapply(fit_list, function(x) !is.null(x) && is.matrix(x), logical(1)))) {
       cox_features <- .build_cox_risk_matrix(
         surv_mat_list = surv_mat_list,
-        layers = layers,
-        time_grid = ibs_time_grid,
-        t_vec = cox_t_vec,
-        t_vec_probs = cox_t_vec_probs,
-        layer_score = cox_layer_score,
-        eps = cox_eps
+        layers = layers, time_grid = ibs_time_grid, t_vec = cox_t_vec, t_vec_probs = cox_t_vec_probs,
+        layer_score = cox_layer_score, eps = cox_eps
       )
       R_raw <- cox_features$R_raw
       sc <- .safe_scale(R_raw)
@@ -1166,12 +1245,8 @@
         w <- stats::setNames(1, layers)
       } else {
         opt_res <- .cox_simplex_optim_reg(
-          R = R,
-          times = times,
-          events = events,
-          maxit = cox_optim_maxit,
-          lambda = cox_weight_lambda,
-          penalty = cox_weight_penalty
+          R = R, times = times, events = events,
+          maxit = cox_optim_maxit, lambda = cox_weight_lambda, penalty = cox_weight_penalty
         )
         w <- opt_res$weights
         if (cox_weight_cap < 1) {
@@ -1181,13 +1256,9 @@
         names(w) <- layers
       }
       attr(w, "method_details") <- list(
-        weight_method = "COX",
-        time_grid = ibs_time_grid,
-        t_vec = cox_features$t_vec,
-        layer_score = cox_layer_score,
-        scaling = sc,
-        weight_lambda = cox_weight_lambda,
-        weight_penalty = cox_weight_penalty,
+        weight_method = "COX", time_grid = ibs_time_grid,
+        t_vec = cox_features$t_vec, layer_score = cox_layer_score, scaling = sc,
+        weight_lambda = cox_weight_lambda, weight_penalty = cox_weight_penalty,
         weight_cap = cox_weight_cap
       )
       return(w)
@@ -1198,16 +1269,19 @@
   df <- as.data.frame(layer_risk_mat)
   df$time <- times
   df$event <- events
-  fit <- tryCatch(
-    survival::coxph(survival::Surv(time, event) ~ ., data = df, ties = "efron"),
+  fit <- tryCatch(survival::coxph(survival::Surv(time, event) ~ ., data = df, ties = "efron"),
     error = function(e) NULL
   )
-  if (is.null(fit)) return(stats::setNames(rep(1 / n_layers, n_layers), layers))
+  if (is.null(fit)) {
+    return(stats::setNames(rep(1 / n_layers, n_layers), layers))
+  }
 
   coefs <- stats::coef(fit)
   coefs[!is.finite(coefs)] <- 0
   w <- abs(coefs)
-  if (sum(w) <= 0) return(stats::setNames(rep(1 / n_layers, n_layers), layers))
+  if (sum(w) <= 0) {
+    return(stats::setNames(rep(1 / n_layers, n_layers), layers))
+  }
   w <- w / sum(w)
   w <- w[layers]
   attr(w, "method_details") <- list(weight_method = "COX_fallback")
@@ -1215,64 +1289,43 @@
 }
 
 .ILsurv_bioc_core <- function(
-    feature_table,
-    sample_metadata,
-    feature_metadata,
-    valid_feature_table = NULL,
-    valid_sample_metadata = NULL,
-    base_learner = "surv.coxph",
-    folds = 5,
-    seed = 123,
-    run_screening = FALSE,
-    screen_pct = NULL,
-    do_early_fusion = TRUE,
-    weight_method = c("COX", "UNIFORM", "IBS"),
-    ibs_grid_n = 30,
-    ibs_maxit = 3000,
-    ibs_shrink_to_uniform = 0.1,
-    cox_t_vec = NULL,
-    cox_t_vec_probs = c(0.05, 0.25, 0.50, 0.75, 0.95),
-    cox_layer_score = c("sum", "mean", "l2"),
-    cox_eps = 1e-12,
-    cox_weight_lambda = 0.02,
-    cox_weight_penalty = c("l2_to_uniform", "entropy"),
-    cox_weight_cap = 1.0,
-    cox_optim_maxit = 4000,
-    intermediate_learners = c("surv.coxph"),
-    verbose = FALSE,
-    model_args = list()
+  feature_table, sample_metadata, feature_metadata, valid_feature_table = NULL,
+  valid_sample_metadata = NULL, base_learner = "surv.coxph", folds = 5, seed = 123,
+  run_screening = FALSE, screen_pct = NULL, do_early_fusion = TRUE, weight_method = c(
+    "COX",
+    "UNIFORM", "IBS"
+  ), ibs_grid_n = 30, ibs_maxit = 3000, ibs_shrink_to_uniform = 0.1,
+  cox_t_vec = NULL, cox_t_vec_probs = c(0.05, 0.25, 0.5, 0.75, 0.95), cox_layer_score = c(
+    "sum",
+    "mean", "l2"
+  ), cox_eps = 1e-12, cox_weight_lambda = 0.02, cox_weight_penalty = c(
+    "l2_to_uniform",
+    "entropy"
+  ), cox_weight_cap = 1, cox_optim_maxit = 4000, intermediate_learners = c("surv.coxph"),
+  verbose = FALSE, model_args = list()
 ) {
   .vmsg <- function(...) {
-    if (isTRUE(verbose)) cat(paste0(...), "\n")
+    if (isTRUE(verbose)) {
+      message(...)
+    }
     invisible(NULL)
   }
   .fmt <- function(x) {
-    if (length(x) == 0L || is.na(x) || !is.finite(x)) return("NA")
+    if (length(x) == 0L || is.na(x) || !is.finite(x)) {
+      return("NA")
+    }
     sprintf("%.4f", as.numeric(x))
   }
 
   supported <- c(
-    "surv.coxph",
-    "surv.glmnet",
-    "surv.ranger",
-    "surv.ranger.extratrees",
-    "surv.ranger.maxstat",
-    "surv.ranger.C",
-    "surv.rfsrc",
-    "surv.coxboost",
-    "surv.gbm",
-    "surv.xgboost.cox",
-    "surv.xgboost.aft",
-    "surv.mboost",
-    "surv.bart"
+    "surv.coxph", "surv.glmnet", "surv.ranger", "surv.ranger.extratrees",
+    "surv.ranger.maxstat", "surv.ranger.C", "surv.rfsrc", "surv.coxboost", "surv.gbm",
+    "surv.xgboost.cox", "surv.xgboost.aft", "surv.mboost", "surv.bart"
   )
 
   validated <- .validate_survival_core_inputs(
-    feature_table = feature_table,
-    sample_metadata = sample_metadata,
-    feature_metadata = feature_metadata,
-    base_learner = base_learner,
-    supported_learners = supported,
+    feature_table = feature_table, sample_metadata = sample_metadata,
+    feature_metadata = feature_metadata, base_learner = base_learner, supported_learners = supported,
     model_args = model_args
   )
 
@@ -1280,10 +1333,8 @@
   cox_layer_score <- match.arg(cox_layer_score)
   cox_weight_penalty <- match.arg(cox_weight_penalty)
   screening <- .resolve_screening_args(
-    run_screening = run_screening,
-    screen_pct = screen_pct,
-    base_screener = NULL,
-    context = "ILsurv"
+    run_screening = run_screening, screen_pct = screen_pct,
+    base_screener = NULL, context = "ILsurv"
   )
   model_args <- validated$model_args
   feature_metadata <- validated$feature_metadata
@@ -1310,7 +1361,8 @@
   full_layer_models <- list()
 
   for (lay in layers) {
-    lay_features <- rownames(feature_metadata)[feature_metadata$featureType == lay]
+    lay_features <- rownames(feature_metadata)[feature_metadata$featureType ==
+      lay]
     X <- t(feature_table[lay_features, , drop = FALSE])
     if (ncol(X) == 0L) {
       .vmsg("[", lay, "] skipped (no features)")
@@ -1318,12 +1370,14 @@
     }
     .vmsg("[", lay, "] fitting OOF + full model (", ncol(X), " features)")
     method_opts <- model_args[[base_learner]]
-    if (is.null(method_opts)) method_opts <- list()
+    if (is.null(method_opts)) {
+      method_opts <- list()
+    }
     if (isTRUE(screening$enabled)) {
-      method_opts <- utils::modifyList(
-        method_opts,
-        list(screen_pct = screening$screen_pct, screen_method = "cox")
-      )
+      method_opts <- utils::modifyList(method_opts, list(
+        screen_pct = screening$screen_pct,
+        screen_method = "cox"
+      ))
     }
     oof_out <- .fit_oof(base_learner, X, times, events, fold_id = fold_id, method_args = method_opts)
     preds_list[[lay]] <- as.numeric(oof_out$oof_risk)
@@ -1333,7 +1387,9 @@
     .vmsg("[", lay, "] done")
   }
 
-  if (length(preds_list) == 0L) stop("No layer predictions were generated.", call. = FALSE)
+  if (length(preds_list) == 0L) {
+    stop("No layer predictions were generated.", call. = FALSE)
+  }
 
   layer_risk_mat <- as.matrix(as.data.frame(preds_list, check.names = FALSE))
   colnames(layer_risk_mat) <- names(preds_list)
@@ -1345,9 +1401,7 @@
   names(single_layer_metrics) <- names(preds_list)
   if (isTRUE(verbose)) {
     for (lay in names(single_layer_metrics)) {
-      .vmsg(
-        "  [single:", lay, "] cindex=", .fmt(single_layer_metrics[[lay]]$cindex)
-      )
+      .vmsg("  [single:", lay, "] cindex=", .fmt(single_layer_metrics[[lay]]$cindex))
     }
   }
 
@@ -1357,27 +1411,30 @@
     all_features <- rownames(feature_metadata)
     X_all <- t(feature_table[all_features, , drop = FALSE])
     method_opts <- model_args[[base_learner]]
-    if (is.null(method_opts)) method_opts <- list()
-    if (isTRUE(screening$enabled)) {
-      method_opts <- utils::modifyList(
-        method_opts,
-        list(screen_pct = screening$screen_pct, screen_method = "cox")
-      )
+    if (is.null(method_opts)) {
+      method_opts <- list()
     }
-    early_oof <- .fit_oof(base_learner, X_all, times, events, fold_id = fold_id, method_args = method_opts)
+    if (isTRUE(screening$enabled)) {
+      method_opts <- utils::modifyList(method_opts, list(
+        screen_pct = screening$screen_pct,
+        screen_method = "cox"
+      ))
+    }
+    early_oof <- .fit_oof(base_learner, X_all, times, events,
+      fold_id = fold_id,
+      method_args = method_opts
+    )
     early_met <- .compute_auc_cindex(times, events, early_oof$oof_risk)
     signs_all <- .get_univariate_signs(as.data.frame(X_all), times, events)
     imp_all <- early_oof$importance
     imp_all_signed <- imp_all * signs_all[names(imp_all)]
     early_fusion_out <- list(
-      train_risk = early_oof$oof_risk,
-      train_cindex = early_met$cindex,
-      train_auc = early_met$auc,
-      train_auc_mean = early_met$auc_mean,
-      train_brier = early_met$brier,
-      train_ibs = early_met$ibs,
-      combined_importance = imp_all_signed,
-      full_model = .train_full(base_learner, X_all, times, events, method_args = method_opts)
+      train_risk = early_oof$oof_risk, train_cindex = early_met$cindex,
+      train_auc = early_met$auc, train_auc_mean = early_met$auc_mean, train_brier = early_met$brier,
+      train_ibs = early_met$ibs, combined_importance = imp_all_signed, full_model = .train_full(base_learner,
+        X_all, times, events,
+        method_args = method_opts
+      )
     )
     .vmsg("  [early] cindex=", .fmt(early_fusion_out$train_cindex))
   } else {
@@ -1393,9 +1450,7 @@
     for (lay in names(preds_list)) {
       layer_surv_train[[lay]] <- .risk_to_surv_matrix(
         risk_train = preds_list[[lay]],
-        time_train = times,
-        event_train = events,
-        risk_new = preds_list[[lay]],
+        time_train = times, event_train = events, risk_new = preds_list[[lay]],
         time_grid = ibs_time_grid
       )
     }
@@ -1403,51 +1458,41 @@
 
   .vmsg("Learning late-fusion weights")
   weights <- .learn_weights(
-    layer_risk_mat = layer_risk_mat,
-    times = times,
-    events = events,
-    weight_method = weight_method,
-    surv_mat_list = layer_surv_train,
-    ibs_time_grid = ibs_time_grid,
-    ibs_maxit = ibs_maxit,
-    ibs_shrink_to_uniform = ibs_shrink_to_uniform,
-    cox_t_vec = cox_t_vec,
-    cox_t_vec_probs = cox_t_vec_probs,
-    cox_layer_score = cox_layer_score,
-    cox_eps = cox_eps,
-    cox_weight_lambda = cox_weight_lambda,
-    cox_weight_penalty = cox_weight_penalty,
-    cox_weight_cap = cox_weight_cap,
-    cox_optim_maxit = cox_optim_maxit
+    layer_risk_mat = layer_risk_mat, times = times, events = events,
+    weight_method = weight_method, surv_mat_list = layer_surv_train, ibs_time_grid = ibs_time_grid,
+    ibs_maxit = ibs_maxit, ibs_shrink_to_uniform = ibs_shrink_to_uniform, cox_t_vec = cox_t_vec,
+    cox_t_vec_probs = cox_t_vec_probs, cox_layer_score = cox_layer_score, cox_eps = cox_eps,
+    cox_weight_lambda = cox_weight_lambda, cox_weight_penalty = cox_weight_penalty,
+    cox_weight_cap = cox_weight_cap, cox_optim_maxit = cox_optim_maxit
   )
   weight_details <- attr(weights, "method_details")
   if (weight_method == "IBS") {
-    combined_train_surv <- Reduce(`+`, lapply(names(weights), function(lay) layer_surv_train[[lay]] * weights[[lay]]))
+    combined_train_surv <- Reduce(`+`, lapply(names(weights), function(lay) {
+      layer_surv_train[[lay]] *
+        weights[[lay]]
+    }))
     combined_train_risk <- -rowMeans(combined_train_surv)
-  } else if (weight_method == "COX" &&
-             !is.null(weight_details$scaling) &&
-             !is.null(layer_surv_train) &&
-             !is.null(weight_details$time_grid) &&
-             !is.null(weight_details$t_vec)) {
+  } else if (weight_method == "COX" && !is.null(weight_details$scaling) && !is.null(layer_surv_train) &&
+    !is.null(weight_details$time_grid) && !is.null(weight_details$t_vec)) {
     cox_train <- .build_cox_risk_matrix(
-      surv_mat_list = layer_surv_train,
-      layers = names(weights),
-      time_grid = as.numeric(weight_details$time_grid),
-      t_vec = as.numeric(weight_details$t_vec),
-      t_vec_probs = cox_t_vec_probs,
-      layer_score = cox_layer_score,
-      eps = cox_eps
+      surv_mat_list = layer_surv_train, layers = names(weights),
+      time_grid = as.numeric(weight_details$time_grid), t_vec = as.numeric(weight_details$t_vec),
+      t_vec_probs = cox_t_vec_probs, layer_score = cox_layer_score, eps = cox_eps
     )
     R_train_raw <- cox_train$R_raw
     sc <- weight_details$scaling
     R_train <- sweep(R_train_raw, 2, sc$center[colnames(R_train_raw)], "-")
     R_train <- sweep(R_train, 2, sc$scale[colnames(R_train_raw)], "/")
-    combined_train_risk <- as.numeric(R_train[, names(weights), drop = FALSE] %*% weights)
+    combined_train_risk <- as.numeric(R_train[, names(weights), drop = FALSE] %*%
+      weights)
   } else {
-    combined_train_risk <- as.numeric(layer_risk_mat[, names(weights), drop = FALSE] %*% weights)
+    combined_train_risk <- as.numeric(layer_risk_mat[, names(weights), drop = FALSE] %*%
+      weights)
   }
   late_train <- .compute_auc_cindex(times, events, combined_train_risk)
-  .vmsg("  [late] weights: ", paste(names(weights), "=", sprintf("%.4f", weights), collapse = ", "))
+  .vmsg("  [late] weights: ", paste(names(weights), "=", sprintf("%.4f", weights),
+    collapse = ", "
+  ))
   .vmsg("  [late] cindex=", .fmt(late_train$cindex))
 
   combined_importance <- unlist(lapply(names(weights), function(lay) {
@@ -1463,38 +1508,34 @@
   intermediate_train <- list()
   intermediate_models <- list()
   if (length(intermediate_learners) > 0L) {
-    .vmsg("Running intermediate fusion learners: ", paste(intermediate_learners, collapse = ", "))
+    .vmsg("Running intermediate fusion learners: ", paste(intermediate_learners,
+      collapse = ", "
+    ))
     for (learner_id in intermediate_learners) {
       if (!(learner_id %in% supported)) {
-        warning("Skipping unsupported intermediate learner: ", learner_id, call. = FALSE)
+        warning("Skipping unsupported intermediate learner: ", learner_id,
+          call. = FALSE
+        )
         .vmsg("  [intermediate:", learner_id, "] skipped (unsupported)")
         next
       }
       .vmsg("  [intermediate:", learner_id, "] fitting")
       method_opts <- model_args[[learner_id]]
-      if (is.null(method_opts)) method_opts <- list()
+      if (is.null(method_opts)) {
+        method_opts <- list()
+      }
       inter_oof <- .fit_oof(
-        method = learner_id,
-        X = layer_risk_mat,
-        times = times,
-        events = events,
-        fold_id = fold_id,
-        method_args = method_opts
+        method = learner_id, X = layer_risk_mat, times = times,
+        events = events, fold_id = fold_id, method_args = method_opts
       )
       met <- .compute_auc_cindex(times, events, inter_oof$oof_risk)
       intermediate_train[[learner_id]] <- list(
-        train_cindex = met$cindex,
-        train_auc = met$auc,
-        train_auc_mean = met$auc_mean,
-        train_brier = met$brier,
-        train_ibs = met$ibs
+        train_cindex = met$cindex, train_auc = met$auc,
+        train_auc_mean = met$auc_mean, train_brier = met$brier, train_ibs = met$ibs
       )
       intermediate_models[[learner_id]] <- .train_full(
         method = learner_id,
-        X = layer_risk_mat,
-        times = times,
-        events = events,
-        method_args = method_opts
+        X = layer_risk_mat, times = times, events = events, method_args = method_opts
       )
       .vmsg("  [intermediate:", learner_id, "] cindex=", .fmt(met$cindex))
     }
@@ -1506,7 +1547,9 @@
   if (!is.null(valid_feature_table) && !is.null(valid_sample_metadata)) {
     .vmsg("Running validation")
     if (!all(c("time", "event") %in% colnames(valid_sample_metadata))) {
-      stop("valid_sample_metadata must contain columns 'time' and 'event'.", call. = FALSE)
+      stop("valid_sample_metadata must contain columns 'time' and 'event'.",
+        call. = FALSE
+      )
     }
     V_times <- as.numeric(valid_sample_metadata$time)
     V_events <- as.numeric(valid_sample_metadata$event)
@@ -1515,11 +1558,18 @@
     single_valid_metrics <- list()
 
     for (lay in names(full_layer_models)) {
-      lay_features <- rownames(feature_metadata)[feature_metadata$featureType == lay]
+      lay_features <- rownames(feature_metadata)[feature_metadata$featureType ==
+        lay]
       Xv <- t(valid_feature_table[lay_features, , drop = FALSE])
-      pred_v <- .predict_surv_risk(base_learner, full_layer_models[[lay]], Xv)
+      pred_v <- .predict_surv_risk(
+        base_learner, full_layer_models[[lay]],
+        Xv
+      )
       preds_valid_list[[lay]] <- pred_v
-      single_valid_metrics[[lay]] <- .compute_auc_cindex(V_times, V_events, pred_v)
+      single_valid_metrics[[lay]] <- .compute_auc_cindex(
+        V_times, V_events,
+        pred_v
+      )
       .vmsg("  [valid single:", lay, "] cindex=", .fmt(single_valid_metrics[[lay]]$cindex))
     }
 
@@ -1530,37 +1580,36 @@
       for (lay in names(preds_valid_list)) {
         layer_surv_valid[[lay]] <- .risk_to_surv_matrix(
           risk_train = preds_list[[lay]],
-          time_train = times,
-          event_train = events,
-          risk_new = preds_valid_list[[lay]],
+          time_train = times, event_train = events, risk_new = preds_valid_list[[lay]],
           time_grid = ibs_time_grid
         )
       }
     }
 
     if (weight_method == "IBS") {
-      combined_valid_surv <- Reduce(`+`, lapply(names(weights), function(lay) layer_surv_valid[[lay]] * weights[[lay]]))
+      combined_valid_surv <- Reduce(`+`, lapply(names(weights), function(lay) {
+        layer_surv_valid[[lay]] *
+          weights[[lay]]
+      }))
       combined_valid_risk <- -rowMeans(combined_valid_surv)
-    } else if (weight_method == "COX" &&
-               !is.null(weight_details$scaling) &&
-               !is.null(weight_details$time_grid) &&
-               !is.null(weight_details$t_vec)) {
+    } else if (weight_method == "COX" && !is.null(weight_details$scaling) && !is.null(weight_details$time_grid) &&
+      !is.null(weight_details$t_vec)) {
       cox_valid <- .build_cox_risk_matrix(
         surv_mat_list = layer_surv_valid,
-        layers = names(weights),
-        time_grid = as.numeric(weight_details$time_grid),
-        t_vec = as.numeric(weight_details$t_vec),
-        t_vec_probs = cox_t_vec_probs,
-        layer_score = cox_layer_score,
-        eps = cox_eps
+        layers = names(weights), time_grid = as.numeric(weight_details$time_grid),
+        t_vec = as.numeric(weight_details$t_vec), t_vec_probs = cox_t_vec_probs,
+        layer_score = cox_layer_score, eps = cox_eps
       )
       Rv_raw <- cox_valid$R_raw
       sc <- weight_details$scaling
       Rv <- sweep(Rv_raw, 2, sc$center[colnames(Rv_raw)], "-")
       Rv <- sweep(Rv, 2, sc$scale[colnames(Rv_raw)], "/")
-      combined_valid_risk <- as.numeric(Rv[, names(weights), drop = FALSE] %*% weights)
+      combined_valid_risk <- as.numeric(Rv[, names(weights), drop = FALSE] %*%
+        weights)
     } else {
-      combined_valid_risk <- as.numeric(layer_risk_valid[, names(weights), drop = FALSE] %*% weights)
+      combined_valid_risk <- as.numeric(layer_risk_valid[, names(weights),
+        drop = FALSE
+      ] %*% weights)
     }
     late_valid <- .compute_auc_cindex(V_times, V_events, combined_valid_risk)
     .vmsg("  [valid late] cindex=", .fmt(late_valid$cindex))
@@ -1569,7 +1618,10 @@
     if (isTRUE(do_early_fusion) && !is.null(early_fusion_out$full_model)) {
       all_features <- rownames(feature_metadata)
       Xv_all <- t(valid_feature_table[all_features, , drop = FALSE])
-      risk_early_v <- .predict_surv_risk(base_learner, early_fusion_out$full_model, Xv_all)
+      risk_early_v <- .predict_surv_risk(
+        base_learner, early_fusion_out$full_model,
+        Xv_all
+      )
       early_valid <- .compute_auc_cindex(V_times, V_events, risk_early_v)
       .vmsg("  [valid early] cindex=", .fmt(early_valid$cindex))
     }
@@ -1577,79 +1629,70 @@
     intermediate_valid <- list()
     if (length(intermediate_models) > 0L) {
       for (learner_id in names(intermediate_models)) {
-        rv <- .predict_surv_risk(learner_id, intermediate_models[[learner_id]], layer_risk_valid)
+        rv <- .predict_surv_risk(
+          learner_id, intermediate_models[[learner_id]],
+          layer_risk_valid
+        )
         mv <- .compute_auc_cindex(V_times, V_events, rv)
         intermediate_valid[[learner_id]] <- list(
           valid_cindex = mv$cindex,
-          valid_auc = mv$auc,
-          valid_auc_mean = mv$auc_mean,
-          valid_brier = mv$brier,
+          valid_auc = mv$auc, valid_auc_mean = mv$auc_mean, valid_brier = mv$brier,
           valid_ibs = mv$ibs
         )
         .vmsg("  [valid intermediate:", learner_id, "] cindex=", .fmt(mv$cindex))
       }
     }
 
-    valid_out_formatted <- list(
-      single = list(
-        valid_cindex = lapply(single_valid_metrics, function(x) x$cindex),
-        valid_auc = lapply(single_valid_metrics, function(x) x$auc),
-        valid_auc_mean = lapply(single_valid_metrics, function(x) x$auc_mean),
-        valid_brier = lapply(single_valid_metrics, function(x) x$brier),
-        valid_ibs = lapply(single_valid_metrics, function(x) x$ibs)
-      ),
-      early = if (is.null(early_valid)) NULL else list(
+    valid_out_formatted <- list(single = list(
+      valid_cindex = lapply(
+        single_valid_metrics,
+        function(x) x$cindex
+      ), valid_auc = lapply(single_valid_metrics, function(x) x$auc),
+      valid_auc_mean = lapply(single_valid_metrics, function(x) x$auc_mean),
+      valid_brier = lapply(single_valid_metrics, function(x) x$brier), valid_ibs = lapply(
+        single_valid_metrics,
+        function(x) x$ibs
+      )
+    ), early = if (is.null(early_valid)) {
+      NULL
+    } else {
+      list(
         valid_cindex = early_valid$cindex,
-        valid_auc = early_valid$auc,
-        valid_auc_mean = early_valid$auc_mean,
-        valid_brier = early_valid$brier,
+        valid_auc = early_valid$auc, valid_auc_mean = early_valid$auc_mean, valid_brier = early_valid$brier,
         valid_ibs = early_valid$ibs
-      ),
-      late = list(
-        valid_cindex = late_valid$cindex,
-        valid_auc = late_valid$auc,
-        valid_auc_mean = late_valid$auc_mean,
-        valid_brier = late_valid$brier,
-        valid_ibs = late_valid$ibs
-      ),
-      intermediate = intermediate_valid
-    )
+      )
+    }, late = list(
+      valid_cindex = late_valid$cindex,
+      valid_auc = late_valid$auc, valid_auc_mean = late_valid$auc_mean, valid_brier = late_valid$brier,
+      valid_ibs = late_valid$ibs
+    ), intermediate = intermediate_valid)
   } else {
     .vmsg("No validation data provided; skipping validation metrics")
   }
 
   train_out <- list(
-    single = list(metrics = single_layer_metrics),
-    early = if (is.null(early_fusion_out)) NULL else list(
-      train_cindex = early_fusion_out$train_cindex,
-      train_auc = early_fusion_out$train_auc,
-      train_auc_mean = early_fusion_out$train_auc_mean,
-      train_brier = early_fusion_out$train_brier,
-      train_ibs = early_fusion_out$train_ibs,
-      combined_importance = early_fusion_out$combined_importance
-    ),
-    late = list(
+    single = list(metrics = single_layer_metrics), early = if (is.null(early_fusion_out)) {
+      NULL
+    } else {
+      list(
+        train_cindex = early_fusion_out$train_cindex,
+        train_auc = early_fusion_out$train_auc, train_auc_mean = early_fusion_out$train_auc_mean,
+        train_brier = early_fusion_out$train_brier, train_ibs = early_fusion_out$train_ibs,
+        combined_importance = early_fusion_out$combined_importance
+      )
+    }, late = list(
       weights = weights,
-      train_cindex = late_train$cindex,
-      train_auc = late_train$auc,
-      train_auc_mean = late_train$auc_mean,
-      train_brier = late_train$brier,
-      train_ibs = late_train$ibs,
-      combined_importance = combined_importance
+      train_cindex = late_train$cindex, train_auc = late_train$auc, train_auc_mean = late_train$auc_mean,
+      train_brier = late_train$brier, train_ibs = late_train$ibs, combined_importance = combined_importance
     ),
     intermediate = intermediate_train
   )
 
   .vmsg("ILsurv completed")
   list(
-    train_out = train_out,
-    valid_out = valid_out_formatted,
-    backend = "bioc_prototype",
-    base_learner = base_learner,
-    supported_learners = supported,
-    fold_id = fold_id,
-    screening_used = isTRUE(screening$enabled),
-    screen_method = if (isTRUE(screening$enabled)) "cox" else NULL,
+    train_out = train_out, valid_out = valid_out_formatted, backend = "bioc_prototype",
+    base_learner = base_learner, supported_learners = supported, fold_id = fold_id,
+    screening_used = isTRUE(screening$enabled), screen_method = if (isTRUE(screening$enabled)) "cox" else NULL,
     screen_pct = screening$screen_pct
   )
 }
@@ -1668,17 +1711,17 @@
 #' @param base_learner Survival base learner.
 #' @param do_early_fusion Logical; run early fusion model.
 #' @param weight_method Late-fusion weighting method. Supported:
-#'   \code{"IBS"}, \code{"COX"}.
+#'   \code{'IBS'}, \code{'COX'}.
 #' @param t_vec Optional explicit time points for COX-based late-fusion feature
 #'   construction.
 #' @param t_vec_probs Quantiles used to derive \code{t_vec} when \code{t_vec}
 #'   is \code{NULL}.
-#' @param layer_score Layer summary on cumhaz increments: \code{"sum"},
-#'   \code{"mean"}, or \code{"l2"}.
+#' @param layer_score Layer summary on cumhaz increments: \code{'sum'},
+#'   \code{'mean'}, or \code{'l2'}.
 #' @param eps Numerical lower bound for survival probabilities.
 #' @param weight_lambda COX-weight optimization regularization strength.
 #' @param weight_penalty COX-weight optimization regularizer:
-#'   \code{"l2_to_uniform"} or \code{"entropy"}.
+#'   \code{'l2_to_uniform'} or \code{'entropy'}.
 #' @param weight_cap Optional cap on any one layer weight (COX method).
 #' @param optim_maxit_cox Maximum iterations for COX-weight optimization.
 #' @param optim_maxit_ibs Maximum iterations for IBS-weight optimization.
@@ -1691,33 +1734,48 @@
 #'
 #' @return List with \code{train_out} and \code{valid_out} in the same nested
 #'   format as previous survival implementations.
+#'
+#' @examples
+#' identical(IL_survival, ILsurv)
+#' if (FALSE) {
+#'   set.seed(1)
+#'   n <- 20
+#'   feature_table <- rbind(
+#'     matrix(rnorm(3 * n), nrow = 3, dimnames = list(paste0("L1_F", 1:3), paste0("S", 1:n))),
+#'     matrix(rnorm(2 * n), nrow = 2, dimnames = list(paste0("L2_F", 1:2), paste0("S", 1:n)))
+#'   )
+#'   sample_metadata <- data.frame(
+#'     subjectID = paste0("ID", 1:n),
+#'     time = rexp(n, rate = 0.1),
+#'     event = rbinom(n, 1, 0.6),
+#'     row.names = colnames(feature_table)
+#'   )
+#'   sample_metadata$Y <- survival::Surv(sample_metadata$time, sample_metadata$event)
+#'   feature_metadata <- data.frame(
+#'     featureID = rownames(feature_table),
+#'     featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
+#'     row.names = rownames(feature_table)
+#'   )
+#'   fit <- ILsurv(
+#'     feature_table = feature_table,
+#'     sample_metadata = sample_metadata,
+#'     feature_metadata = feature_metadata,
+#'     folds = 3
+#'   )
+#'   names(fit)
+#' }
 #' @export
 ILsurv <- function(
-    feature_table,
-    sample_metadata,
-    feature_metadata,
-    valid_feature_table = NULL,
-    valid_sample_metadata = NULL,
-    base_learner = "surv.rfsrc",
-    folds = 5,
-    seed = 123,
-    run_screening = FALSE,
-    screen_pct = NULL,
-    verbose = FALSE,
-    do_early_fusion = TRUE,
-    weight_method = c("IBS", "COX"),
-    t_vec = NULL,
-    t_vec_probs = c(0.05, 0.25, 0.50, 0.75, 0.95),
-    layer_score = c("sum", "mean", "l2"),
-    eps = 1e-12,
-    weight_lambda = 0.02,
-    weight_penalty = c("l2_to_uniform", "entropy"),
-    weight_cap = 1.0,
-    optim_maxit_cox = 4000,
-    optim_maxit_ibs = 300,
-    ibs_shrink_to_uniform = 0,
-    intermediate_learners = c("surv.coxph"),
-    ...
+  feature_table, sample_metadata, feature_metadata, valid_feature_table = NULL,
+  valid_sample_metadata = NULL, base_learner = "surv.rfsrc", folds = 5, seed = 123,
+  run_screening = FALSE, screen_pct = NULL, verbose = FALSE, do_early_fusion = TRUE,
+  weight_method = c("IBS", "COX"), t_vec = NULL, t_vec_probs = c(
+    0.05, 0.25, 0.5,
+    0.75, 0.95
+  ), layer_score = c("sum", "mean", "l2"), eps = 1e-12, weight_lambda = 0.02,
+  weight_penalty = c("l2_to_uniform", "entropy"), weight_cap = 1, optim_maxit_cox = 4000,
+  optim_maxit_ibs = 300, ibs_shrink_to_uniform = 0, intermediate_learners = c("surv.coxph"),
+  ...
 ) {
   weight_method <- match.arg(weight_method)
   layer_score <- match.arg(layer_score)
@@ -1735,45 +1793,28 @@ ILsurv <- function(
   }
   if (length(dots) > 0L) {
     base_args <- model_args[[base_learner]]
-    if (is.null(base_args)) base_args <- list()
+    if (is.null(base_args)) {
+      base_args <- list()
+    }
     model_args[[base_learner]] <- utils::modifyList(base_args, dots)
   }
 
   res <- .ILsurv_bioc_core(
-    feature_table = feature_table,
-    sample_metadata = sample_metadata,
-    feature_metadata = feature_metadata,
-    valid_feature_table = valid_feature_table,
-    valid_sample_metadata = valid_sample_metadata,
-    base_learner = base_learner,
-    folds = folds,
-    seed = seed,
-    run_screening = run_screening,
-    screen_pct = screen_pct,
-    do_early_fusion = do_early_fusion,
-    weight_method = weight_method,
-    ibs_grid_n = 30,
-    ibs_maxit = optim_maxit_ibs,
-    ibs_shrink_to_uniform = ibs_shrink_to_uniform,
-    cox_t_vec = t_vec,
-    cox_t_vec_probs = t_vec_probs,
-    cox_layer_score = layer_score,
-    cox_eps = eps,
-    cox_weight_lambda = weight_lambda,
-    cox_weight_penalty = weight_penalty,
-    cox_weight_cap = weight_cap,
-    cox_optim_maxit = optim_maxit_cox,
-    intermediate_learners = intermediate_learners,
-    verbose = verbose,
-    model_args = model_args
+    feature_table = feature_table, sample_metadata = sample_metadata,
+    feature_metadata = feature_metadata, valid_feature_table = valid_feature_table,
+    valid_sample_metadata = valid_sample_metadata, base_learner = base_learner,
+    folds = folds, seed = seed, run_screening = run_screening, screen_pct = screen_pct,
+    do_early_fusion = do_early_fusion, weight_method = weight_method, ibs_grid_n = 30,
+    ibs_maxit = optim_maxit_ibs, ibs_shrink_to_uniform = ibs_shrink_to_uniform,
+    cox_t_vec = t_vec, cox_t_vec_probs = t_vec_probs, cox_layer_score = layer_score,
+    cox_eps = eps, cox_weight_lambda = weight_lambda, cox_weight_penalty = weight_penalty,
+    cox_weight_cap = weight_cap, cox_optim_maxit = optim_maxit_cox, intermediate_learners = intermediate_learners,
+    verbose = verbose, model_args = model_args
   )
 
   list(
-    train_out = res$train_out,
-    valid_out = res$valid_out,
-    screening_used = res$screening_used,
-    screen_method = res$screen_method,
-    screen_pct = res$screen_pct
+    train_out = res$train_out, valid_out = res$valid_out, screening_used = res$screening_used,
+    screen_method = res$screen_method, screen_pct = res$screen_pct
   )
 }
 

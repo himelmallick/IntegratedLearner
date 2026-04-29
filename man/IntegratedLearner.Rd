@@ -11,6 +11,8 @@ IntegratedLearner(
   PCL_valid = NULL,
   experiment = NULL,
   assay.type = NULL,
+  outcome_col = "Y",
+  subject_id_col = "subjectID",
   na.rm = FALSE,
   folds = 5,
   seed = 1234,
@@ -36,8 +38,9 @@ IntegratedLearner(
 Each experiment corresponds to one view (omics layer), usually stored as a
 \code{SummarizedExperiment} or \code{TreeSummarizedExperiment}.
 The \code{colData} of every selected experiment must contain a column
-named \code{"Y"} describing the outcome of interest (binary, continuous,
-or survival-encoded).}
+named by \code{outcome_col} describing the outcome of interest (binary,
+continuous, or survival-encoded), and a subject identifier column named by
+\code{subject_id_col}.}
 
 \item{MAE_valid}{Optional \code{MultiAssayExperiment} containing an
 independent validation/test set for which prediction is desired.
@@ -57,6 +60,12 @@ if supplied). If \code{NULL}, all experiments in \code{MAE_train} are used.}
 \item{assay.type}{Optional character vector of assay names, one per
 experiment. If \code{NULL}, each selected experiment must contain exactly
 one assay; otherwise, the user must supply \code{assay.type}.}
+
+\item{outcome_col}{Outcome column name in MAE/PCL sample metadata. Defaults
+to \code{"Y"} for backward compatibility.}
+
+\item{subject_id_col}{Subject identifier column name in MAE/PCL sample
+metadata. Defaults to \code{"subjectID"} for backward compatibility.}
 
 \item{na.rm}{Logical; if \code{TRUE}, features with missing values are
 dropped after extraction.}
@@ -84,14 +93,14 @@ or external validation data.}
 (\code{(0,100]}).}
 
 \item{filter_method}{Optional feature-filter method for non-survival runs.
-Supported values: \code{"prevalence"} and \code{"variance"}.}
+Supported values: \code{'prevalence'} and \code{'variance'}.}
 
 \item{filter_pct}{Optional retention percentage (in \code{(0,100]}) for the
-selected \code{filter_method}. Keeps the top \code{filter_pct}\\% features.}
+selected \code{filter_method}. Keeps the top \code{filter_pct} percent features.}
 
 \item{prevalence_pct}{Optional retention percentage (in \code{(0,100]}) for
 prevalence-based feature filtering before model fitting. Deprecated alias
-of \code{filter_pct} with \code{filter_method = "prevalence"}.}
+of \code{filter_pct} with \code{filter_method = 'prevalence'}.}
 
 \item{meta_learner}{Meta-learner for late fusion (stacked generalization).
 Defaults to \code{`SL.nnls.auc`}.
@@ -147,6 +156,38 @@ Internally, \code{IntegratedLearner()} converts the MultiAssayExperiment
 into tabular multi-view matrices and then calls \code{IL_conbin} for
 continuous/binary outcomes or \code{IL_survival} for time-to-event outcomes,
 depending on the specified \code{family}.
+}
+\examples{
+is.function(IntegratedLearner)
+if (FALSE) {
+  set.seed(1)
+  n <- 20
+  feature_table <- rbind(
+    matrix(rnorm(3 * n), nrow = 3, dimnames = list(paste0("L1_F", 1:3), paste0("S", 1:n))),
+    matrix(rnorm(2 * n), nrow = 2, dimnames = list(paste0("L2_F", 1:2), paste0("S", 1:n)))
+  )
+  sample_metadata <- data.frame(
+    subjectID = paste0("ID", 1:n), Y = rnorm(n),
+    row.names = colnames(feature_table)
+  )
+  feature_metadata <- data.frame(
+    featureID = rownames(feature_table),
+    featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
+    row.names = rownames(feature_table)
+  )
+  pcl <- list(
+    feature_table = feature_table,
+    sample_metadata = sample_metadata,
+    feature_metadata = feature_metadata
+  )
+  fit <- IntegratedLearner(
+    PCL_train = pcl, folds = 3, base_learner = "SL.mean",
+    run_stacked = FALSE, run_concat = FALSE, print_learner = FALSE,
+    family = stats::gaussian()
+  )
+  names(fit)
+}
+
 }
 \author{
 Himel Mallick, \email{him4004@med.cornell.edu}

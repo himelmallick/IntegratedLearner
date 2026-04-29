@@ -14,7 +14,7 @@ SL.BART(
   id,
   num_trees = 50,
   num_burn_in = 250,
-  verbose = F,
+  verbose = FALSE,
   alpha = 0.95,
   beta = 2,
   k = 2,
@@ -33,7 +33,7 @@ SL.BART(
 
 \item{newX}{Optional dataframe to predict the outcome}
 
-\item{family}{"gaussian" for regression, "binomial" for binary
+\item{family}{'gaussian' for regression, 'binomial' for binary
 classification}
 
 \item{obsWeights}{Optional observation-level weights (supported but not tested)}
@@ -43,7 +43,7 @@ currently).}
 
 \item{num_trees}{The number of trees to be grown in the sum-of-trees model.}
 
-\item{num_burn_in}{Number of MCMC samples to be discarded as "burn-in".}
+\item{num_burn_in}{Number of MCMC samples to be discarded as 'burn-in'.}
 
 \item{verbose}{Prints information about progress of the algorithm to the
 screen.}
@@ -56,7 +56,7 @@ nonterminal or not.}
 
 \item{k}{For regression, k determines the prior probability that E(Y|X) is
 contained in the interval \eqn{(y_{min}, y_{max})}, based on a normal
-distribution. For example, when k=2, the prior probability is 95\\%. For
+distribution. For example, when k=2, the prior probability is 95 percent. For
 classification, k determines the prior probability that E(Y|X) is between
 (-3,3). Note that a larger value of k results in more shrinkage and a more
 conservative fit.}
@@ -79,6 +79,26 @@ will require additional RAM.}
 
 \item{...}{Additional arguments (not used)}
 }
+\value{
+A list with elements \code{pred} (predictions for \code{newX}) and
+\code{fit} (the fitted model object).
+}
 \description{
 Support bayesian additive regression trees via the bartMachine package.
+}
+\examples{
+is.function(SL.BART)
+if (FALSE) {
+  set.seed(1)
+  X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
+  Y <- rnorm(20)
+  fit <- SL.BART(
+    Y = Y, X = X, newX = X[1:3, ],
+    family = stats::gaussian(),
+    obsWeights = rep(1, nrow(X)), id = seq_len(nrow(X)),
+    num_trees = 5, num_burn_in = 5, num_iterations_after_burn_in = 20
+  )
+  fit$pred
+}
+
 }

@@ -1,5 +1,5 @@
-
-# This is a basic utility function to plot the credible intervals based on BART posterior samples.
+# This is a utility function to plot credible intervals based on
+# BART posterior samples.
 # Depends on the library bayesplot.
 credint.learner <- function(fit,
                             test = FALSE,
@@ -16,14 +16,13 @@ credint.learner <- function(fit,
                             model = NULL,
                             class = NULL,
                             ...) {
-  
   .require_package("bayesplot")
   .require_package("ggplot2")
-  
+
   # Multiclass BART path (native mbart backend)
   if (identical(fit$family, "multinomial")) {
     .require_package("BART")
-    
+
     if (isTRUE(test)) {
       if (!isTRUE(fit$test)) {
         stop("No test set information available as part of the fit object", call. = FALSE)
@@ -36,32 +35,32 @@ credint.learner <- function(fit,
       dataY <- fit$Y_train
       prob_src <- fit$prob.train
     }
-    
+
     layer_names <- names(fit$model_fits$model_layers)
     layer_is_mbart <- vapply(
       fit$model_fits$model_layers,
       function(m) is.list(m) && identical(m$learner_id, "mbart"),
       logical(1)
     )
-    
+
     stacked_is_mbart <- !is.null(fit$model_fits$model_stacked) &&
       identical(fit$model_fits$model_stacked$learner_id, "mbart")
     concat_is_mbart <- !is.null(fit$model_fits$model_concat) &&
       identical(fit$model_fits$model_concat$learner_id, "mbart")
-    
+
     available_models <- c(
       layer_names[layer_is_mbart],
       if (stacked_is_mbart) "stacked",
       if (concat_is_mbart) "concatenated"
     )
-    
+
     if (length(available_models) == 0L) {
       stop(
         "For multiclass uncertainty, at least one fitted model must use 'mbart'.",
         call. = FALSE
       )
     }
-    
+
     if (is.null(model)) {
       if ("stacked" %in% available_models) {
         model <- "stacked"
@@ -71,7 +70,7 @@ credint.learner <- function(fit,
         model <- available_models[1]
       }
     }
-    
+
     if (!(model %in% available_models)) {
       stop(
         "Requested model '", model, "' is not available as an mbart model. ",
@@ -79,7 +78,7 @@ credint.learner <- function(fit,
         call. = FALSE
       )
     }
-    
+
     if (model %in% layer_names) {
       fit_obj <- fit$model_fits$model_layers[[model]]
       newX <- dataX[[model]]
@@ -116,7 +115,7 @@ credint.learner <- function(fit,
       }
       newX <- full_dat[, feat, drop = FALSE]
     }
-    
+
     class_levels <- fit$class_levels
     if (is.null(class_levels) || length(class_levels) < 2L) {
       stop("Could not determine multiclass levels from fit object.", call. = FALSE)
@@ -131,13 +130,13 @@ credint.learner <- function(fit,
         call. = FALSE
       )
     }
-    
+
     pred_obj <- stats::predict(fit_obj$model, newdata = as.matrix(newX))
     prob_draws <- pred_obj$prob.test
     if (is.null(prob_draws)) {
       stop("mbart prediction did not return posterior probability draws.", call. = FALSE)
     }
-    
+
     prob_draws <- as.matrix(prob_draws)
     n_obs <- nrow(newX)
     n_cls <- length(class_levels)
@@ -148,39 +147,39 @@ credint.learner <- function(fit,
         call. = FALSE
       )
     }
-    
+
     cls_idx <- match(class, class_levels)
     cls_draws <- matrix(NA_real_, nrow = nrow(prob_draws), ncol = n_obs)
     for (i in seq_len(nrow(prob_draws))) {
       p_i <- matrix(prob_draws[i, ], nrow = n_obs, ncol = n_cls, byrow = TRUE)
       cls_draws[i, ] <- p_i[, cls_idx]
     }
-    
+
     sample_ids <- rownames(newX)
     if (is.null(sample_ids)) {
       sample_ids <- paste0("sample_", seq_len(n_obs))
     }
     colnames(cls_draws) <- sample_ids
-    
+
     post_means <- colMeans(cls_draws)
     ord <- order(post_means, decreasing = FALSE)
     ord_names <- sample_ids[ord]
     cls_draws <- cls_draws[, ord, drop = FALSE]
-    
+
     point_x <- rep(NA_real_, length(ord_names))
     if (!is.null(dataY)) {
       yy <- as.character(dataY)
       names(yy) <- rownames(newX)
       point_x <- as.numeric(yy[ord_names] == class)
     }
-    
+
     if (is.null(title)) {
       title <- paste0("Posterior CI for P(Y = ", class, ") [", model, "]")
     }
     if (is.null(ylab)) {
       ylab <- paste0("P(Y = ", class, ")")
     }
-    
+
     alpha_outer <- (1 - prob_outer) / 2
     alpha_inner <- (1 - prob_inner) / 2
     lower_outer <- apply(cls_draws, 2, stats::quantile, probs = alpha_outer, na.rm = TRUE)
@@ -188,7 +187,7 @@ credint.learner <- function(fit,
     lower_inner <- apply(cls_draws, 2, stats::quantile, probs = alpha_inner, na.rm = TRUE)
     upper_inner <- apply(cls_draws, 2, stats::quantile, probs = 1 - alpha_inner, na.rm = TRUE)
     post_mean <- colMeans(cls_draws)
-    
+
     n_plot <- length(ord_names)
     plot_df <- data.frame(
       obs = seq_len(n_plot),
@@ -200,11 +199,11 @@ credint.learner <- function(fit,
       truth = point_x,
       stringsAsFactors = FALSE
     )
-    
+
     if (is.null(xlab) || identical(xlab, "Observations")) {
       xlab <- "Observations (ordered by posterior mean)"
     }
-    
+
     p <- ggplot2::ggplot(plot_df, ggplot2::aes(x = obs, y = mean)) +
       ggplot2::geom_ribbon(
         ggplot2::aes(ymin = lower_outer, ymax = upper_outer),
@@ -235,10 +234,10 @@ credint.learner <- function(fit,
         axis.title  = ggplot2::element_text(size = ggplot2::rel(size.lab)),
         axis.text   = ggplot2::element_text(size = ggplot2::rel(size.axis))
       )
-    
+
     return(p)
   }
-  
+
   if (!(fit$base_learner == "SL.BART" && fit$meta_learner == "SL.nnls.auc")) {
     stop(
       "Credible Interval feature is currently only available for ",
@@ -246,11 +245,11 @@ credint.learner <- function(fit,
       call. = FALSE
     )
   }
-  
+
   .require_package("bartMachine")
-  
+
   weights <- fit$weights
-  
+
   if (isTRUE(test)) {
     if (!isTRUE(fit$test)) stop("No test set information available as part of the fit object", call. = FALSE)
     dataX <- fit$X_test_layers
@@ -259,13 +258,13 @@ credint.learner <- function(fit,
     dataX <- fit$X_train_layers
     dataY <- fit$Y_train
   }
-  
+
   #############################
   # Extract posterior samples #
   #############################
   post.samples <- vector("list", length(weights))
   names(post.samples) <- names(dataX)
-  
+
   for (i in seq_along(post.samples)) {
     post.samples[[i]] <-
       bartMachine::bart_machine_get_posterior(
@@ -273,21 +272,21 @@ credint.learner <- function(fit,
         dataX[[i]]
       )$y_hat_posterior_samples
   }
-  
+
   ##################################
   # Get weighted posterior samples #
   ##################################
   weighted.post.samples <- Reduce("+", Map("*", post.samples, weights))
   rownames(weighted.post.samples) <- rownames(dataX[[1]])
   names(dataY) <- rownames(dataX[[1]])
-  
+
   # Order by posterior mean
   post_means <- rowMeans(weighted.post.samples)
   ord_names <- names(sort(post_means, decreasing = FALSE))
-  
+
   weighted.post.samples <- weighted.post.samples[ord_names, , drop = FALSE]
   dataY <- dataY[ord_names]
-  
+
   # Build plot
   p <- bayesplot::mcmc_intervals(
     t(weighted.post.samples),
@@ -302,7 +301,7 @@ credint.learner <- function(fit,
     ) +
     ggplot2::labs(
       title = title,
-      x = ylab,  # coord_flip swaps axes
+      x = ylab, # coord_flip swaps axes
       y = xlab
     ) +
     style +
@@ -313,6 +312,6 @@ credint.learner <- function(fit,
       axis.text   = ggplot2::element_text(size = ggplot2::rel(size.axis))
     ) +
     ggplot2::coord_flip()
-  
+
   return(p)
 }

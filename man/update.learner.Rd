@@ -4,24 +4,33 @@
 \alias{update.learner}
 \title{Update IntegratedLearner fit object based on layers available in the test set}
 \usage{
-update.learner(
+\method{update}{learner}(
   object,
   feature_table_valid,
   sample_metadata_valid = NULL,
   feature_metadata_valid,
+  outcome_col = NULL,
+  subject_id_col = NULL,
   seed = 1234,
   verbose = FALSE,
   ...
 )
 }
 \arguments{
-\item{object}{fitted "IntegratedLearner" object}
+\item{object}{fitted 'IntegratedLearner' object}
 
 \item{feature_table_valid}{Feature table from validation set. It should be a data frame with features in rows and samples in columns. Feature names should be a subset of training data feature names.}
 
 \item{sample_metadata_valid}{OPTIONAL (can provide feature_table_valid and not this):  Sample-specific metadata table from independent validation set. If provided, it must have the exact same structure as sample_metadata. Default is NULL.}
 
 \item{feature_metadata_valid}{Matrix containing feature names and their corresponding layers. Must be subset of feature_metadata provided in IntegratedLearner object.}
+
+\item{outcome_col}{Optional outcome column name in \code{sample_metadata_valid}.
+If \code{NULL}, uses \code{object$column_map$outcome_col} (or \code{"Y"}).}
+
+\item{subject_id_col}{Optional subject ID column name in
+\code{sample_metadata_valid}. If \code{NULL}, uses
+\code{object$column_map$subject_id_col} (or \code{"subjectID"}).}
 
 \item{seed}{Seed for reproducibility. Default is 1234.}
 
@@ -34,4 +43,16 @@ SL object
 }
 \description{
 Allow update of IntegratedLearner if only a subset of omics layers are available in test set. If all layers and features match, it calls predict.learner()
+}
+\examples{
+is.function(update.learner)
+if (FALSE) {
+  # Build a fit with IntegratedLearner() first, then update with reduced layers.
+  update.learner(
+    object = fit,
+    feature_table_valid = feature_table_valid,
+    sample_metadata_valid = sample_metadata_valid,
+    feature_metadata_valid = feature_metadata_valid
+  )
+}
 }

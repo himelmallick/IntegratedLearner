@@ -24,8 +24,9 @@
 #'   Each experiment corresponds to one view (omics layer), usually stored as a
 #'   \code{SummarizedExperiment} or \code{TreeSummarizedExperiment}.
 #'   The \code{colData} of every selected experiment must contain a column
-#'   named \code{"Y"} describing the outcome of interest (binary, continuous,
-#'   or survival-encoded).
+#'   named by \code{outcome_col} describing the outcome of interest (binary,
+#'   continuous, or survival-encoded), and a subject identifier column named by
+#'   \code{subject_id_col}.
 #' @param MAE_valid Optional \code{MultiAssayExperiment} containing an
 #'   independent validation/test set for which prediction is desired.
 #'   It must contain the same set of experiments used for training, with
@@ -40,6 +41,10 @@
 #' @param assay.type Optional character vector of assay names, one per
 #'   experiment. If \code{NULL}, each selected experiment must contain exactly
 #'   one assay; otherwise, the user must supply \code{assay.type}.
+#' @param outcome_col Outcome column name in MAE/PCL sample metadata. Defaults
+#'   to \code{"Y"} for backward compatibility.
+#' @param subject_id_col Subject identifier column name in MAE/PCL sample
+#'   metadata. Defaults to \code{"subjectID"} for backward compatibility.
 #' @param na.rm Logical; if \code{TRUE}, features with missing values are
 #'   dropped after extraction.
 #' @param folds How many folds in the V-fold nested cross-validation?
@@ -59,12 +64,12 @@
 #' @param screen_pct Percentage of features to retain during screening
 #'   (\code{(0,100]}).
 #' @param filter_method Optional feature-filter method for non-survival runs.
-#'   Supported values: \code{"prevalence"} and \code{"variance"}.
+#'   Supported values: \code{'prevalence'} and \code{'variance'}.
 #' @param filter_pct Optional retention percentage (in \code{(0,100]}) for the
-#'   selected \code{filter_method}. Keeps the top \code{filter_pct}\% features.
+#'   selected \code{filter_method}. Keeps the top \code{filter_pct} percent features.
 #' @param prevalence_pct Optional retention percentage (in \code{(0,100]}) for
 #'   prevalence-based feature filtering before model fitting. Deprecated alias
-#'   of \code{filter_pct} with \code{filter_method = "prevalence"}.
+#'   of \code{filter_pct} with \code{filter_method = 'prevalence'}.
 #' @param meta_learner Meta-learner for late fusion (stacked generalization).
 #'   Defaults to \code{`SL.nnls.auc`}.
 #'   Check out the
@@ -91,6 +96,37 @@
 #' performance estimates, and predicted values for training and, if supplied,
 #' validation data.
 #'
+#' @examples
+#' is.function(IntegratedLearner)
+#' if (FALSE) {
+#'   set.seed(1)
+#'   n <- 20
+#'   feature_table <- rbind(
+#'     matrix(rnorm(3 * n), nrow = 3, dimnames = list(paste0("L1_F", 1:3), paste0("S", 1:n))),
+#'     matrix(rnorm(2 * n), nrow = 2, dimnames = list(paste0("L2_F", 1:2), paste0("S", 1:n)))
+#'   )
+#'   sample_metadata <- data.frame(
+#'     subjectID = paste0("ID", 1:n), Y = rnorm(n),
+#'     row.names = colnames(feature_table)
+#'   )
+#'   feature_metadata <- data.frame(
+#'     featureID = rownames(feature_table),
+#'     featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
+#'     row.names = rownames(feature_table)
+#'   )
+#'   pcl <- list(
+#'     feature_table = feature_table,
+#'     sample_metadata = sample_metadata,
+#'     feature_metadata = feature_metadata
+#'   )
+#'   fit <- IntegratedLearner(
+#'     PCL_train = pcl, folds = 3, base_learner = "SL.mean",
+#'     run_stacked = FALSE, run_concat = FALSE, print_learner = FALSE,
+#'     family = stats::gaussian()
+#'   )
+#'   names(fit)
+#' }
+#'
 #' @author Himel Mallick, \email{him4004@@med.cornell.edu}
 #'
 #' @keywords microbiome, metagenomics, multiomics, scRNASeq, tweedie, singlecell
@@ -98,103 +134,112 @@
 #' @importFrom ranger ranger
 #' @export
 IntegratedLearner <- function(
-    MAE_train   = NULL,
-    MAE_valid   = NULL,
-    PCL_train   = NULL,
-    PCL_valid   = NULL,
-    experiment  = NULL,
-    assay.type  = NULL,
-    na.rm       = FALSE,
-    folds       = 5,
-    seed        = 1234,
-    base_learner = "SL.BART",
-    base_screener = "All",
-    run_screening = FALSE,
-    screen_pct = NULL,
-    filter_method = NULL,
-    filter_pct = NULL,
-    prevalence_pct = NULL,
-    meta_learner  = "SL.nnls.auc",
-    run_concat    = TRUE,
-    run_stacked   = TRUE,
-    verbose       = FALSE,
-    print_learner = TRUE,
-    refit.stack   = FALSE,
-    family        = stats::gaussian(),
-    ...
-){
-  ## ------------------------------------------------------------
-  ## 1. Detect input mode (MAE vs PCL)
+  MAE_train = NULL, MAE_valid = NULL, PCL_train = NULL,
+  PCL_valid = NULL, experiment = NULL, assay.type = NULL, outcome_col = "Y",
+  subject_id_col = "subjectID", na.rm = FALSE, folds = 5,
+  seed = 1234, base_learner = "SL.BART", base_screener = "All", run_screening = FALSE,
+  screen_pct = NULL, filter_method = NULL, filter_pct = NULL, prevalence_pct = NULL,
+  meta_learner = "SL.nnls.auc", run_concat = TRUE, run_stacked = TRUE, verbose = FALSE,
+  print_learner = TRUE, refit.stack = FALSE, family = stats::gaussian(), ...
+) {
+  if (!.is_a_string(outcome_col)) {
+    stop("'outcome_col' must be a single character value.", call. = FALSE)
+  }
+  if (!.is_a_string(subject_id_col)) {
+    stop("'subject_id_col' must be a single character value.", call. = FALSE)
+  }
+
+  ## ------------------------------------------------------------ 1. Detect
+  ## input mode (MAE vs PCL)
   ## ------------------------------------------------------------
   mode <- .infer_input_mode(MAE_train, PCL_train)
-  
-  ## ------------------------------------------------------------
-  ## 2. Prepare inputs according to mode
-  ## ------------------------------------------------------------
-  if (mode == "MAE") { # Add the checks 1) print a message talking about the number of assays (add the name of the assay type)
+
+  ## ------------------------------------------------------------ 2. Prepare
+  ## inputs according to mode
+  ## ------------------------------------------------------------ Add the
+  ## checks 1) print a message talking about the number of assays (add the
+  ## name of the assay type)
+  if (mode == "MAE") {
     prepared <- .prepare_from_MAE(
-      mae_train = MAE_train,
-      mae_valid = MAE_valid,
-      experiment = experiment,
-      assay.type = assay.type,
-      na.rm = na.rm,
-      verbose = verbose
+      mae_train = MAE_train, mae_valid = MAE_valid,
+      experiment = experiment, assay.type = assay.type, na.rm = na.rm, verbose = verbose,
+      outcome_col = outcome_col, subject_id_col = subject_id_col
     )
-  } else {  # mode == "PCL"
+  } else {
+    # mode == 'PCL'
     prepared <- .prepare_from_PCL(
-      PCL_train = PCL_train,
-      PCL_valid = PCL_valid,
-      na.rm     = na.rm
+      PCL_train = PCL_train, PCL_valid = PCL_valid,
+      na.rm = na.rm, outcome_col = outcome_col, subject_id_col = subject_id_col
     )
   }
-  
+
   ## Extract canonical inputs
-  feature_table         <- prepared$feature_table
-  sample_metadata       <- prepared$sample_metadata
-  feature_metadata      <- prepared$feature_metadata
-  feature_table_valid   <- prepared$feature_table_valid
+  feature_table <- prepared$feature_table
+  sample_metadata <- prepared$sample_metadata
+  feature_metadata <- prepared$feature_metadata
+  feature_table_valid <- prepared$feature_table_valid
   sample_metadata_valid <- prepared$sample_metadata_valid
-  
-  # Align validation feature order to training if the sets match
-  if (!is.null(feature_table_valid)) {
-    if (setequal(rownames(feature_table), rownames(feature_table_valid)) &&
-        !identical(rownames(feature_table), rownames(feature_table_valid))) {
-      feature_table_valid <- feature_table_valid[rownames(feature_table), , drop = FALSE]
-    }
-  }
-  
+
   fam_name <- .safe_family_name(family)
   is_survival <- .is_survival_outcome(fam_name, sample_metadata)
+
+  binary_levels <- NULL
+  if (!is_survival) {
+    coerced_train <- .coerce_outcome_by_family(
+      sample_metadata = sample_metadata,
+      family_name = fam_name,
+      context = "training sample_metadata"
+    )
+    sample_metadata <- coerced_train$sample_metadata
+    binary_levels <- coerced_train$binary_levels
+    if (!is.null(sample_metadata_valid)) {
+      coerced_valid <- .coerce_outcome_by_family(
+        sample_metadata = sample_metadata_valid,
+        family_name = fam_name,
+        context = "validation sample_metadata",
+        binary_levels = binary_levels
+      )
+      sample_metadata_valid <- coerced_valid$sample_metadata
+    }
+  }
+
+  # Align validation feature order to training if the sets match
+  if (!is.null(feature_table_valid)) {
+    if (setequal(rownames(feature_table), rownames(feature_table_valid)) && !identical(
+      rownames(feature_table),
+      rownames(feature_table_valid)
+    )) {
+      feature_table_valid <- feature_table_valid[rownames(feature_table), ,
+        drop = FALSE
+      ]
+    }
+  }
+
   is_multiclass <- FALSE
   if (!is_survival && identical(fam_name, "binomial")) {
     is_multiclass <- length(unique(as.character(sample_metadata$Y))) > 2L
   }
-  
+
   if (is_survival) {
-    sample_metadata       <- .ensure_survival_metadata(sample_metadata, context = "training")
-    sample_metadata_valid <- .ensure_survival_metadata(sample_metadata_valid, context = "validation")
+    sample_metadata <- .ensure_survival_metadata(sample_metadata, context = "training")
+    sample_metadata_valid <- .ensure_survival_metadata(sample_metadata_valid,
+      context = "validation"
+    )
   }
-  
+
   .validate_IL_inputs(
-    feature_table         = feature_table,
-    sample_metadata       = sample_metadata,
-    feature_metadata      = feature_metadata,
-    feature_table_valid   = feature_table_valid,
-    sample_metadata_valid = sample_metadata_valid,
-    family_name           = fam_name,
-    is_survival           = is_survival
+    feature_table = feature_table, sample_metadata = sample_metadata,
+    feature_metadata = feature_metadata, feature_table_valid = feature_table_valid,
+    sample_metadata_valid = sample_metadata_valid, family_name = fam_name, is_survival = is_survival
   )
-  ## ------------------------------------------------------------
-  ## 3. Dispatch to IL_conbin() or IL_survival()
+  ## ------------------------------------------------------------ 3. Dispatch
+  ## to IL_conbin() or IL_survival()
   ## ------------------------------------------------------------
   if (is_survival) {
     filtered_surv <- .filter_features_by_method(
       feature_table = feature_table,
-      feature_metadata = feature_metadata,
-      feature_table_valid = feature_table_valid,
-      filter_method = filter_method,
-      filter_pct = filter_pct,
-      prevalence_pct = prevalence_pct,
+      feature_metadata = feature_metadata, feature_table_valid = feature_table_valid,
+      filter_method = filter_method, filter_pct = filter_pct, prevalence_pct = prevalence_pct,
       verbose = verbose
     )
     feature_table <- filtered_surv$feature_table
@@ -202,18 +247,11 @@ IntegratedLearner <- function(
     feature_table_valid <- filtered_surv$feature_table_valid
 
     res <- ILsurv(
-      feature_table        = feature_table,
-      sample_metadata      = sample_metadata,
-      feature_metadata     = feature_metadata,
-      valid_feature_table  = feature_table_valid,
-      valid_sample_metadata = sample_metadata_valid,
-      base_learner         = base_learner,
-      folds                = folds,
-      seed                 = seed,
-      run_screening        = run_screening,
-      screen_pct           = screen_pct,
-      verbose              = verbose,
-      ...
+      feature_table = feature_table, sample_metadata = sample_metadata,
+      feature_metadata = feature_metadata, valid_feature_table = feature_table_valid,
+      valid_sample_metadata = sample_metadata_valid, base_learner = base_learner,
+      folds = folds, seed = seed, run_screening = run_screening, screen_pct = screen_pct,
+      verbose = verbose, ...
     )
     res$family <- "survival"
     res$feature.names <- rownames(feature_table)
@@ -222,55 +260,33 @@ IntegratedLearner <- function(
     res$prevalence_pct <- filtered_surv$prevalence_pct
   } else if (is_multiclass) {
     res <- IL_multiclass(
-      feature_table         = feature_table,
-      sample_metadata       = sample_metadata,
-      feature_metadata      = feature_metadata,
-      feature_table_valid   = feature_table_valid,
-      sample_metadata_valid = sample_metadata_valid,
-      folds                 = folds,
-      seed                  = seed,
-      base_learner          = base_learner,
-      base_screener         = base_screener,
-      run_screening         = run_screening,
-      screen_pct            = screen_pct,
-      filter_method         = filter_method,
-      filter_pct            = filter_pct,
-      prevalence_pct        = prevalence_pct,
-      meta_learner          = meta_learner,
-      run_concat            = run_concat,
-      run_stacked           = run_stacked,
-      verbose               = verbose,
-      print_learner         = print_learner,
-      family                = family,
-      ...
+      feature_table = feature_table, sample_metadata = sample_metadata,
+      feature_metadata = feature_metadata, feature_table_valid = feature_table_valid,
+      sample_metadata_valid = sample_metadata_valid, folds = folds, seed = seed,
+      base_learner = base_learner, base_screener = base_screener, run_screening = run_screening,
+      screen_pct = screen_pct, filter_method = filter_method, filter_pct = filter_pct,
+      prevalence_pct = prevalence_pct, meta_learner = meta_learner, run_concat = run_concat,
+      run_stacked = run_stacked, verbose = verbose, print_learner = print_learner,
+      family = family, ...
     )
   } else {
     res <- IL_conbin(
-      feature_table         = feature_table,
-      sample_metadata       = sample_metadata,
-      feature_metadata      = feature_metadata,
-      feature_table_valid   = feature_table_valid,
-      sample_metadata_valid = sample_metadata_valid,
-      folds                = folds,
-      seed                 = seed,
-      base_learner         = base_learner,
-      base_screener        = base_screener,
-      run_screening        = run_screening,
-      screen_pct           = screen_pct,
-      filter_method        = filter_method,
-      filter_pct           = filter_pct,
-      prevalence_pct       = prevalence_pct,
-      meta_learner         = meta_learner,
-      run_concat           = run_concat,
-      run_stacked          = run_stacked,
-      verbose              = verbose,
-      print_learner        = print_learner,
-      refit.stack          = refit.stack,
-      family               = family,
-      ...
+      feature_table = feature_table, sample_metadata = sample_metadata,
+      feature_metadata = feature_metadata, feature_table_valid = feature_table_valid,
+      sample_metadata_valid = sample_metadata_valid, folds = folds, seed = seed,
+      base_learner = base_learner, base_screener = base_screener, run_screening = run_screening,
+      screen_pct = screen_pct, filter_method = filter_method, filter_pct = filter_pct,
+      prevalence_pct = prevalence_pct, meta_learner = meta_learner, run_concat = run_concat,
+      run_stacked = run_stacked, verbose = verbose, print_learner = print_learner,
+      refit.stack = refit.stack, family = family, ...
     )
   }
-  
+
   res$input_mode <- mode
+  res$column_map <- list(
+    outcome_col = outcome_col,
+    subject_id_col = subject_id_col,
+    binary_levels = binary_levels
+  )
   return(res)
 }

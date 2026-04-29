@@ -77,17 +77,17 @@ base models.}
 (\code{(0,100]}). Applied after any optional filtering.}
 
 \item{filter_method}{Optional feature-filter method before model fitting.
-Supported values are \code{"prevalence"} (top detected features by
-prevalence) and \code{"variance"} (top features by caret-based variance
+Supported values are \code{'prevalence'} (top detected features by
+prevalence) and \code{'variance'} (top features by caret-based variance
 ranking via \code{nearZeroVar} + empirical variance). If \code{NULL},
-defaults to \code{"prevalence"} when filtering is requested.}
+defaults to \code{'prevalence'} when filtering is requested.}
 
 \item{filter_pct}{Optional retention percentage (in \code{(0,100]}) for the
-selected \code{filter_method}. Keeps the top \code{filter_pct}\\% features.}
+selected \code{filter_method}. Keeps the top \code{filter_pct} percent features.}
 
 \item{prevalence_pct}{Optional retention percentage (in \code{(0,100]}) for
 prevalence-based filtering before model fitting. Deprecated alias of
-\code{filter_pct} with \code{filter_method = "prevalence"}.}
+\code{filter_pct} with \code{filter_method = 'prevalence'}.}
 
 \item{meta_learner}{Meta-learner for late fusion (stacked generalization).
 Defaults to \code{SL.nnls.auc}.}
@@ -111,7 +111,7 @@ IL_survival().}
 }
 \value{
 A list-like IntegratedLearner object containing fitted layer-specific,
-stacked, and concatenated models, cross-validated performance (AUC or R²),
+stacked, and concatenated models, cross-validated performance (AUC or R\302\262),
 and predictions for training and validation sets.
 }
 \description{
@@ -137,6 +137,35 @@ Although \code{IL_conbin()} is typically called internally by
 \code{MultiAssayExperiment} objects, advanced users may call
 \code{IL_conbin()} directly when they already have multiview feature tables
 and metadata in matrix/data.frame form.
+}
+\examples{
+is.function(IL_conbin)
+if (FALSE) {
+  set.seed(1)
+  n <- 20
+  feature_table <- rbind(
+    matrix(rnorm(3 * n), nrow = 3, dimnames = list(paste0("L1_F", 1:3), paste0("S", 1:n))),
+    matrix(rnorm(2 * n), nrow = 2, dimnames = list(paste0("L2_F", 1:2), paste0("S", 1:n)))
+  )
+  sample_metadata <- data.frame(
+    subjectID = paste0("ID", 1:n), Y = rnorm(n),
+    row.names = colnames(feature_table)
+  )
+  feature_metadata <- data.frame(
+    featureID = rownames(feature_table),
+    featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
+    row.names = rownames(feature_table)
+  )
+  fit <- IL_conbin(
+    feature_table = feature_table,
+    sample_metadata = sample_metadata,
+    feature_metadata = feature_metadata,
+    folds = 3, base_learner = "SL.mean", run_stacked = FALSE,
+    run_concat = FALSE, print_learner = FALSE, family = stats::gaussian()
+  )
+  names(fit)
+}
+
 }
 \seealso{
 \code{\link{IntegratedLearner}}, IL_survival()
