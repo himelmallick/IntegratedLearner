@@ -44,3 +44,15 @@ SL object
 \description{
 Allow update of IntegratedLearner if only a subset of omics layers are available in test set. If all layers and features match, it calls predict.learner()
 }
+\examples{
+is.function(update.learner)
+if (FALSE) {
+  # Build a fit with IntegratedLearner() first, then update with reduced layers.
+  update.learner(
+    object = fit,
+    feature_table_valid = feature_table_valid,
+    sample_metadata_valid = sample_metadata_valid,
+    feature_metadata_valid = feature_metadata_valid
+  )
+}
+}

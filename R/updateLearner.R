@@ -16,6 +16,18 @@
 #' @param ... Additional arguments (unused)
 #'
 #' @return SL object
+#'
+#' @examples
+#' is.function(update.learner)
+#' if (FALSE) {
+#'   # Build a fit with IntegratedLearner() first, then update with reduced layers.
+#'   update.learner(
+#'     object = fit,
+#'     feature_table_valid = feature_table_valid,
+#'     sample_metadata_valid = sample_metadata_valid,
+#'     feature_metadata_valid = feature_metadata_valid
+#'   )
+#' }
 #' @export
 update.learner <- function(
   object, feature_table_valid, sample_metadata_valid = NULL,

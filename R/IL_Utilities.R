@@ -226,6 +226,24 @@ expit <- function(x) {
 #' @param seed Seed for reproducibility passed to bartMachine.
 #' @param ... Additional arguments (not used)
 #'
+#' @return A list with elements \code{pred} (predictions for \code{newX}) and
+#'   \code{fit} (the fitted model object).
+#'
+#' @examples
+#' is.function(SL.BART)
+#' if (FALSE) {
+#'   set.seed(1)
+#'   X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
+#'   Y <- rnorm(20)
+#'   fit <- SL.BART(
+#'     Y = Y, X = X, newX = X[1:3, ],
+#'     family = stats::gaussian(),
+#'     obsWeights = rep(1, nrow(X)), id = seq_len(nrow(X)),
+#'     num_trees = 5, num_burn_in = 5, num_iterations_after_burn_in = 20
+#'   )
+#'   fit$pred
+#' }
+#'
 #' @encoding utf-8
 #' @export
 SL.BART <- function(
@@ -311,6 +329,20 @@ predict.SL.BART <- function(object, newdata, family, X = NULL, Y = NULL, ...) {
 #' @param ... Additional arguments passed to \code{mxBART::mxbart}.
 #'
 #' @return A list with elements \code{pred} and \code{fit} (SuperLearner convention).
+#'
+#' @examples
+#' is.function(SL.mxBART)
+#' if (FALSE) {
+#'   set.seed(1)
+#'   X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
+#'   Y <- rnorm(20)
+#'   fit <- SL.mxBART(
+#'     Y = Y, X = X, newX = X[1:3, ], family = stats::gaussian(),
+#'     obsWeights = rep(1, nrow(X)), id = rep(1:5, each = 4),
+#'     ntree = 10, ndpost = 20, nskip = 10, keepevery = 2
+#'   )
+#'   fit$pred
+#' }
 #' @export
 SL.mxBART <- function(
   Y, X, newX, family, obsWeights, id, sparse = FALSE, ntree = 50,
@@ -422,20 +454,19 @@ predict.SL.mxBART <- function(
 #'   background).
 #' @param ... Any additional arguments are passed through to cv.glmnet.
 #'
+#' @return A list with elements \code{pred} (predictions for \code{newX}) and
+#'   \code{fit} (cross-validated glmnet fit metadata).
+#'
 #' @examples
-#' if (requireNamespace("mlbench", quietly = TRUE)) {
-#'   data(PimaIndiansDiabetes2, package = "mlbench")
-#'   dat <- stats::na.omit(PimaIndiansDiabetes2)
-#'   Y <- as.numeric(dat$diabetes == "pos")
-#'   X <- subset(dat, select = -diabetes)
-#' }
-#' \dontrun{
-#' sl <- SuperLearner::SuperLearner(
-#'   Y, X,
-#'   family = stats::binomial(),
-#'   SL.library = c("SL.mean", "SL.glm", "SL.glmnet")
+#' set.seed(1)
+#' X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
+#' Y <- rnorm(20)
+#' fit <- SL.glmnet2(
+#'   Y = Y, X = X, newX = X[1:3, ], family = stats::gaussian(),
+#'   obsWeights = rep(1, nrow(X)), id = seq_len(nrow(X)),
+#'   nfolds = 3, nlambda = 10
 #' )
-#' }
+#' head(fit$pred)
 #'
 #' @references
 #'
@@ -523,20 +554,20 @@ SL.glmnet2 <- function(
 #'   background).
 #' @param ... Any additional arguments are passed through to cv.glmnet.
 #'
+#' @return A list with elements \code{pred} (predictions for \code{newX}) and
+#'   \code{fit} (cross-validated glmnet fit metadata).
+#'
 #' @examples
-#' if (requireNamespace("mlbench", quietly = TRUE)) {
-#'   data(PimaIndiansDiabetes2, package = "mlbench")
-#'   dat <- stats::na.omit(PimaIndiansDiabetes2)
-#'   Y <- as.numeric(dat$diabetes == "pos")
-#'   X <- subset(dat, select = -diabetes)
-#' }
-#' \dontrun{
-#' sl <- SuperLearner::SuperLearner(
-#'   Y, X,
-#'   family = stats::binomial(),
-#'   SL.library = c("SL.mean", "SL.glm", "SL.glmnet")
+#' set.seed(1)
+#' X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
+#' linpred <- 0.5 * X$x1 - 0.25 * X$x2
+#' Y <- stats::rbinom(nrow(X), 1, stats::plogis(linpred))
+#' fit <- SL.LASSO(
+#'   Y = Y, X = X, newX = X[1:3, ], family = stats::binomial(),
+#'   obsWeights = rep(1, nrow(X)), id = seq_len(nrow(X)),
+#'   nfolds = 3, nlambda = 10
 #' )
-#' }
+#' head(fit$pred)
 #'
 #' @references
 #'
@@ -628,20 +659,19 @@ SL.LASSO <- function(
 #'   background).
 #' @param ... Any additional arguments are passed through to cv.glmnet.
 #'
+#' @return A list with elements \code{pred} (predictions for \code{newX}) and
+#'   \code{fit} (cross-validated glmnet fit metadata).
+#'
 #' @examples
-#' if (requireNamespace("mlbench", quietly = TRUE)) {
-#'   data(PimaIndiansDiabetes2, package = "mlbench")
-#'   dat <- stats::na.omit(PimaIndiansDiabetes2)
-#'   Y <- as.numeric(dat$diabetes == "pos")
-#'   X <- subset(dat, select = -diabetes)
-#' }
-#' \dontrun{
-#' sl <- SuperLearner::SuperLearner(
-#'   Y, X,
-#'   family = stats::binomial(),
-#'   SL.library = c("SL.mean", "SL.glm", "SL.glmnet")
+#' set.seed(1)
+#' X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
+#' Y <- rnorm(20)
+#' fit <- SL.enet(
+#'   Y = Y, X = X, newX = X[1:3, ], family = stats::gaussian(),
+#'   obsWeights = rep(1, nrow(X)), id = seq_len(nrow(X)),
+#'   alpha = c(0, 0.5, 1), nfolds = 3, nlambda = 10
 #' )
-#' }
+#' head(fit$pred)
 #'
 #' @references
 #'
@@ -734,6 +764,19 @@ get_cvm <- function(model) {
 #' @param ... other parameters passed to bayesreg function
 #'
 #' @return SL object
+#'
+#' @examples
+#' is.function(SL.horseshoe)
+#' if (FALSE) {
+#'   set.seed(1)
+#'   X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
+#'   Y <- rnorm(20)
+#'   fit <- SL.horseshoe(
+#'     Y = Y, X = X, newX = X[1:3, ],
+#'     family = stats::gaussian()
+#'   )
+#'   fit$pred
+#' }
 #' @export
 #' @export
 SL.horseshoe <- function(
@@ -798,6 +841,11 @@ predict.SL.horseshoe <- function(object, newdata, family, X = NULL, Y = NULL, ..
 #' @param Y Outcome variable
 #'
 #' @return 1 - AUC
+#'
+#' @examples
+#' X <- data.frame(m1 = c(0.1, 0.4, 0.8, 0.9), m2 = c(0.2, 0.3, 0.7, 0.95))
+#' Y <- c(0, 0, 1, 1)
+#' auc.obj(b = c(0.5, 0.5), X = X, Y = Y)
 #' @export
 auc.obj <- function(b, X, Y) {
   # Doesn't use observation weights in this part right now
@@ -814,6 +862,12 @@ auc.obj <- function(b, X, Y) {
 #' @param wt wt
 #'
 #' @return Solution of the quadratic programming problem
+#'
+#' @examples
+#' x <- cbind(c(0.1, 0.4, 0.6, 0.9), c(0.2, 0.5, 0.7, 0.8))
+#' y <- c(0.15, 0.45, 0.65, 0.85)
+#' fit <- NNLS(x = x, y = y, wt = rep(1, nrow(x)))
+#' fit$solution
 #' @export
 NNLS <- function(x, y, wt) {
   wX <- sqrt(wt) * x
@@ -841,6 +895,16 @@ NNLS <- function(x, y, wt) {
 #' @param ... Additional arguments passed through
 #'
 #' @return Estimated meta-learner coefficients and predictions
+#'
+#' @examples
+#' set.seed(1)
+#' X <- data.frame(m1 = runif(20), m2 = runif(20))
+#' Y <- rnorm(20)
+#' fit <- SL.nnls.auc(
+#'   Y = Y, X = X, newX = X[1:4, ],
+#'   family = stats::gaussian(), obsWeights = rep(1, nrow(X))
+#' )
+#' head(fit$pred)
 #' @export
 SL.nnls.auc <- function(Y, X, newX, family, obsWeights, bounds = c(0, Inf), ...) {
   if (family$family == "gaussian") {
@@ -1410,7 +1474,17 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
   y <- sample_metadata$Y
 
   if (identical(family_name, "gaussian")) {
-    y_num <- suppressWarnings(as.numeric(as.character(y)))
+    y_chr <- as.character(y)
+    is_numeric_like <- grepl(
+      "^\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?\\s*$",
+      y_chr
+    )
+    if (any(is.na(y_chr) | !nzchar(trimws(y_chr)) | !is_numeric_like)) {
+      stop("'", context, "': outcome could not be converted to numeric for gaussian family.",
+        call. = FALSE
+      )
+    }
+    y_num <- as.numeric(y_chr)
     if (any(!is.finite(y_num))) {
       stop("'", context, "': outcome could not be converted to numeric for gaussian family.",
         call. = FALSE

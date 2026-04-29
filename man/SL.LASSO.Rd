@@ -53,6 +53,10 @@ binomial can also be 'auc' or 'class' (misclassification error).}
 
 \item{...}{Any additional arguments are passed through to cv.glmnet.}
 }
+\value{
+A list with elements \code{pred} (predictions for \code{newX}) and
+\code{fit} (cross-validated glmnet fit metadata).
+}
 \description{
 Penalized regression using elastic net. Alpha = 0 corresponds to ridge
 regression and alpha = 1 corresponds to Lasso.
@@ -61,19 +65,16 @@ See \code{vignette('glmnet_beta', package = 'glmnet')} for a nice tutorial on
 glmnet.
 }
 \examples{
-if (requireNamespace("mlbench", quietly = TRUE)) {
-  data(PimaIndiansDiabetes2, package = "mlbench")
-  dat <- stats::na.omit(PimaIndiansDiabetes2)
-  Y <- as.numeric(dat$diabetes == "pos")
-  X <- subset(dat, select = -diabetes)
-}
-\dontrun{
-sl <- SuperLearner::SuperLearner(
-  Y, X,
-  family = stats::binomial(),
-  SL.library = c("SL.mean", "SL.glm", "SL.glmnet")
+set.seed(1)
+X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
+linpred <- 0.5 * X$x1 - 0.25 * X$x2
+Y <- stats::rbinom(nrow(X), 1, stats::plogis(linpred))
+fit <- SL.LASSO(
+  Y = Y, X = X, newX = X[1:3, ], family = stats::binomial(),
+  obsWeights = rep(1, nrow(X)), id = seq_len(nrow(X)),
+  nfolds = 3, nlambda = 10
 )
-}
+head(fit$pred)
 
 }
 \references{

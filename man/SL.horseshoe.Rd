@@ -45,3 +45,16 @@ SL object
 \description{
 Horseshoe regression
 }
+\examples{
+is.function(SL.horseshoe)
+if (FALSE) {
+  set.seed(1)
+  X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
+  Y <- rnorm(20)
+  fit <- SL.horseshoe(
+    Y = Y, X = X, newX = X[1:3, ],
+    family = stats::gaussian()
+  )
+  fit$pred
+}
+}

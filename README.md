@@ -84,6 +84,8 @@ IntegratedLearner(
   MAE_valid = mae_valid,        # optional
   experiment = c("metabolome", "species"),
   assay.type = c("abundance", "abundance"),
+  outcome_col = "diseaseCat",   # column in colData(MAE_train)
+  subject_id_col = "sample_id", # subject/sample ID column in colData(MAE_train)
   folds = 5,
   base_learner = "randomforest",
   meta_learner = "randomforest",
@@ -94,18 +96,47 @@ IntegratedLearner(
   family = binomial()
 )
 
+# MAE mode (custom metadata column names)
+IntegratedLearner(
+  MAE_train = mae_train,
+  MAE_valid = mae_valid,        # optional
+  experiment = c("metabolome", "species"),
+  assay.type = c("abundance", "abundance"),
+  outcome_col = "clinical_outcome",
+  subject_id_col = "participant_id",
+  folds = 5,
+  base_learner = "SL.randomForest",
+  meta_learner = "SL.nnls.auc",
+  family = gaussian()
+)
+
 # MAE mode (survival)
 IntegratedLearner(
   MAE_train = mae_train,
   MAE_valid = mae_valid,        # optional
   experiment = c("taxonomy", "pathway"),
   assay.type = c("relative_abundance", "pathway_abundance"),
+  outcome_col = "surv_outcome", # survival outcome column in colData(MAE_train)
+  subject_id_col = "patient_id",
   folds = 5,
   base_learner = "surv.coxph",
   filter_method = "variance",
   filter_pct = 40,
   run_screening = TRUE,
   screen_pct = 25,
+  weight_method = "COX"
+)
+
+# MAE mode (survival with custom metadata column names)
+IntegratedLearner(
+  MAE_train = mae_train,
+  MAE_valid = mae_valid,        # optional
+  experiment = c("taxonomy", "pathway"),
+  assay.type = c("relative_abundance", "pathway_abundance"),
+  outcome_col = "time_to_event_obj",
+  subject_id_col = "participant_id",
+  folds = 5,
+  base_learner = "surv.coxph",
   weight_method = "COX"
 )
 ```

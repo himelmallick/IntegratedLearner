@@ -27,3 +27,13 @@ Estimated meta-learner coefficients and predictions
 \description{
 Combined SuperLearner function for both NNLS/AUC maximization
 }
+\examples{
+set.seed(1)
+X <- data.frame(m1 = runif(20), m2 = runif(20))
+Y <- rnorm(20)
+fit <- SL.nnls.auc(
+  Y = Y, X = X, newX = X[1:4, ],
+  family = stats::gaussian(), obsWeights = rep(1, nrow(X))
+)
+head(fit$pred)
+}

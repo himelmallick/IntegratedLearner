@@ -96,6 +96,37 @@
 #' performance estimates, and predicted values for training and, if supplied,
 #' validation data.
 #'
+#' @examples
+#' is.function(IntegratedLearner)
+#' if (FALSE) {
+#'   set.seed(1)
+#'   n <- 20
+#'   feature_table <- rbind(
+#'     matrix(rnorm(3 * n), nrow = 3, dimnames = list(paste0("L1_F", 1:3), paste0("S", 1:n))),
+#'     matrix(rnorm(2 * n), nrow = 2, dimnames = list(paste0("L2_F", 1:2), paste0("S", 1:n)))
+#'   )
+#'   sample_metadata <- data.frame(
+#'     subjectID = paste0("ID", 1:n), Y = rnorm(n),
+#'     row.names = colnames(feature_table)
+#'   )
+#'   feature_metadata <- data.frame(
+#'     featureID = rownames(feature_table),
+#'     featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
+#'     row.names = rownames(feature_table)
+#'   )
+#'   pcl <- list(
+#'     feature_table = feature_table,
+#'     sample_metadata = sample_metadata,
+#'     feature_metadata = feature_metadata
+#'   )
+#'   fit <- IntegratedLearner(
+#'     PCL_train = pcl, folds = 3, base_learner = "SL.mean",
+#'     run_stacked = FALSE, run_concat = FALSE, print_learner = FALSE,
+#'     family = stats::gaussian()
+#'   )
+#'   names(fit)
+#' }
+#'
 #' @author Himel Mallick, \email{him4004@@med.cornell.edu}
 #'
 #' @keywords microbiome, metagenomics, multiomics, scRNASeq, tweedie, singlecell
@@ -150,22 +181,26 @@ IntegratedLearner <- function(
   sample_metadata_valid <- prepared$sample_metadata_valid
 
   fam_name <- .safe_family_name(family)
+  is_survival <- .is_survival_outcome(fam_name, sample_metadata)
 
-  coerced_train <- .coerce_outcome_by_family(
-    sample_metadata = sample_metadata,
-    family_name = fam_name,
-    context = "training sample_metadata"
-  )
-  sample_metadata <- coerced_train$sample_metadata
-  binary_levels <- coerced_train$binary_levels
-  if (!is.null(sample_metadata_valid)) {
-    coerced_valid <- .coerce_outcome_by_family(
-      sample_metadata = sample_metadata_valid,
+  binary_levels <- NULL
+  if (!is_survival) {
+    coerced_train <- .coerce_outcome_by_family(
+      sample_metadata = sample_metadata,
       family_name = fam_name,
-      context = "validation sample_metadata",
-      binary_levels = binary_levels
+      context = "training sample_metadata"
     )
-    sample_metadata_valid <- coerced_valid$sample_metadata
+    sample_metadata <- coerced_train$sample_metadata
+    binary_levels <- coerced_train$binary_levels
+    if (!is.null(sample_metadata_valid)) {
+      coerced_valid <- .coerce_outcome_by_family(
+        sample_metadata = sample_metadata_valid,
+        family_name = fam_name,
+        context = "validation sample_metadata",
+        binary_levels = binary_levels
+      )
+      sample_metadata_valid <- coerced_valid$sample_metadata
+    }
   }
 
   # Align validation feature order to training if the sets match
@@ -180,7 +215,6 @@ IntegratedLearner <- function(
     }
   }
 
-  is_survival <- .is_survival_outcome(fam_name, sample_metadata)
   is_multiclass <- FALSE
   if (!is_survival && identical(fam_name, "binomial")) {
     is_multiclass <- length(unique(as.character(sample_metadata$Y))) > 2L

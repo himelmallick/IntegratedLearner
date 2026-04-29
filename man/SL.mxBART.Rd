@@ -54,3 +54,17 @@ A list with elements \code{pred} and \code{fit} (SuperLearner convention).
 SuperLearner wrapper for mixed-effects BART using the \pkg{mxBART} package.
 This learner is optional and requires \pkg{mxBART} to be installed.
 }
+\examples{
+is.function(SL.mxBART)
+if (FALSE) {
+  set.seed(1)
+  X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
+  Y <- rnorm(20)
+  fit <- SL.mxBART(
+    Y = Y, X = X, newX = X[1:3, ], family = stats::gaussian(),
+    obsWeights = rep(1, nrow(X)), id = rep(1:5, each = 4),
+    ntree = 10, ndpost = 20, nskip = 10, keepevery = 2
+  )
+  fit$pred
+}
+}

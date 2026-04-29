@@ -79,6 +79,26 @@ will require additional RAM.}
 
 \item{...}{Additional arguments (not used)}
 }
+\value{
+A list with elements \code{pred} (predictions for \code{newX}) and
+\code{fit} (the fitted model object).
+}
 \description{
 Support bayesian additive regression trees via the bartMachine package.
+}
+\examples{
+is.function(SL.BART)
+if (FALSE) {
+  set.seed(1)
+  X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
+  Y <- rnorm(20)
+  fit <- SL.BART(
+    Y = Y, X = X, newX = X[1:3, ],
+    family = stats::gaussian(),
+    obsWeights = rep(1, nrow(X)), id = seq_len(nrow(X)),
+    num_trees = 5, num_burn_in = 5, num_iterations_after_burn_in = 20
+  )
+  fit$pred
+}
+
 }
