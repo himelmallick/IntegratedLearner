@@ -1,8 +1,5 @@
 load_pcl_fixture <- function(filename) {
-  path <- resolve_fixture_path(filename, local_candidates = c(file.path(
-    "data",
-    filename
-  ), filename))
+  path <- resolve_fixture_path(filename)
 
   env <- new.env(parent = emptyenv())
   load(path, envir = env)
@@ -42,10 +39,7 @@ assert_pcl_structure <- function(pcl, label) {
 }
 
 test_that("PCL fixtures in data folder have valid structure", {
-  fixture_files <- c(
-    "iHMP.RData", "pregnancy.RData", "PRISM.RData", "StelzerEGA.RData",
-    "StelzerDOS.RData", "StelzerEGA_valid.RData", "StelzerDOS_valid.RData", "NLIBD.RData"
-  )
+  fixture_files <- c("pregnancy.RData", "PRISM.RData", "NLIBD.RData")
 
   for (fixture in fixture_files) {
     pcl <- load_pcl_fixture(fixture)

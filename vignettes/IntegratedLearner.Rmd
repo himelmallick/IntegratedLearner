@@ -49,6 +49,15 @@ can_run_sl_bart <- function() {
 }
 
 use_sl_bart <- isTRUE(can_run_sl_bart())
+
+load_extdata_rdata <- function(filename, envir = parent.frame()) {
+  path <- system.file("extdata", filename, package = "IntegratedLearner")
+  if (!nzchar(path)) {
+    stop("Could not find extdata file: ", filename)
+  }
+  load(path, envir = envir)
+  invisible(path)
+}
 ```
 
 This vignette is a practical tutorial for binary, multiclass, continuous, and survival outcome workflows in `IntegratedLearner`.
@@ -419,7 +428,7 @@ This section uses the PRISM dataset (Franzosa et al., 2019) for classifying IBD 
 
 ```{r}
 # Training data
-load(url("https://github.com/himelmallick/IntegratedLearner/blob/master/data/PRISM.RData?raw=true"))
+load_extdata_rdata("PRISM.RData", envir = environment())
 
 feature_table <- pcl$feature_table
 sample_metadata <- pcl$sample_metadata
@@ -438,7 +447,7 @@ all(rownames(feature_table) == rownames(feature_metadata))
 all(colnames(feature_table) == rownames(sample_metadata))
 
 # Independent validation data
-load(url("https://github.com/himelmallick/IntegratedLearner/blob/master/data/NLIBD.RData?raw=true"))
+load_extdata_rdata("NLIBD.RData", envir = environment())
 feature_table_valid <- pcl$feature_table
 sample_metadata_valid <- pcl$sample_metadata
 rm(pcl)
@@ -512,7 +521,7 @@ This section uses the pregnancy dataset (Ghaemi et al., 2019), where `Y` is cont
 ### Step 1: Load and Inspect Data
 
 ```{r}
-load(url("https://github.com/himelmallick/IntegratedLearner/blob/master/data/pregnancy.RData?raw=true"))
+load_extdata_rdata("pregnancy.RData", envir = environment())
 
 feature_table <- pcl$feature_table
 sample_metadata <- pcl$sample_metadata
@@ -750,19 +759,110 @@ plot_grid(
 
 ## Example 3: Multiclass Outcome (Franzosa MAE with External Validation)
 
-This section shows a full multiclass MAE workflow where the outcome is already available in `Y` in MAE `colData`, with training/validation feature alignment and Python-style class balancing on the training set.
+This section shows a full multiclass MAE workflow using packaged local fixtures.
+Here we keep the original outcome column name (`diseaseCat`) and subject ID
+column (`sample_id`) and pass them through `outcome_col` and
+`subject_id_col`.
 
 ```{r}
+load_extdata_rdata("FranzosaE_2019.RData", envir = environment())
+load_extdata_rdata("FranzosaE_2019_Validation.RData", envir = environment())
 
-load(url("https://github.com/himelmallick/IntegratedLearner/blob/master/data/FranzosaE_2019_Train_Validation.RData?raw=true"))
+as_feature_matrix <- function(df, id_col = "X") {
+  ids <- as.character(df[[id_col]])
+  mat <- as.matrix(df[, setdiff(colnames(df), id_col), drop = FALSE])
+  storage.mode(mat) <- "numeric"
+  rownames(mat) <- ids
+  t(mat)
+}
+
+prep_sample_metadata <- function(df, id_col = "X") {
+  sm <- as.data.frame(df, stringsAsFactors = FALSE)
+  sm$sample_id <- as.character(sm[[id_col]])
+  rownames(sm) <- sm$sample_id
+  sm
+}
+
+met_train <- as_feature_matrix(FranzosaE_2019_CuratedMetabolome)
+met_valid <- as_feature_matrix(FranzosaE_2019_Validation_CuratedMetabolome)
+species_train <- as_feature_matrix(FranzosaE_2019_CuratedSpeciesProfile)
+species_valid <- as_feature_matrix(FranzosaE_2019_Validation_CuratedSpeciesProfile)
+
+# Enforce exact train/validation feature alignment per layer.
+met_shared <- intersect(rownames(met_train), rownames(met_valid))
+species_shared <- intersect(rownames(species_train), rownames(species_valid))
+met_train <- met_train[met_shared, , drop = FALSE]
+met_valid <- met_valid[met_shared, , drop = FALSE]
+species_train <- species_train[species_shared, , drop = FALSE]
+species_valid <- species_valid[species_shared, , drop = FALSE]
+
+sm_train <- prep_sample_metadata(FranzosaE_2019_CuratedMetadata)
+sm_valid <- prep_sample_metadata(FranzosaE_2019_Validation_CuratedMetadata)
+
+train_ids <- Reduce(intersect, list(colnames(met_train), colnames(species_train), rownames(sm_train)))
+valid_ids <- Reduce(intersect, list(colnames(met_valid), colnames(species_valid), rownames(sm_valid)))
+
+met_train <- met_train[, train_ids, drop = FALSE]
+met_valid <- met_valid[, valid_ids, drop = FALSE]
+species_train <- species_train[, train_ids, drop = FALSE]
+species_valid <- species_valid[, valid_ids, drop = FALSE]
+sm_train <- sm_train[train_ids, , drop = FALSE]
+sm_valid <- sm_valid[valid_ids, , drop = FALSE]
+
+class_levels <- sort(unique(as.character(sm_train$diseaseCat)))
+sm_train$diseaseCat <- factor(sm_train$diseaseCat, levels = class_levels)
+sm_valid$diseaseCat <- factor(sm_valid$diseaseCat, levels = class_levels)
+
+cd_train <- S4Vectors::DataFrame(
+  sample_id = sm_train$sample_id,
+  diseaseCat = sm_train$diseaseCat,
+  row.names = sm_train$sample_id
+)
+
+cd_valid <- S4Vectors::DataFrame(
+  sample_id = sm_valid$sample_id,
+  diseaseCat = sm_valid$diseaseCat,
+  row.names = sm_valid$sample_id
+)
+
+MAE_train <- MultiAssayExperiment(
+  experiments = ExperimentList(
+    metabolome = SummarizedExperiment::SummarizedExperiment(
+      assays = list(abundance = met_train),
+      colData = cd_train
+    ),
+    species = SummarizedExperiment::SummarizedExperiment(
+      assays = list(abundance = species_train),
+      colData = cd_train
+    )
+  ),
+  colData = cd_train
+)
+
+MAE_valid <- MultiAssayExperiment(
+  experiments = ExperimentList(
+    metabolome = SummarizedExperiment::SummarizedExperiment(
+      assays = list(abundance = met_valid),
+      colData = cd_valid
+    ),
+    species = SummarizedExperiment::SummarizedExperiment(
+      assays = list(abundance = species_valid),
+      colData = cd_valid
+    )
+  ),
+  colData = cd_valid
+)
+
 fit <- IntegratedLearner::IntegratedLearner(
   MAE_train = MAE_train,
   MAE_valid = MAE_valid,
   experiment = c("metabolome", "species"),
   assay.type = c("abundance", "abundance"),
+  outcome_col = "diseaseCat",
+  subject_id_col = "sample_id",
   family = stats::binomial(),
-  base_learner = "mbart",
-  meta_learner = "mbart",
+  base_learner = "glmnet",
+  meta_learner = "glmnet",
   run_stacked = TRUE,
   run_concat = TRUE,
   filter_method = "variance",
@@ -797,19 +897,125 @@ This path uses the package-native survival backend (no `mlr3` dependency require
 
 This section provides a complete MAE workflow, followed by an equivalent PCL sketch.
 
-
-
 ```{r}
+load_extdata_rdata("TCGA_BRCA.RData", envir = environment())
 
+to_feature_matrix <- function(df, id_col = "patient_id", n_keep = 120L) {
+  drop_cols <- c("patient_id", "OS", "OS.time", "age", "race_white", "stage_i", "stage_ii")
+  d <- as.data.frame(df, stringsAsFactors = FALSE)
+  rownames(d) <- as.character(d[[id_col]])
+  feature_cols <- setdiff(colnames(d), drop_cols)
+  feature_cols <- feature_cols[seq_len(min(length(feature_cols), n_keep))]
+  mat <- t(as.matrix(d[, feature_cols, drop = FALSE]))
+  storage.mode(mat) <- "numeric"
+  mat
+}
 
-load(url("https://github.com/himelmallick/IntegratedLearner/blob/master/data/TCGA_BRCA.RData?raw=true"))
+gene_all <- gene_all[order(gene_all$patient_id), , drop = FALSE]
+mir_all <- mir_all[order(mir_all$patient_id), , drop = FALSE]
+
+common_ids <- intersect(as.character(gene_all$patient_id), as.character(mir_all$patient_id))
+gene_all <- gene_all[match(common_ids, gene_all$patient_id), , drop = FALSE]
+mir_all <- mir_all[match(common_ids, mir_all$patient_id), , drop = FALSE]
+
+gene_mat <- to_feature_matrix(gene_all, n_keep = 120L)
+mirna_mat <- to_feature_matrix(mir_all, n_keep = 100L)
+
+tcga_metadata <- data.frame(
+  patient_id = as.character(gene_all$patient_id),
+  time = as.numeric(gene_all$OS.time),
+  event = as.numeric(gene_all$OS),
+  stringsAsFactors = FALSE
+)
+rownames(tcga_metadata) <- tcga_metadata$patient_id
+
+common_ids <- Reduce(intersect, list(colnames(gene_mat), colnames(mirna_mat), rownames(tcga_metadata)))
+gene_mat <- gene_mat[, common_ids, drop = FALSE]
+mirna_mat <- mirna_mat[, common_ids, drop = FALSE]
+tcga_metadata <- tcga_metadata[common_ids, , drop = FALSE]
+
+tcga_metadata$outcome_surv <- I(survival::Surv(tcga_metadata$time, tcga_metadata$event))
+
+set.seed(123)
+event_ids <- rownames(tcga_metadata)[tcga_metadata$event == 1]
+censor_ids <- rownames(tcga_metadata)[tcga_metadata$event == 0]
+train_ids <- c(
+  sample(event_ids, max(1L, floor(0.7 * length(event_ids)))),
+  sample(censor_ids, max(1L, floor(0.7 * length(censor_ids))))
+)
+train_ids <- sort(unique(train_ids))
+valid_ids <- setdiff(rownames(tcga_metadata), train_ids)
+
+cd_train <- S4Vectors::DataFrame(tcga_metadata[train_ids, c("patient_id", "time", "event"), drop = FALSE])
+cd_train$outcome_surv <- I(survival::Surv(cd_train$time, cd_train$event))
+rownames(cd_train) <- cd_train$patient_id
+
+cd_valid <- S4Vectors::DataFrame(tcga_metadata[valid_ids, c("patient_id", "time", "event"), drop = FALSE])
+cd_valid$outcome_surv <- I(survival::Surv(cd_valid$time, cd_valid$event))
+rownames(cd_valid) <- cd_valid$patient_id
+
+mae_train <- MultiAssayExperiment(
+  experiments = ExperimentList(
+    gene = SummarizedExperiment::SummarizedExperiment(
+      assays = list(abundance = gene_mat[, train_ids, drop = FALSE]),
+      colData = cd_train
+    ),
+    mirna = SummarizedExperiment::SummarizedExperiment(
+      assays = list(abundance = mirna_mat[, train_ids, drop = FALSE]),
+      colData = cd_train
+    )
+  ),
+  colData = cd_train
+)
+
+mae_valid <- MultiAssayExperiment(
+  experiments = ExperimentList(
+    gene = SummarizedExperiment::SummarizedExperiment(
+      assays = list(abundance = gene_mat[, valid_ids, drop = FALSE]),
+      colData = cd_valid
+    ),
+    mirna = SummarizedExperiment::SummarizedExperiment(
+      assays = list(abundance = mirna_mat[, valid_ids, drop = FALSE]),
+      colData = cd_valid
+    )
+  ),
+  colData = cd_valid
+)
+
+feature_metadata_surv <- data.frame(
+  featureID = c(rownames(gene_mat), rownames(mirna_mat)),
+  featureType = c(rep("gene", nrow(gene_mat)), rep("mirna", nrow(mirna_mat))),
+  stringsAsFactors = FALSE
+)
+rownames(feature_metadata_surv) <- feature_metadata_surv$featureID
+
+PCL_train <- list(
+  feature_table = as.data.frame(rbind(
+    gene_mat[, train_ids, drop = FALSE],
+    mirna_mat[, train_ids, drop = FALSE]
+  )),
+  sample_metadata = as.data.frame(cd_train),
+  feature_metadata = feature_metadata_surv
+)
+
+PCL_valid <- list(
+  feature_table = as.data.frame(rbind(
+    gene_mat[, valid_ids, drop = FALSE],
+    mirna_mat[, valid_ids, drop = FALSE]
+  )),
+  sample_metadata = as.data.frame(cd_valid),
+  feature_metadata = feature_metadata_surv
+)
+
 fit_surv_mae <- IntegratedLearner(
   MAE_train = mae_train,
   MAE_valid = mae_valid,
-  experiment = c("taxonomy", "pathway"),
-  assay.type = c("relative_abundance", "pathway_abundance"),
+  experiment = c("gene", "mirna"),
+  assay.type = c("abundance", "abundance"),
+  outcome_col = "outcome_surv",
+  subject_id_col = "patient_id",
   folds = 2,
-  base_learner = "surv.xgboost.cox",  # alternatives include surv.coxph/surv.ranger/surv.xgboost.cox/...
+  base_learner = "surv.coxph",
   filter_method = "variance",
   filter_pct = 40,
   run_screening = TRUE,
@@ -850,8 +1056,10 @@ fit_surv_mae$valid_out$single$valid_cindex
 fit_surv_pcl <- IntegratedLearner(
   PCL_train = PCL_train,
   PCL_valid = PCL_valid,
+  outcome_col = "outcome_surv",
+  subject_id_col = "patient_id",
   folds = 2,
-  base_learner = "surv.coxboost",
+  base_learner = "surv.coxph",
   filter_method = "prevalence",
   filter_pct = 40,
   run_screening = TRUE,

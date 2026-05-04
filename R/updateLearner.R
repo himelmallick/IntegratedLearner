@@ -18,10 +18,10 @@
 #' @return SL object
 #'
 #' @examples
-#' is.function(update.learner)
+#' is.function(getS3method("update", "learner"))
 #' if (FALSE) {
 #'   # Build a fit with IntegratedLearner() first, then update with reduced layers.
-#'   update.learner(
+#'   update(
 #'     object = fit,
 #'     feature_table_valid = feature_table_valid,
 #'     sample_metadata_valid = sample_metadata_valid,

@@ -1,72 +1,8 @@
-.fixture_urls_from_vignette <- local({
-  cache <- NULL
-  function() {
-    if (!is.null(cache)) {
-      return(cache)
-    }
-
-    rmd <- testthat::test_path("..", "..", "vignettes", "IntegratedLearner.Rmd")
-    urls <- character(0)
-
-    if (file.exists(rmd)) {
-      lines <- readLines(rmd, warn = FALSE)
-      hits <- regmatches(lines, gregexpr("https?://[^\\)\"']+\\.RData\\?raw=true",
-        lines,
-        perl = TRUE
-      ))
-      hits <- unique(unlist(hits, use.names = FALSE))
-      hits <- hits[nzchar(hits)]
-
-      if (length(hits) > 0L) {
-        keys <- sub("\\?raw=true$", "", basename(hits))
-        urls <- stats::setNames(hits, keys)
-      }
-    }
-
-    cache <<- urls
-    cache
-  }
-})
-
-.fixture_download_url <- function(filename) {
-  urls <- .fixture_urls_from_vignette()
-  to_raw <- function(url) {
-    out <- sub(
-      "^https://github\\.com/([^/]+)/([^/]+)/blob/([^?]+)\\?raw=true$",
-      "https://raw.githubusercontent.com/\\1/\\2/\\3", url
-    )
-    out
-  }
-
-  if (filename %in% names(urls)) {
-    return(to_raw(urls[[filename]]))
-  }
-
-  paste0(
-    "https://raw.githubusercontent.com/himelmallick/IntegratedLearner/master/data/",
-    filename, ""
-  )
-}
-
-.is_valid_rdata <- function(path) {
-  if (!file.exists(path) || !isTRUE(file.info(path)$size > 0)) {
-    return(FALSE)
-  }
-  ok <- tryCatch(
-    {
-      env <- new.env(parent = emptyenv())
-      load(path, envir = env)
-      TRUE
-    },
-    error = function(e) FALSE
-  )
-  isTRUE(ok)
-}
-
 resolve_fixture_path <- function(filename, local_candidates = c(file.path(
-                                   "data",
-                                   filename
-                                 ), filename, file.path("data", "Survival", filename))) {
+                                   "inst", "extdata", filename
+                                 ), file.path("data", filename), filename, file.path(
+                                   "data", "Survival", filename
+                                 ))) {
   for (rel in unique(local_candidates)) {
     path <- testthat::test_path("..", "..", rel)
     if (file.exists(path)) {
@@ -74,37 +10,17 @@ resolve_fixture_path <- function(filename, local_candidates = c(file.path(
     }
   }
 
-  cache_dir <- file.path(tempdir(), "IntegratedLearner-fixtures")
-  if (!dir.exists(cache_dir)) {
-    dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
+  pkg_path <- system.file("extdata", filename, package = "IntegratedLearner")
+  if (nzchar(pkg_path) && file.exists(pkg_path)) {
+    return(pkg_path)
   }
 
-  cache_path <- file.path(cache_dir, filename)
-  if (.is_valid_rdata(cache_path)) {
-    return(cache_path)
-  }
-  if (file.exists(cache_path)) {
-    unlink(cache_path)
-  }
-
-  url <- .fixture_download_url(filename)
-  ok <- tryCatch(
-    {
-      utils::download.file(url, destfile = cache_path, mode = "wb", quiet = TRUE)
-      .is_valid_rdata(cache_path)
-    },
-    warning = function(w) {
-      .is_valid_rdata(cache_path)
-    },
-    error = function(e) FALSE
+  testthat::skip(
+    paste0(
+      "Missing local fixture: ", filename,
+      ". Expected under inst/extdata or repository data/"
+    )
   )
-
-  testthat::skip_if_not(ok, paste0(
-    "Missing fixture and download failed: ", filename,
-    " (", url, ")"
-  ))
-
-  cache_path
 }
 
 make_toy_pcl <- function(

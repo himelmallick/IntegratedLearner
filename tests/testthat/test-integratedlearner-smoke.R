@@ -18,14 +18,11 @@ test_that("IntegratedLearner runs on toy PCL data (binomial)", {
   expect_true(all(fit$AUC.train >= 0 & fit$AUC.train <= 1))
 })
 
-test_that("IntegratedLearner runs on an iHMP subset with validation set", {
+test_that("IntegratedLearner runs on a PRISM subset with validation set", {
   skip_if_not_installed("SuperLearner")
   suppressPackageStartupMessages(library(SuperLearner))
 
-  path <- resolve_fixture_path("iHMP.RData", local_candidates = c(file.path(
-    "data",
-    "iHMP.RData"
-  ), "iHMP.RData"))
+  path <- resolve_fixture_path("PRISM.RData")
 
   env <- new.env(parent = emptyenv())
   load(path, envir = env)

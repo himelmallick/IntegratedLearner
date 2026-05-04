@@ -1450,8 +1450,15 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
   }
 
   sample_metadata$subjectID <- as.character(sample_metadata[[subject_id_col]])
-  if (isTRUE(require_outcome)) {
-    sample_metadata$Y <- sample_metadata[[outcome_col]]
+  if (isTRUE(require_outcome) && !identical(outcome_col, "Y")) {
+    outcome_value <- sample_metadata[[outcome_col]]
+
+    # Keep matrix/Surv outcomes as a single protected column.
+    if (inherits(outcome_value, "Surv") || is.matrix(outcome_value)) {
+      sample_metadata$Y <- I(outcome_value)
+    } else {
+      sample_metadata$Y <- outcome_value
+    }
   }
 
   sample_metadata

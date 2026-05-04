@@ -132,6 +132,7 @@
 #' @keywords microbiome, metagenomics, multiomics, scRNASeq, tweedie, singlecell
 #' @importFrom stats setNames
 #' @importFrom ranger ranger
+#' @importFrom utils type.convert
 #' @export
 IntegratedLearner <- function(
   MAE_train = NULL, MAE_valid = NULL, PCL_train = NULL,
