@@ -1,11 +1,7 @@
-load_pcl_fixture <- function(filename) {
-  path <- resolve_fixture_path(filename)
-
-  env <- new.env(parent = emptyenv())
-  load(path, envir = env)
-
-  expect_true(exists("pcl", envir = env), info = filename)
-  get("pcl", envir = env)
+load_pcl_fixture <- function(dataset_name) {
+  obj <- load_fixture_dataset(dataset_name)
+  expect_true(is.list(obj), info = dataset_name)
+  obj
 }
 
 assert_pcl_structure <- function(pcl, label) {
@@ -39,22 +35,18 @@ assert_pcl_structure <- function(pcl, label) {
 }
 
 test_that("PCL fixtures in data folder have valid structure", {
-  fixture_files <- c("pregnancy.RData", "PRISM.RData", "NLIBD.RData")
+  fixture_datasets <- c("pregnancy", "PRISM", "NLIBD")
 
-  for (fixture in fixture_files) {
+  for (fixture in fixture_datasets) {
     pcl <- load_pcl_fixture(fixture)
     assert_pcl_structure(pcl, fixture)
   }
 })
 
 test_that("TCGA survival fixture contains required columns", {
-  path <- resolve_fixture_path("TCGA_BRCA.RData", local_candidates = c(file.path(
-    "data",
-    "Survival", "TCGA_BRCA.RData"
-  ), file.path("data", "TCGA_BRCA.RData"), "TCGA_BRCA.RData"))
-
   env <- new.env(parent = emptyenv())
-  load(path, envir = env)
+  env$gene_all <- load_fixture_dataset("gene_all")
+  env$mir_all <- load_fixture_dataset("mir_all")
 
   has_legacy <- exists("gene_all", envir = env) && exists("mir_all", envir = env)
   has_pcl <- exists("PCL_train", envir = env) && exists("PCL_valid", envir = env)

@@ -1,26 +1,24 @@
-resolve_fixture_path <- function(filename, local_candidates = c(file.path(
-                                   "inst", "extdata", filename
-                                 ), file.path("data", filename), filename, file.path(
-                                   "data", "Survival", filename
-                                 ))) {
-  for (rel in unique(local_candidates)) {
-    path <- testthat::test_path("..", "..", rel)
-    if (file.exists(path)) {
-      return(path)
+load_fixture_dataset <- function(dataset_name) {
+  env <- new.env(parent = emptyenv())
+
+  ok <- tryCatch({
+    data(list = dataset_name, package = "IntegratedLearner", envir = env)
+    exists(dataset_name, envir = env, inherits = FALSE)
+  }, error = function(e) FALSE)
+
+  if (!ok) {
+    local_path <- testthat::test_path("..", "..", "data", paste0(dataset_name, ".RData"))
+    if (file.exists(local_path)) {
+      load(local_path, envir = env)
+      ok <- exists(dataset_name, envir = env, inherits = FALSE)
     }
   }
 
-  pkg_path <- system.file("extdata", filename, package = "IntegratedLearner")
-  if (nzchar(pkg_path) && file.exists(pkg_path)) {
-    return(pkg_path)
+  if (!ok) {
+    testthat::skip(paste0("Missing fixture dataset: ", dataset_name))
   }
 
-  testthat::skip(
-    paste0(
-      "Missing local fixture: ", filename,
-      ". Expected under inst/extdata or repository data/"
-    )
-  )
+  get(dataset_name, envir = env, inherits = FALSE)
 }
 
 make_toy_pcl <- function(
@@ -246,15 +244,11 @@ make_tcga_survival_pcl <- function(
     list(train_ids = tr_ids, valid_ids = va_ids)
   }
 
-  fixture_path <- resolve_fixture_path("TCGA_BRCA.RData", local_candidates = c(file.path(
-    "data",
-    "Survival", "TCGA_BRCA.RData"
-  ), file.path("data", "TCGA_BRCA.RData"), "TCGA_BRCA.RData"))
-
   env <- new.env(parent = emptyenv())
-  load(fixture_path, envir = env)
+  env$gene_all <- load_fixture_dataset("gene_all")
+  env$mir_all <- load_fixture_dataset("mir_all")
 
-  # Legacy fixture path (older TCGA_BRCA.RData format)
+  # Dataset path: packaged TCGA tables exposed as data(gene_all), data(mir_all)
   if (exists("gene_all", envir = env) && exists("mir_all", envir = env)) {
     gene <- get("gene_all", envir = env)
     mir <- get("mir_all", envir = env)
@@ -313,57 +307,7 @@ make_tcga_survival_pcl <- function(
     ))
   }
 
-  # Current fixture path (PCL_train/PCL_valid, used in vignette)
-  if (exists("PCL_train", envir = env) && exists("PCL_valid", envir = env)) {
-    pcl_train0 <- .normalize_pcl(get("PCL_train", envir = env))
-    pcl_valid0 <- .normalize_pcl(get("PCL_valid", envir = env))
-
-    common_feat <- intersect(rownames(pcl_train0$feature_table), rownames(pcl_valid0$feature_table))
-    fm <- pcl_train0$feature_metadata[common_feat, , drop = FALSE]
-
-    layers <- unique(as.character(fm$featureType))
-    if (length(layers) < 2L) {
-      stop("TCGA fixture must contain at least two feature layers.")
-    }
-
-    ids1 <- rownames(fm)[fm$featureType == layers[1]]
-    ids2 <- rownames(fm)[fm$featureType == layers[2]]
-    keep1 <- head(ids1, min(length(ids1), n_gene_features))
-    keep2 <- head(ids2, min(length(ids2), n_mirna_features))
-    keep_feat <- unique(c(keep1, keep2))
-    fm <- fm[keep_feat, , drop = FALSE]
-
-    train_ids0 <- intersect(colnames(pcl_train0$feature_table), rownames(pcl_train0$sample_metadata))
-    valid_ids0 <- intersect(colnames(pcl_valid0$feature_table), rownames(pcl_valid0$sample_metadata))
-
-    ft_all <- cbind(
-      pcl_train0$feature_table[keep_feat, train_ids0, drop = FALSE],
-      pcl_valid0$feature_table[keep_feat, valid_ids0, drop = FALSE]
-    )
-    sm_all <- rbind(pcl_train0$sample_metadata[train_ids0, , drop = FALSE], pcl_valid0$sample_metadata[valid_ids0, ,
-      drop = FALSE
-    ])
-
-    split <- .sample_train_valid(
-      ft = ft_all, sm = sm_all, n_samples = n_samples,
-      n_train = n_train, seed = seed
-    )
-
-    return(list(
-      train = list(
-        feature_table = ft_all[, split$train_ids, drop = FALSE],
-        sample_metadata = sm_all[split$train_ids, , drop = FALSE], feature_metadata = fm
-      ),
-      valid = list(
-        feature_table = ft_all[, split$valid_ids, drop = FALSE],
-        sample_metadata = sm_all[split$valid_ids, , drop = FALSE], feature_metadata = fm
-      )
-    ))
-  }
-
-  stop("TCGA_BRCA fixture did not contain expected objects. Found: ", paste(ls(env),
-    collapse = ", "
-  ))
+  stop("TCGA fixture did not contain expected objects. Found: ", paste(ls(env), collapse = ", "))
 }
 
 make_toy_survival_metadata <- function(sample_ids, seed = 99L, include_surv_col = FALSE) {

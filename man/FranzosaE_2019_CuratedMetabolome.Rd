@@ -7,11 +7,8 @@
 \format{
 A data frame with samples in rows and metabolite features in columns.
 }
-\source{
-curatedMetagenomicData / GutMicrobiomeMetabolomeCompendium-derived tutorial data.
-}
 \usage{
-FranzosaE_2019_CuratedMetabolome
+data(FranzosaE_2019_CuratedMetabolome)
 }
 \description{
 Metabolomics feature table for the FranzosaE_2019 training cohort.

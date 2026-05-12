@@ -7,11 +7,8 @@
 \format{
 A data frame with one row per sample and clinical/study covariates in columns.
 }
-\source{
-curatedMetagenomicData / GutMicrobiomeMetabolomeCompendium-derived tutorial data.
-}
 \usage{
-FranzosaE_2019_Validation_CuratedMetadata
+data(FranzosaE_2019_Validation_CuratedMetadata)
 }
 \description{
 Sample-level metadata for the FranzosaE_2019 external validation cohort.

@@ -49,15 +49,6 @@ can_run_sl_bart <- function() {
 }
 
 use_sl_bart <- isTRUE(can_run_sl_bart())
-
-load_extdata_rdata <- function(filename, envir = parent.frame()) {
-  path <- system.file("extdata", filename, package = "IntegratedLearner")
-  if (!nzchar(path)) {
-    stop("Could not find extdata file: ", filename)
-  }
-  load(path, envir = envir)
-  invisible(path)
-}
 ```
 
 This vignette is a practical tutorial for binary, multiclass, continuous, and survival outcome workflows in `IntegratedLearner`.
@@ -428,7 +419,8 @@ This section uses the PRISM dataset (Franzosa et al., 2019) for classifying IBD 
 
 ```{r}
 # Training data
-load_extdata_rdata("PRISM.RData", envir = environment())
+data("PRISM", package = "IntegratedLearner")
+pcl <- PRISM
 
 feature_table <- pcl$feature_table
 sample_metadata <- pcl$sample_metadata
@@ -447,7 +439,8 @@ all(rownames(feature_table) == rownames(feature_metadata))
 all(colnames(feature_table) == rownames(sample_metadata))
 
 # Independent validation data
-load_extdata_rdata("NLIBD.RData", envir = environment())
+data("NLIBD", package = "IntegratedLearner")
+pcl <- NLIBD
 feature_table_valid <- pcl$feature_table
 sample_metadata_valid <- pcl$sample_metadata
 rm(pcl)
@@ -521,7 +514,8 @@ This section uses the pregnancy dataset (Ghaemi et al., 2019), where `Y` is cont
 ### Step 1: Load and Inspect Data
 
 ```{r}
-load_extdata_rdata("pregnancy.RData", envir = environment())
+data("pregnancy", package = "IntegratedLearner")
+pcl <- pregnancy
 
 feature_table <- pcl$feature_table
 sample_metadata <- pcl$sample_metadata
@@ -765,8 +759,12 @@ column (`sample_id`) and pass them through `outcome_col` and
 `subject_id_col`.
 
 ```{r}
-load_extdata_rdata("FranzosaE_2019.RData", envir = environment())
-load_extdata_rdata("FranzosaE_2019_Validation.RData", envir = environment())
+data("FranzosaE_2019_CuratedMetabolome", package = "IntegratedLearner")
+data("FranzosaE_2019_CuratedMetadata", package = "IntegratedLearner")
+data("FranzosaE_2019_CuratedSpeciesProfile", package = "IntegratedLearner")
+data("FranzosaE_2019_Validation_CuratedMetabolome", package = "IntegratedLearner")
+data("FranzosaE_2019_Validation_CuratedMetadata", package = "IntegratedLearner")
+data("FranzosaE_2019_Validation_CuratedSpeciesProfile", package = "IntegratedLearner")
 
 as_feature_matrix <- function(df, id_col = "X") {
   ids <- as.character(df[[id_col]])
@@ -898,7 +896,8 @@ This path uses the package-native survival backend (no `mlr3` dependency require
 This section provides a complete MAE workflow, followed by an equivalent PCL sketch.
 
 ```{r}
-load_extdata_rdata("TCGA_BRCA.RData", envir = environment())
+data("gene_all", package = "IntegratedLearner")
+data("mir_all", package = "IntegratedLearner")
 
 to_feature_matrix <- function(df, id_col = "patient_id", n_keep = 120L) {
   drop_cols <- c("patient_id", "OS", "OS.time", "age", "race_white", "stage_i", "stage_ii")

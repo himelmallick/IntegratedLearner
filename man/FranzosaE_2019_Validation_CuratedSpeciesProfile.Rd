@@ -7,11 +7,8 @@
 \format{
 A data frame with samples in rows and microbial species features in columns.
 }
-\source{
-curatedMetagenomicData / GutMicrobiomeMetabolomeCompendium-derived tutorial data.
-}
 \usage{
-FranzosaE_2019_Validation_CuratedSpeciesProfile
+data(FranzosaE_2019_Validation_CuratedSpeciesProfile)
 }
 \description{
 Species-level relative abundance table for the FranzosaE_2019 external validation cohort.

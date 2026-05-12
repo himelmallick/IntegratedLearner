@@ -11,7 +11,7 @@ A data frame with one row per patient and covariates plus gene features in colum
 TCGA-derived example data bundled for package tests/tutorials.
 }
 \usage{
-gene_all
+data(gene_all)
 }
 \description{
 Gene-expression and associated covariate/outcome table for TCGA BRCA examples.

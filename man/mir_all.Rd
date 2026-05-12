@@ -11,7 +11,7 @@ A data frame with one row per patient and covariates plus microRNA features in c
 TCGA-derived example data bundled for package tests/tutorials.
 }
 \usage{
-mir_all
+data(mir_all)
 }
 \description{
 microRNA and associated covariate/outcome table for TCGA BRCA examples.
