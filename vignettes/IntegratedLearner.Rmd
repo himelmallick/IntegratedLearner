@@ -1085,24 +1085,6 @@ fit_surv_mae$valid_out$late$valid_auc
 fit_surv_mae$valid_out$single$valid_cindex
 ```
 
-### Equivalent PCL Survival 
-
-```{r,warning =FALSE}
-
-fit_surv_pcl <- IntegratedLearner(
-  PCL_train = PCL_train,
-  PCL_valid = PCL_valid,
-  outcome_col = "outcome_surv",
-  subject_id_col = "patient_id",
-  folds = 2,
-  base_learner = "surv.coxph",
-  filter_method = "prevalence",
-  filter_pct = 40,
-  run_screening = TRUE,
-  screen_pct = 25,
-  weight_method = "IBS"
-)
-```
 
 ## Session Information
 
