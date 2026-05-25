@@ -49,6 +49,34 @@ can_run_sl_bart <- function() {
 }
 
 use_sl_bart <- isTRUE(can_run_sl_bart())
+
+load_il_dataset <- function(dataset_name, envir = parent.frame()) {
+  # Prefer packaged datasets when available.
+  try(utils::data(list = dataset_name, package = "IntegratedLearner", envir = envir), silent = TRUE)
+  if (exists(dataset_name, envir = envir, inherits = FALSE)) {
+    return(invisible(TRUE))
+  }
+
+  # Fallback for local/source rendering (for example, knitting from vignettes/).
+  candidates <- c(
+    file.path("data", paste0(dataset_name, ".RData")),
+    file.path("..", "data", paste0(dataset_name, ".RData"))
+  )
+
+  for (path in unique(candidates)) {
+    if (file.exists(path)) {
+      load(path, envir = envir)
+      if (exists(dataset_name, envir = envir, inherits = FALSE)) {
+        return(invisible(TRUE))
+      }
+    }
+  }
+
+  stop(
+    "Could not load dataset '", dataset_name, "'. ",
+    "Install the latest IntegratedLearner package or ensure source data file exists."
+  )
+}
 ```
 
 This vignette is a practical tutorial for binary, multiclass, continuous, and survival outcome workflows in `IntegratedLearner`.
@@ -419,7 +447,7 @@ This section uses the PRISM dataset (Franzosa et al., 2019) for classifying IBD 
 
 ```{r}
 # Training data
-data("PRISM", package = "IntegratedLearner")
+load_il_dataset("PRISM", envir = environment())
 pcl <- PRISM
 
 feature_table <- pcl$feature_table
@@ -439,11 +467,20 @@ all(rownames(feature_table) == rownames(feature_metadata))
 all(colnames(feature_table) == rownames(sample_metadata))
 
 # Independent validation data
-data("NLIBD", package = "IntegratedLearner")
+load_il_dataset("NLIBD", envir = environment())
 pcl <- NLIBD
 feature_table_valid <- pcl$feature_table
 sample_metadata_valid <- pcl$sample_metadata
 rm(pcl)
+
+# Align validation features to training feature set/order (required by IntegratedLearner)
+if (!identical(rownames(feature_table), rownames(feature_table_valid))) {
+  missing_in_valid <- setdiff(rownames(feature_table), rownames(feature_table_valid))
+  if (length(missing_in_valid) > 0) {
+    stop("Validation set is missing training features, e.g.: ", paste(head(missing_in_valid, 5), collapse = ", "))
+  }
+  feature_table_valid <- feature_table_valid[rownames(feature_table), , drop = FALSE]
+}
 
 all(rownames(feature_table) == rownames(feature_table_valid))
 all(colnames(feature_table_valid) == rownames(sample_metadata_valid))
@@ -514,7 +551,7 @@ This section uses the pregnancy dataset (Ghaemi et al., 2019), where `Y` is cont
 ### Step 1: Load and Inspect Data
 
 ```{r}
-data("pregnancy", package = "IntegratedLearner")
+load_il_dataset("pregnancy", envir = environment())
 pcl <- pregnancy
 
 feature_table <- pcl$feature_table
@@ -759,12 +796,12 @@ column (`sample_id`) and pass them through `outcome_col` and
 `subject_id_col`.
 
 ```{r}
-data("FranzosaE_2019_CuratedMetabolome", package = "IntegratedLearner")
-data("FranzosaE_2019_CuratedMetadata", package = "IntegratedLearner")
-data("FranzosaE_2019_CuratedSpeciesProfile", package = "IntegratedLearner")
-data("FranzosaE_2019_Validation_CuratedMetabolome", package = "IntegratedLearner")
-data("FranzosaE_2019_Validation_CuratedMetadata", package = "IntegratedLearner")
-data("FranzosaE_2019_Validation_CuratedSpeciesProfile", package = "IntegratedLearner")
+load_il_dataset("FranzosaE_2019_CuratedMetabolome", envir = environment())
+load_il_dataset("FranzosaE_2019_CuratedMetadata", envir = environment())
+load_il_dataset("FranzosaE_2019_CuratedSpeciesProfile", envir = environment())
+load_il_dataset("FranzosaE_2019_Validation_CuratedMetabolome", envir = environment())
+load_il_dataset("FranzosaE_2019_Validation_CuratedMetadata", envir = environment())
+load_il_dataset("FranzosaE_2019_Validation_CuratedSpeciesProfile", envir = environment())
 
 as_feature_matrix <- function(df, id_col = "X") {
   ids <- as.character(df[[id_col]])
@@ -896,8 +933,8 @@ This path uses the package-native survival backend (no `mlr3` dependency require
 This section provides a complete MAE workflow, followed by an equivalent PCL sketch.
 
 ```{r}
-data("gene_all", package = "IntegratedLearner")
-data("mir_all", package = "IntegratedLearner")
+load_il_dataset("gene_all", envir = environment())
+load_il_dataset("mir_all", envir = environment())
 
 to_feature_matrix <- function(df, id_col = "patient_id", n_keep = 120L) {
   drop_cols <- c("patient_id", "OS", "OS.time", "age", "race_white", "stage_i", "stage_ii")
