@@ -3,11 +3,11 @@ Type: Package
 Title: Integrated Multi-Omics Learning for Survival and Other Outcomes
 Version: 0.99.0
 Authors@R: c(
-    person("Nalin", "Arora", email = "naa4050@med.cornell.edu", role = "aut"),
-    person("Anupreet", "Porwal", role = "aut"),
-    person("Himel", "Mallick", email = "him4004@med.cornell.edu",
+    person("Nalin", "Arora", email = "naa4050@med.cornell.edu",
         role = c("aut", "cre", "cph"),
-        comment = c(ORCID = "0000-0003-4956-2429"))
+        comment = c(ORCID = "0000-0003-4956-2429")),
+    person("Anupreet", "Porwal", role = "aut"),
+    person("Himel", "Mallick", email = "him4004@med.cornell.edu", role = "aut")
     )
 Description: IntegratedLearner provides a unified interface for multi-omics
     prediction using early, late, and intermediate fusion for continuous,
