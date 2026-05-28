@@ -1,5 +1,6 @@
 test_that("IntegratedLearner binomial stacked + concat returns expected structure", {
   skip_if_not_installed("SuperLearner")
+  skip_if_not_installed("nloptr")
   suppressPackageStartupMessages(library(SuperLearner))
 
   pcl <- make_toy_pcl(n_samples = 28, n_features = 12, seed = 41, binary = TRUE)
@@ -74,6 +75,7 @@ test_that("IntegratedLearner runs in MAE mode for binomial outcome", {
 
 test_that("predict.learner validates inputs and returns aligned predictions", {
   skip_if_not_installed("SuperLearner")
+  skip_if_not_installed("nloptr")
   suppressPackageStartupMessages(library(SuperLearner))
 
   pcl <- make_toy_pcl(n_samples = 26, n_features = 12, seed = 44, binary = TRUE)

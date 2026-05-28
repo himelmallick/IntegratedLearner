@@ -53,7 +53,7 @@
 #'   Default is 1234.
 #' @param base_learner Base learner for late fusion and early fusion.
 #'   Check out the
-#'   \href{https://cran.r-project.org/web/packages/SuperLearner/vignettes/Guide-to-SuperLearner.html}{SuperLearner user manual}
+#'   \href{https://CRAN.R-project.org/package=SuperLearner}{SuperLearner package page}
 #'   for all available options. Default is \code{`SL.BART`}.
 #' @param base_screener Deprecated for \code{IL_conbin} and \code{IL_multiclass};
 #'   kept for backward compatibility and currently ignored in those backends.
@@ -73,7 +73,7 @@
 #' @param meta_learner Meta-learner for late fusion (stacked generalization).
 #'   Defaults to \code{`SL.nnls.auc`}.
 #'   Check out the
-#'   \href{https://cran.r-project.org/web/packages/SuperLearner/vignettes/Guide-to-SuperLearner.html}{SuperLearner user manual}
+#'   \href{https://CRAN.R-project.org/package=SuperLearner}{SuperLearner package page}
 #'   for all available options.
 #' @param run_concat Should early fusion be run? Default is TRUE.
 #'   Uses the specified \code{base_learner} as the learning algorithm.
@@ -129,7 +129,7 @@
 #'
 #' @author Himel Mallick, \email{him4004@@med.cornell.edu}
 #'
-#' @keywords microbiome, metagenomics, multiomics, scRNASeq, tweedie, singlecell
+#' @keywords microbiome metagenomics multiomics scRNASeq tweedie singlecell
 #' @importFrom stats setNames
 #' @importFrom ranger ranger
 #' @importFrom utils type.convert

@@ -114,7 +114,7 @@
 #'
 #' @author Himel Mallick, \email{him4004@@med.cornell.edu}
 #'
-#' @keywords microbiome, metagenomics, multiomics, scRNASeq, tweedie, singlecell
+#' @keywords microbiome metagenomics multiomics scRNASeq tweedie singlecell
 #' @seealso \code{\link{IntegratedLearner}}, IL_survival()
 #' @export
 #'

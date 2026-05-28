@@ -104,7 +104,7 @@ Optional feature selection workflow used in this vignette:
 
 ## Load Packages
 
-```{r, warning=FALSE, message=FALSE}
+```{r chunk-01, warning=FALSE, message=FALSE}
 # Main package
 library(IntegratedLearner)
 
@@ -115,7 +115,6 @@ library(caret)
 library(cowplot)
 library(bayesplot)
 library(S4Vectors)
-#library(curatedMetagenomicData)
 library(TreeSummarizedExperiment)
 library(SummarizedExperiment)
 library(MultiAssayExperiment)
@@ -126,7 +125,7 @@ if (use_sl_bart) {
 }
 ```
 
-```{r, include=FALSE}
+```{r chunk-02, include=FALSE}
 if (!use_sl_bart) {
   message(
     "SL.BART sections are in fallback mode: Java >= 21 with bartMachine is required for SL.BART."
@@ -177,7 +176,8 @@ Automatic coercion in the wrapper:
 `IntegratedLearner` accepts `MultiAssayExperiment` inputs through `MAE_train`/`MAE_valid`. This is often the cleanest path when each omics layer is already represented as a `SummarizedExperiment`/`TreeSummarizedExperiment`.
 
 
-```{r, eval=TRUE,warning = FALSE, eval=FALSE}
+```{r chunk-03, eval=TRUE,warning = FALSE, eval=FALSE}
+library(curatedMetagenomicData)
 
 
 # 1) Download two aligned layers from curatedMetagenomicData
@@ -412,7 +412,7 @@ This section summarizes the outputs produced by each integration method and wher
 
 ### Quick Access Snippets
 
-```{r, eval=FALSE}
+```{r chunk-04, eval=FALSE}
 # ---- Conbin: weights + top features ----
 fit$weights
 head(fit$feature_importance_signed, 20)
@@ -445,7 +445,7 @@ This section uses the PRISM dataset (Franzosa et al., 2019) for classifying IBD 
 
 ### Step 1: Load and Inspect Training and Validation Data
 
-```{r}
+```{r chunk-05}
 # Training data
 load_il_dataset("PRISM", envir = environment())
 pcl <- PRISM
@@ -488,7 +488,7 @@ all(colnames(feature_table_valid) == rownames(sample_metadata_valid))
 
 ### Step 2: Build PCL Inputs
 
-```{r}
+```{r chunk-06}
 PCL_train <- list(
   feature_table = feature_table,
   sample_metadata = sample_metadata,
@@ -506,7 +506,7 @@ PCL_valid <- list(
 
 `IntegratedLearner` fits one model per layer (`base_learner`) and then combines layer-level predictions with a meta-learner (`meta_learner`).
 
-```{r, warning=FALSE}
+```{r chunk-07, warning=FALSE}
 fit <- IntegratedLearner(
   PCL_train = PCL_train,
   PCL_valid = PCL_valid,
@@ -530,7 +530,7 @@ Core outputs for binary tasks include:
 - `fit$weights`: layer contributions in the stacked model (when `SL.nnls.auc` is used).
 - `fit$yhat.train` and `fit$yhat.test`: predicted probabilities.
 
-```{r}
+```{r chunk-08}
 fit$AUC.train
 fit$AUC.test
 fit$weights
@@ -538,7 +538,7 @@ fit$weights
 
 Plot ROC summaries for train and validation sets:
 
-```{r, warning=FALSE, fig.height=10, fig.width=7}
+```{r chunk-09, warning=FALSE, fig.height=10, fig.width=7}
 plot.obj <- IntegratedLearner:::plot.learner(fit)
 ```
 
@@ -550,7 +550,7 @@ This section uses the pregnancy dataset (Ghaemi et al., 2019), where `Y` is cont
 
 ### Step 1: Load and Inspect Data
 
-```{r}
+```{r chunk-10}
 load_il_dataset("pregnancy", envir = environment())
 pcl <- pregnancy
 
@@ -578,7 +578,7 @@ all(colnames(feature_table) == rownames(sample_metadata))
 
 ### Step 2: Build PCL Input
 
-```{r}
+```{r chunk-11}
 PCL_train <- list(
   feature_table = feature_table,
   sample_metadata = sample_metadata,
@@ -599,7 +599,7 @@ your Java runtime is older than the version used by your installed `bartMachine`
 - upgrade Java runtime to 21 and restart R, or
 - use a non-Java learner (example fallback shown below).
 
-```{r, warning=FALSE, eval=use_sl_bart}
+```{r chunk-12, warning=FALSE, eval=use_sl_bart}
 fit <- IntegratedLearner(
   PCL_train = PCL_train,
   folds = 2,
@@ -615,7 +615,7 @@ fit <- IntegratedLearner(
 
 Fallback (non-Java) run:
 
-```{r, eval=!use_sl_bart}
+```{r chunk-13, eval=!use_sl_bart}
 fit <- IntegratedLearner(
   PCL_train = PCL_train,
   folds = 2,
@@ -633,11 +633,11 @@ fit <- IntegratedLearner(
 
 For continuous outcomes, `IntegratedLearner` reports `R2.train` (and `R2.test` if validation is provided).
 
-```{r}
+```{r chunk-14}
 fit$R2.train
 ```
 
-```{r fig.asp=0.8, fig.width=7}
+```{r chunk-21, fig.asp=0.8, fig.width=7}
 plot.obj <- IntegratedLearner:::plot.learner(fit)
 ```
 
@@ -646,7 +646,7 @@ plot.obj <- IntegratedLearner:::plot.learner(fit)
 When using `SL.BART`, you can inspect posterior predictive distributions and derive weighted posterior summaries.
 `r if (!use_sl_bart) "This section is skipped in this session because Java < 21 (or bartMachine is unavailable)." else ""`
 
-```{r, eval=use_sl_bart}
+```{r chunk-15, eval=use_sl_bart}
 weights <- fit$weights
 
 dataX <- fit$X_train_layers
@@ -669,7 +669,7 @@ names(dataY) <- rownames(dataX[[1]])
 
 Visualize 68% and 95% credible intervals for observations:
 
-```{r fig.width=9, fig.height=7, eval=use_sl_bart}
+```{r chunk-22, fig.width=9, fig.height=7, eval=use_sl_bart}
 ord_names <- names(sort(rowMeans(weighted.post.samples), decreasing = TRUE))
 
 mcmc_intervals(t(weighted.post.samples), prob = 0.68, prob_outer = 0.95) +
@@ -686,7 +686,7 @@ mcmc_intervals(t(weighted.post.samples), prob = 0.68, prob_outer = 0.95) +
 
 Layer weights and feature-level inclusion proportions can also be examined for biological interpretation.
 
-```{r, eval=use_sl_bart}
+```{r chunk-16, eval=use_sl_bart}
 omicsEye_theme <- function() {
   angle <- 45
   hjust <- 1
@@ -768,7 +768,7 @@ p5 <- VIMP %>%
   xlab("")
 ```
 
-```{r fig.width=7, fig.height=4, eval=use_sl_bart}
+```{r chunk-23, fig.width=7, fig.height=4, eval=use_sl_bart}
 plot_grid(
   p4,
   ncol = 1,
@@ -778,7 +778,7 @@ plot_grid(
 ) + theme(plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm"))
 ```
 
-```{r fig.width=9, fig.height=7, eval=use_sl_bart}
+```{r chunk-24, fig.width=9, fig.height=7, eval=use_sl_bart}
 plot_grid(
   p5,
   ncol = 1,
@@ -795,7 +795,7 @@ Here we keep the original outcome column name (`diseaseCat`) and subject ID
 column (`sample_id`) and pass them through `outcome_col` and
 `subject_id_col`.
 
-```{r}
+```{r chunk-17}
 load_il_dataset("FranzosaE_2019_CuratedMetabolome", envir = environment())
 load_il_dataset("FranzosaE_2019_CuratedMetadata", envir = environment())
 load_il_dataset("FranzosaE_2019_CuratedSpeciesProfile", envir = environment())
@@ -932,7 +932,7 @@ This path uses the package-native survival backend (no `mlr3` dependency require
 
 This section provides a complete MAE workflow, followed by an equivalent PCL sketch.
 
-```{r}
+```{r chunk-18}
 load_il_dataset("gene_all", envir = environment())
 load_il_dataset("mir_all", envir = environment())
 
@@ -1066,7 +1066,7 @@ fit_surv_mae <- IntegratedLearner(
 
 ### Interpret Survival Outputs
 
-```{r}
+```{r chunk-19}
 # Single-layer training metrics
 # fit_surv_mae$train_out$single$metrics
 
@@ -1088,7 +1088,7 @@ fit_surv_mae$valid_out$single$valid_cindex
 
 ## Session Information
 
-```{r}
+```{r chunk-20}
 sessionInfo()
 ```
 
@@ -1096,7 +1096,7 @@ sessionInfo()
 
 Franzosa EA et al. (2019).
 [Gut microbiome structure and metabolic activity in inflammatory bowel disease](
-https://www.ncbi.nlm.nih.gov/pubmed/30531976
+https://pubmed.ncbi.nlm.nih.gov/30531976/
 ).
 *Nature Microbiology* 4(2):293-305.
 

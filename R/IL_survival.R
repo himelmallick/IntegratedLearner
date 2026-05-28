@@ -415,7 +415,8 @@
     .require_pkg("randomForestSRC", method)
     method_args <- .cap_mtry(method_args, p)
     defaults <- list(formula = fml, data = dat, ntree = 500, importance = TRUE)
-    fit <- do.call(randomForestSRC::rfsrc, utils::modifyList(defaults, method_args))
+    rfsrc_fun <- get("rfsrc", envir = asNamespace("randomForestSRC"))
+    fit <- do.call(rfsrc_fun, utils::modifyList(defaults, method_args))
     return(list(model = fit, feature_names = feat))
   }
 
@@ -1767,7 +1768,7 @@
 #' @export
 ILsurv <- function(
   feature_table, sample_metadata, feature_metadata, valid_feature_table = NULL,
-  valid_sample_metadata = NULL, base_learner = "surv.rfsrc", folds = 5, seed = 123,
+  valid_sample_metadata = NULL, base_learner = "surv.coxph", folds = 5, seed = 123,
   run_screening = FALSE, screen_pct = NULL, verbose = FALSE, do_early_fusion = TRUE,
   weight_method = c("IBS", "COX"), t_vec = NULL, t_vec_probs = c(
     0.05, 0.25, 0.5,

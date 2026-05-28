@@ -173,9 +173,9 @@ if (FALSE) {
 \author{
 Himel Mallick, \email{him4004@med.cornell.edu}
 }
-\keyword{metagenomics,}
-\keyword{microbiome,}
-\keyword{multiomics,}
-\keyword{scRNASeq,}
+\keyword{metagenomics}
+\keyword{microbiome}
+\keyword{multiomics}
+\keyword{scRNASeq}
 \keyword{singlecell}
-\keyword{tweedie,}
+\keyword{tweedie}
