@@ -17,7 +17,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.0.2</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.0</span>
       </span>
     </div>
 
@@ -55,10 +55,13 @@
     <div id="ref-usage">
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># S3 method for class 'learner'</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span></span>
-<span>  <span class="va">fit</span>,</span>
+<span>  <span class="va">object</span>,</span>
 <span>  feature_table_valid <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  sample_metadata_valid <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  feature_metadata <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  feature_metadata <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  outcome_col <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  subject_id_col <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -66,8 +69,8 @@
     <h2>Arguments</h2>
 
 
-<dl><dt id="arg-fit">fit<a class="anchor" aria-label="anchor" href="#arg-fit"></a></dt>
-<dd><p>fitted "IntegratedLearner" object</p></dd>
+<dl><dt id="arg-object">object<a class="anchor" aria-label="anchor" href="#arg-object"></a></dt>
+<dd><p>Fitted 'IntegratedLearner' object</p></dd>
 
 
 <dt id="arg-feature-table-valid">feature_table_valid<a class="anchor" aria-label="anchor" href="#arg-feature-table-valid"></a></dt>
@@ -80,6 +83,22 @@
 
 <dt id="arg-feature-metadata">feature_metadata<a class="anchor" aria-label="anchor" href="#arg-feature-metadata"></a></dt>
 <dd><p>Matrix containing feature names and their corresponding layers. Must be same as that provided in IntegratedLearner object.</p></dd>
+
+
+<dt id="arg-outcome-col">outcome_col<a class="anchor" aria-label="anchor" href="#arg-outcome-col"></a></dt>
+<dd><p>Optional outcome column name in <code>sample_metadata_valid</code>.
+If <code>NULL</code>, uses the mapping stored in <code>object$column_map</code> (or
+falls back to <code>"Y"</code>).</p></dd>
+
+
+<dt id="arg-subject-id-col">subject_id_col<a class="anchor" aria-label="anchor" href="#arg-subject-id-col"></a></dt>
+<dd><p>Optional subject identifier column name in
+<code>sample_metadata_valid</code>. If <code>NULL</code>, uses the mapping stored in
+<code>object$column_map</code> (or falls back to <code>"subjectID"</code>).</p></dd>
+
+
+<dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
+<dd><p>Additional arguments (currently unused)</p></dd>
 
 </dl></div>
     <div id="value">
@@ -95,7 +114,7 @@
 
 
       <footer><div class="copyright">
-  <p></p><p>Developed by Himel Mallick, Anupreet Porwal.</p>
+  <p></p><p>Developed by Nalin Arora, Anupreet Porwal, Himel Mallick.</p>
 </div>
 
 <div class="pkgdown">

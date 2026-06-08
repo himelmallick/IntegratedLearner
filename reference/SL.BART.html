@@ -17,7 +17,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.0.2</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.0</span>
       </span>
     </div>
 
@@ -62,7 +62,7 @@
 <span>  <span class="va">id</span>,</span>
 <span>  num_trees <span class="op">=</span> <span class="fl">50</span>,</span>
 <span>  num_burn_in <span class="op">=</span> <span class="fl">250</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">F</span>,</span>
+<span>  verbose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  alpha <span class="op">=</span> <span class="fl">0.95</span>,</span>
 <span>  beta <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  k <span class="op">=</span> <span class="fl">2</span>,</span>
@@ -92,7 +92,7 @@
 
 
 <dt id="arg-family">family<a class="anchor" aria-label="anchor" href="#arg-family"></a></dt>
-<dd><p>"gaussian" for regression, "binomial" for binary
+<dd><p>'gaussian' for regression, 'binomial' for binary
 classification</p></dd>
 
 
@@ -110,7 +110,7 @@ currently).</p></dd>
 
 
 <dt id="arg-num-burn-in">num_burn_in<a class="anchor" aria-label="anchor" href="#arg-num-burn-in"></a></dt>
-<dd><p>Number of MCMC samples to be discarded as "burn-in".</p></dd>
+<dd><p>Number of MCMC samples to be discarded as 'burn-in'.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
@@ -130,8 +130,8 @@ nonterminal or not.</p></dd>
 
 <dt id="arg-k">k<a class="anchor" aria-label="anchor" href="#arg-k"></a></dt>
 <dd><p>For regression, k determines the prior probability that E(Y|X) is
-contained in the interval (y_min, y_max), based on a normal
-distribution. For example, when k=2, the prior probability is 95\<!-- %. For -->
+contained in the interval \((y_{min}, y_{max})\), based on a normal
+distribution. For example, when k=2, the prior probability is 95 percent. For
 classification, k determines the prior probability that E(Y|X) is between
 (-3,3). Note that a larger value of k results in more shrinkage and a more
 conservative fit.</p></dd>
@@ -159,11 +159,39 @@ posterior distribution of f(x).</p></dd>
 will require additional RAM.</p></dd>
 
 
+<dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
+<dd><p>Seed for reproducibility passed to bartMachine.</p></dd>
+
+
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
 <dd><p>Additional arguments (not used)</p></dd>
 
 </dl></div>
+    <div id="value">
+    <h2>Value</h2>
+    <p>A list with elements <code>pred</code> (predictions for <code>newX</code>) and
+<code>fit</code> (the fitted model object).</p>
+    </div>
 
+    <div id="ref-examples">
+    <h2>Examples</h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/is.function.html" class="external-link">is.function</a></span><span class="op">(</span><span class="va">SL.BART</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] TRUE</span>
+<span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="va">X</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>x1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fl">20</span><span class="op">)</span>, x2 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fl">20</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="va">Y</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fl">20</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu">SL.BART</span><span class="op">(</span></span></span>
+<span class="r-in"><span>    Y <span class="op">=</span> <span class="va">Y</span>, X <span class="op">=</span> <span class="va">X</span>, newX <span class="op">=</span> <span class="va">X</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, <span class="op">]</span>,</span></span>
+<span class="r-in"><span>    family <span class="op">=</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">gaussian</a></span><span class="op">(</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>    obsWeights <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">X</span><span class="op">)</span><span class="op">)</span>, id <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">X</span><span class="op">)</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>    num_trees <span class="op">=</span> <span class="fl">5</span>, num_burn_in <span class="op">=</span> <span class="fl">5</span>, num_iterations_after_burn_in <span class="op">=</span> <span class="fl">20</span></span></span>
+<span class="r-in"><span>  <span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="va">fit</span><span class="op">$</span><span class="va">pred</span></span></span>
+<span class="r-in"><span><span class="op">}</span></span></span>
+<span class="r-in"><span></span></span>
+</code></pre></div>
+    </div>
   </div>
   <div class="col-md-3 hidden-xs hidden-sm" id="pkgdown-sidebar">
     <nav id="toc" data-toggle="toc" class="sticky-top"><h2 data-toc-skip>Contents</h2>
@@ -172,7 +200,7 @@ will require additional RAM.</p></dd>
 
 
       <footer><div class="copyright">
-  <p></p><p>Developed by Himel Mallick, Anupreet Porwal.</p>
+  <p></p><p>Developed by Nalin Arora, Anupreet Porwal, Himel Mallick.</p>
 </div>
 
 <div class="pkgdown">

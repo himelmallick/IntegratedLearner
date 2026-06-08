@@ -17,7 +17,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.0.2</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.0</span>
       </span>
     </div>
 
@@ -54,15 +54,27 @@
 
     <div id="ref-usage">
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># S3 method for class 'learner'</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">fit</span>, label_size <span class="op">=</span> <span class="fl">8</span>, label_x <span class="op">=</span> <span class="fl">0.3</span>, vjust <span class="op">=</span> <span class="fl">0.1</span>, rowwise_plot <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span></span>
+<span>  <span class="va">x</span>,</span>
+<span>  y <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  label_size <span class="op">=</span> <span class="fl">8</span>,</span>
+<span>  label_x <span class="op">=</span> <span class="fl">0.3</span>,</span>
+<span>  vjust <span class="op">=</span> <span class="fl">0.1</span>,</span>
+<span>  rowwise_plot <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  <span class="va">...</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div id="arguments">
     <h2>Arguments</h2>
 
 
-<dl><dt id="arg-fit">fit<a class="anchor" aria-label="anchor" href="#arg-fit"></a></dt>
-<dd><p>fitted "IntegratedLearner" object</p></dd>
+<dl><dt id="arg-x">x<a class="anchor" aria-label="anchor" href="#arg-x"></a></dt>
+<dd><p>Fitted 'IntegratedLearner' object</p></dd>
+
+
+<dt id="arg-y">y<a class="anchor" aria-label="anchor" href="#arg-y"></a></dt>
+<dd><p>Unused (required for S3 signature)</p></dd>
 
 
 <dt id="arg-label-size">label_size<a class="anchor" aria-label="anchor" href="#arg-label-size"></a></dt>
@@ -80,6 +92,10 @@
 <dt id="arg-rowwise-plot">rowwise_plot<a class="anchor" aria-label="anchor" href="#arg-rowwise-plot"></a></dt>
 <dd><p>If both train and test data is available, should the train and test plots be rowwise_plot. Default is TRUE. If FALSE, plots are aligned column-wise.</p></dd>
 
+
+<dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
+<dd><p>Additional arguments (currently unused)</p></dd>
+
 </dl></div>
     <div id="value">
     <h2>Value</h2>
@@ -94,7 +110,7 @@
 
 
       <footer><div class="copyright">
-  <p></p><p>Developed by Himel Mallick, Anupreet Porwal.</p>
+  <p></p><p>Developed by Nalin Arora, Anupreet Porwal, Himel Mallick.</p>
 </div>
 
 <div class="pkgdown">
