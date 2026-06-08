@@ -504,8 +504,11 @@ NULL
 
     if (inherits(fit_i, "error")) {
       warning(
-        "Skipping multiview rho=", rho_val, " due to fit error: ",
-        conditionMessage(fit_i),
+        sprintf(
+          "Skipping multiview rho=%s due to fit error: %s",
+          rho_val,
+          conditionMessage(fit_i)
+        ),
         call. = FALSE
       )
       next

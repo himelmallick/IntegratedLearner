@@ -109,13 +109,13 @@ Optional feature selection workflow used in this vignette:
 library(IntegratedLearner)
 
 # Tutorial dependencies
-library(tidyverse)
+library(dplyr)
+library(ggplot2)
 library(SuperLearner)
 library(caret)
 library(cowplot)
 library(bayesplot)
 library(S4Vectors)
-library(TreeSummarizedExperiment)
 library(SummarizedExperiment)
 library(MultiAssayExperiment)
 library(survival)
