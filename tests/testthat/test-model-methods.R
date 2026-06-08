@@ -54,6 +54,49 @@ test_that("IntegratedLearner gaussian path computes R2 train and validation", {
   expect_true(all(is.finite(fit$R2.test)))
 })
 
+test_that("fusion-layer screening helper drops poor layers and keeps best fallback", {
+  keep_one <- IntegratedLearner:::.select_fusion_layers(
+    scores = c(layerA = 0.62, layerB = 0.41),
+    threshold = 0.5,
+    metric_label = "AUC",
+    drop_layers = TRUE
+  )
+  expect_identical(keep_one$retained, "layerA")
+  expect_identical(keep_one$removed, "layerB")
+
+  fallback <- IntegratedLearner:::.select_fusion_layers(
+    scores = c(layerA = NA_real_, layerB = 0.32),
+    threshold = 0.5,
+    metric_label = "R2",
+    drop_layers = TRUE
+  )
+  expect_identical(fallback$retained, "layerB")
+  expect_identical(fallback$removed, "layerA")
+})
+
+test_that("IntegratedLearner gaussian fusion can drop poor-performing layers", {
+  skip_if_not_installed("SuperLearner")
+  suppressPackageStartupMessages(library(SuperLearner))
+
+  pcl <- make_toy_pcl(n_samples = 50, n_features = 12, seed = 420, binary = FALSE)
+  bad_features <- rownames(pcl$feature_metadata)[pcl$feature_metadata$featureType == "omicsB"]
+  pcl$feature_table[bad_features, ] <- 0
+
+  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl,
+    folds = 2, seed = 2026, base_learner = "SL.glm", meta_learner = "SL.glm",
+    run_stacked = TRUE, run_concat = TRUE, drop_poor_performing_layers = TRUE,
+    print_learner = FALSE, verbose = FALSE, family = stats::gaussian()
+  ))
+
+  expect_true(isTRUE(fit$drop_poor_performing_layers))
+  expect_true("omicsA" %in% fit$fusion_layers_retained)
+  expect_true("omicsB" %in% fit$fusion_layers_removed)
+  expect_identical(colnames(fit$SL_fits$SL_fit_stacked$X), fit$fusion_layers_retained)
+  expect_true(all(colnames(fit$SL_fits$SL_fit_concat$X) %in% rownames(pcl$feature_metadata)[pcl$feature_metadata$featureType %in%
+    fit$fusion_layers_retained]))
+})
+
 test_that("IntegratedLearner runs in MAE mode for binomial outcome", {
   skip_if_not_installed("SuperLearner")
   suppressPackageStartupMessages(library(SuperLearner))
@@ -222,4 +265,30 @@ test_that("plot.learner returns plotting payloads for binomial and gaussian fits
   expect_true(is.list(out_gauss))
   expect_true(all(c("plot", "R2_table") %in% names(out_gauss)))
   expect_true(is.data.frame(out_gauss$R2_table))
+})
+
+test_that("IntegratedLearner can add multiview intermediate fusion for gaussian", {
+  skip_if_not_installed("SuperLearner")
+  skip_if_not_installed("multiview")
+  suppressPackageStartupMessages(library(SuperLearner))
+
+  pcl <- make_toy_pcl(n_samples = 32, n_features = 12, seed = 460, binary = FALSE)
+  train_ids <- rownames(pcl$sample_metadata)[1:24]
+  valid_ids <- rownames(pcl$sample_metadata)[25:32]
+  pcl_train <- subset_pcl(pcl, feature_ids = rownames(pcl$feature_table), sample_ids = train_ids)
+  pcl_valid <- subset_pcl(pcl, feature_ids = rownames(pcl$feature_table), sample_ids = valid_ids)
+
+  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl_train,
+    PCL_valid = pcl_valid, folds = 3, seed = 2040, base_learner = "SL.glm",
+    run_stacked = FALSE, run_concat = FALSE, intermediate_learners = "multiview",
+    print_learner = FALSE, verbose = FALSE, family = stats::gaussian()
+  ))
+
+  expect_true("intermediate_multiview" %in% colnames(fit$yhat.train))
+  expect_true("intermediate_multiview" %in% colnames(fit$yhat.test))
+  expect_true("multiview" %in% names(fit$model_fits$model_intermediate))
+  expect_true(is.list(fit$intermediate_details$multiview))
+  expect_true(is.finite(fit$R2.train["intermediate_multiview"]))
+  expect_true(is.finite(fit$R2.test["intermediate_multiview"]))
 })

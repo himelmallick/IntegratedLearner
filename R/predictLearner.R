@@ -131,16 +131,33 @@ predict.learner <- function(
 
   combo_valid <- as.data.frame(do.call(cbind, layer_wise_prediction_valid))
   names(combo_valid) <- name_layers
+  fusion_layers <- fit$fusion_layers_retained %||% name_layers
+  fusion_feature_ids <- .feature_ids_for_layers(feature_metadata, fusion_layers)
+
+  intermediate_valid_df <- NULL
+  if (!is.null(fit$model_fits$model_intermediate$multiview)) {
+    intermediate_pred <- .predict_multiview_cv(
+      cvfit = fit$model_fits$model_intermediate$multiview,
+      x_list = X_test_layers,
+      family_name = fit$family,
+      s = fit$multiview_s %||% "lambda.min"
+    )
+    intermediate_valid_df <- data.frame(
+      intermediate_multiview = intermediate_pred,
+      row.names = rownames(combo_valid),
+      check.names = FALSE
+    )
+  }
 
   if (isTRUE(fit$run_stacked)) {
     stacked_prediction_valid <- SuperLearner::predict.SuperLearner(fit$SL_fits$SL_fit_stacked,
-      newdata = combo_valid
+      newdata = combo_valid[, fusion_layers, drop = FALSE]
     )$pred
     rownames(stacked_prediction_valid) <- rownames(combo_valid)
   }
 
   if (isTRUE(fit$run_concat)) {
-    fulldat_valid <- as.data.frame(t(feature_table_valid))
+    fulldat_valid <- as.data.frame(t(feature_table_valid[fusion_feature_ids, , drop = FALSE]))
     concat_prediction_valid <- SuperLearner::predict.SuperLearner(fit$SL_fits$SL_fit_concat,
       newdata = fulldat_valid
     )$pred
@@ -155,16 +172,31 @@ predict.learner <- function(
   }
 
   if (isTRUE(fit$run_concat) && isTRUE(fit$run_stacked)) {
-    yhat.test <- cbind(combo_valid, stacked_prediction_valid, concat_prediction_valid)
-    colnames(yhat.test) <- c(colnames(combo_valid), "stacked", "concatenated")
+    yhat.test <- combo_valid
+    if (!is.null(intermediate_valid_df)) {
+      yhat.test <- cbind(yhat.test, intermediate_valid_df)
+    }
+    yhat.test <- cbind(yhat.test, stacked_prediction_valid, concat_prediction_valid)
+    colnames(yhat.test)[(ncol(yhat.test) - 1L):ncol(yhat.test)] <- c("stacked", "concatenated")
   } else if (isTRUE(fit$run_concat) && !isTRUE(fit$run_stacked)) {
-    yhat.test <- cbind(combo_valid, concat_prediction_valid)
-    colnames(yhat.test) <- c(colnames(combo_valid), "concatenated")
+    yhat.test <- combo_valid
+    if (!is.null(intermediate_valid_df)) {
+      yhat.test <- cbind(yhat.test, intermediate_valid_df)
+    }
+    yhat.test <- cbind(yhat.test, concat_prediction_valid)
+    colnames(yhat.test)[ncol(yhat.test)] <- "concatenated"
   } else if (!isTRUE(fit$run_concat) && isTRUE(fit$run_stacked)) {
-    yhat.test <- cbind(combo_valid, stacked_prediction_valid)
-    colnames(yhat.test) <- c(colnames(combo_valid), "stacked")
+    yhat.test <- combo_valid
+    if (!is.null(intermediate_valid_df)) {
+      yhat.test <- cbind(yhat.test, intermediate_valid_df)
+    }
+    yhat.test <- cbind(yhat.test, stacked_prediction_valid)
+    colnames(yhat.test)[ncol(yhat.test)] <- "stacked"
   } else {
     yhat.test <- combo_valid
+    if (!is.null(intermediate_valid_df)) {
+      yhat.test <- cbind(yhat.test, intermediate_valid_df)
+    }
   }
 
   res$yhat.test <- yhat.test

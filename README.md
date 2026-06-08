@@ -15,6 +15,9 @@ Optional dependency for BART workflows:
 - `SL.BART` and BART uncertainty utilities rely on `bartMachine` and a working Java setup.
 - If Java/BART are unavailable, use non-Java learners such as `SL.randomForest` (continuous/binary) or native multiclass learners.
 
+Optional dependency for cooperative intermediate fusion:
+- `intermediate_learners = "multiview"` (continuous/binary) and `intermediate_learners = "surv.multiview"` (survival) rely on the CRAN package [`multiview`](https://cran.r-project.org/package=multiview).
+
 ## Installation
 
 Once the dependencies are installed, `IntegratedLearner` can be loaded using the following command:
@@ -32,6 +35,7 @@ library(IntegratedLearner)
 * Integrates with [SuperLearner](https://cran.r-project.org/web/packages/SuperLearner/index.html) for binary/continuous models (`SL.*`)
 * Includes a native multiclass backend with multiclass learners (`glmnet`, `randomforest`, `ranger`, `xgboost`, `mbart`, `multinom`)
 * Uses a native BioC-friendly survival backend (`ILsurv`) for `surv.*` models
+* Supports cooperative-learning intermediate fusion via [`multiview`](https://cran.r-project.org/package=multiview) for continuous, binary, and survival outcomes
 * Supports optional feature filtering (`filter_method`, `filter_pct`) and supervised screening (`run_screening`, `screen_pct`)
 * Applies screening in a fold-safe way (fit on fold-training only; apply to fold-validation) to avoid leakage
 * Visualization using built-in plotting
@@ -47,11 +51,11 @@ The package vignette demonstrates binary, multiclass, continuous, survival, `PCL
 
 **`IntegratedLearner`** provides an integrated machine learning framework to 1) consolidate predictions by borrowing information across several longitudinal and cross-sectional omics data layers, 2) decipher the mechanistic role of individual omics features that can potentially lead to new sets of testable hypotheses, and 3) quantify uncertainty of the integration process. Three integration paradigms are supported: early, late, and intermediate.
 
-For binary/continuous outcomes, late fusion proceeds by 1) fitting a machine learning algorithm (`base_learner`) per layer and 2) combining layer-wise cross-validated predictions using a meta model (`meta_learner`). A common default is [BART](https://arxiv.org/abs/0806.3286) as base learner (`base_learner = "SL.BART"`) with `SL.nnls.auc` as the meta-learner.
+For binary/continuous outcomes, late fusion proceeds by 1) fitting a machine learning algorithm (`base_learner`) per layer and 2) combining layer-wise cross-validated predictions using a meta model (`meta_learner`). A common default is [BART](https://arxiv.org/abs/0806.3286) as base learner (`base_learner = "SL.BART"`) with `SL.nnls.auc` as the meta-learner. Optional cooperative intermediate fusion is also available through `intermediate_learners = "multiview"`.
 
 For multiclass outcomes (`family = binomial()` with more than two outcome classes), `IntegratedLearner` dispatches to a native multiclass backend that performs multiclass probability modeling at layer, stacked, and concatenated levels. Optional filtering and screening are supported via `filter_method`/`filter_pct` and `run_screening`/`screen_pct`.
 
-For survival outcomes, `IntegratedLearner` dispatches to the native survival engine (`ILsurv`) with configurable late-fusion weighting (`COX`/`IBS`) and optional intermediate fusion. Supported survival learners include Cox, penalized Cox, tree ensembles, boosting, and XGBoost-based survival variants (see full list below).
+For survival outcomes, `IntegratedLearner` dispatches to the native survival engine (`ILsurv`) with configurable late-fusion weighting (`COX`/`IBS`) and optional intermediate fusion. Supported survival learners include Cox, penalized Cox, tree ensembles, boosting, and XGBoost-based survival variants (see full list below). Intermediate survival fusion can use either risk-level learners such as `surv.coxph` or cooperative-learning feature-level fusion via `surv.multiview`.
 
 For binary/continuous non-survival tasks, learners should use the `SL.` prefix (for example, `SL.randomForest`, `SL.BART`, `SL.glmnet`). For multiclass, use multiclass learner IDs such as `randomforest`, `ranger`, `xgboost`, `glmnet`, `mbart`, or `multinom`.
 
@@ -163,6 +167,11 @@ Custom metadata names are optional. If omitted, defaults remain `outcome_col = "
 * `meta_learner`: Meta learner for non-survival late fusion. Defaults to `"SL.nnls.auc"` in binary/continuous; multiclass supports native learners (for example `glmnet`, `randomforest`, `xgboost`).
 * `run_concat`: Logical; include early-fusion (concatenated) model for non-survival.
 * `run_stacked`: Logical; include late-fusion stacked model for non-survival.
+* `intermediate_learners`: Optional vector of intermediate-fusion learners. Continuous/binary currently support `"multiview"`. Survival supports `"surv.coxph"` and `"surv.multiview"`. Multiclass intermediate fusion is not yet implemented.
+* `multiview_rho_grid`: Optional `rho` grid for cooperative-learning intermediate fusion when using `multiview`.
+* `multiview_s`: Lambda rule used for `multiview` prediction extraction (`"lambda.min"` or `"lambda.1se"`).
+* `multiview_alpha`: Elastic-net `alpha` used in `multiview`.
+* `drop_poor_performing_layers`: If `TRUE`, layers with poor single-layer performance are removed from early and late fusion only (`AUC < 0.5` for binary, `R2 < 0.5` for continuous, `C-index < 0.5` for survival). Single-layer outputs are still retained.
 * `family`: `gaussian()` (continuous), `binomial()` (binary or multiclass), or survival family/metadata.
 * `verbose`: Logical progress flag.
 * `...`: Additional backend parameters. For survival, includes options such as `weight_method`, `do_early_fusion`, `intermediate_learners`, and learner-specific hyperparameters (or `model_args`).
@@ -180,8 +189,9 @@ Supported model families:
 
 Supported fusion modules:
 
-* Non-survival (binary/continuous/multiclass): single-layer + early (`run_concat`) + late (`run_stacked`).
-* Survival: single-layer + early (`do_early_fusion`) + late weighted fusion (`COX`/`IBS`) + intermediate (`intermediate_learners`).
+* Continuous/Binary: single-layer + early (`run_concat`) + late (`run_stacked`) + optional intermediate (`intermediate_learners = "multiview"`).
+* Multiclass: single-layer + early (`run_concat`) + late (`run_stacked`); intermediate fusion is not yet implemented.
+* Survival: single-layer + early (`do_early_fusion`) + late weighted fusion (`COX`/`IBS`) + intermediate (`intermediate_learners`, including `surv.multiview`).
 
 #### The IntegratedLearner workflow
 
@@ -195,6 +205,7 @@ For continuous/binary fits (`IL_conbin` path):
 * `model_fits`: Extracted learner objects.
 * `X_train_layers`, `Y_train`, `yhat.train`: training inputs and predictions.
 * `X_test_layers`, `Y_test`, `yhat.test`: validation inputs and predictions (if validation provided).
+* `model_fits$model_intermediate$multiview` and `intermediate_details$multiview`: optional cooperative intermediate-fusion fit and tuning summary when `intermediate_learners = "multiview"`.
 * `weights`: Layer weights in stacked model (`meta_learner = "SL.nnls.auc"` and `run_stacked = TRUE`).
 * `AUC.train`/`AUC.test` (binomial) or `R2.train`/`R2.test` (gaussian).
 * `feature_importance_signed`: Global signed feature importance.
@@ -214,7 +225,7 @@ For survival fits (`ILsurv` path):
 * `train_out$single`: Single-layer metrics.
 * `train_out$early`: Early-fusion metrics (if enabled).
 * `train_out$late`: Late-fusion metrics and learned layer weights (`train_out$late$weights`).
-* `train_out$intermediate`: Intermediate learner metrics.
+* `train_out$intermediate`: Intermediate learner metrics (including `surv.multiview`, if requested).
 * `valid_out$...`: Validation analogs of single/early/late/intermediate outputs (if validation provided).
 * `train_out$late$combined_importance` and (if available) `train_out$early$combined_importance`: survival feature-importance outputs.
 

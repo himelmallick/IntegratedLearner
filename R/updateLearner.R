@@ -162,15 +162,78 @@ update.learner <- function(
 
   combo_valid <- as.data.frame(do.call(cbind, layer_wise_prediction_valid))
   names(combo_valid) <- name_layers_common
+  fusion_layers_target <- fit$fusion_layers_retained %||% name_layers_common
+  fusion_layers_common <- intersect(name_layers_common, fusion_layers_target)
+  run_stacked_update <- isTRUE(fit$run_stacked) && length(fusion_layers_common) > 0L
+  run_concat_update <- isTRUE(fit$run_concat) && length(fusion_layers_common) > 0L
+  run_intermediate_update <- !is.null(fit$model_fits$model_intermediate$multiview) &&
+    length(name_layers_common) >= 2L
+
+  if ((isTRUE(fit$run_stacked) || isTRUE(fit$run_concat)) && length(fusion_layers_common) == 0L) {
+    message("No retained fusion layers are available in the validation subset; returning single-layer predictions only.")
+  }
+  if (!is.null(fit$model_fits$model_intermediate$multiview) && length(name_layers_common) < 2L) {
+    message("Skipping multiview intermediate fusion update because fewer than 2 common layers are available.")
+  }
+
+  intermediate_prediction_valid <- NULL
+  if (run_intermediate_update) {
+    if (!is.list(fit$cvControl$validRows) || length(fit$cvControl$validRows) == 0L) {
+      stop("Cannot refit multiview intermediate model because fold assignments are missing from the fit object.",
+        call. = FALSE
+      )
+    }
+
+    fold_id <- integer(length(fit$Y_train))
+    for (k in seq_along(fit$cvControl$validRows)) {
+      fold_id[fit$cvControl$validRows[[k]]] <- k
+    }
+
+    mv_fit <- .fit_multiview_intermediate(
+      x_list = fit$X_train_layers[name_layers_common],
+      family_name = fit$family,
+      fold_id = fold_id,
+      rho_grid = fit$multiview_rho_grid %||% c(0, 0.1, 0.25, 0.5, 1),
+      s = fit$multiview_s %||% "lambda.min",
+      alpha = fit$multiview_alpha %||% 1,
+      y = fit$Y_train,
+      verbose = verbose,
+      seed = seed
+    )
+
+    intermediate_prediction_valid <- .predict_multiview_cv(
+      cvfit = mv_fit$cvfit,
+      x_list = X_test_layers,
+      family_name = fit$family,
+      s = fit$multiview_s %||% "lambda.min"
+    )
+
+    fit$model_fits$model_intermediate$multiview <- mv_fit$cvfit
+    fit$intermediate_details$multiview <- list(
+      rho = mv_fit$rho,
+      score = mv_fit$score,
+      rho_grid = mv_fit$all_scores,
+      lambda_rule = mv_fit$lambda_rule,
+      alpha = mv_fit$alpha
+    )
+    fit$yhat.train$intermediate_multiview <- mv_fit$oof_pred
+  } else {
+    fit$model_fits$model_intermediate <- list()
+    fit$intermediate_details <- list()
+    fit$yhat.train$intermediate_multiview <- NULL
+  }
 
   # ---- refit stacked ----
-  if (isTRUE(fit$run_stacked)) {
+  if (run_stacked_update) {
     if (verbose) {
       message("Running new stacked model...")
     }
 
+    combo_fusion <- combo[, fusion_layers_common, drop = FALSE]
+    combo_valid_fusion <- combo_valid[, fusion_layers_common, drop = FALSE]
+
     SL_fit_stacked <- SuperLearner::SuperLearner(
-      Y = fit$Y_train, X = combo,
+      Y = fit$Y_train, X = combo_fusion,
       cvControl = fit$cvControl, verbose = verbose, SL.library = fit$meta_learner,
       family = family, env = sl_env
     )
@@ -178,18 +241,18 @@ update.learner <- function(
     model_stacked <- SL_fit_stacked$fitLibrary[[1]]$object
 
     SL_fit_stacked$Y <- fit$Y_train
-    SL_fit_stacked$X <- combo
+    SL_fit_stacked$X <- combo_fusion
     if (!is.null(sample_metadata_valid)) {
       SL_fit_stacked$validY <- validY
     }
 
     stacked_prediction_valid <- SuperLearner::predict.SuperLearner(SL_fit_stacked,
-      newdata = combo_valid
+      newdata = combo_valid_fusion
     )$pred
 
-    rownames(stacked_prediction_valid) <- rownames(combo_valid)
+    rownames(stacked_prediction_valid) <- rownames(combo_valid_fusion)
 
-    SL_fit_stacked$validX <- combo_valid
+    SL_fit_stacked$validX <- combo_valid_fusion
     SL_fit_stacked$validPrediction <- stacked_prediction_valid
     colnames(SL_fit_stacked$validPrediction) <- "validPrediction"
 
@@ -199,13 +262,15 @@ update.learner <- function(
   }
 
   # ---- refit concat ----
-  if (isTRUE(fit$run_concat)) {
+  if (run_concat_update) {
     if (verbose) {
       message("Running new concatenated model...")
     }
 
-    feature_table_train <- Reduce(cbind.data.frame, fit$X_train_layers)
-    feature_table_train <- feature_table_train[, feature_metadata_valid$featureID,
+    feature_table_train <- Reduce(cbind.data.frame, fit$X_train_layers[fusion_layers_common])
+    concat_feature_ids <- feature_metadata_valid$featureID[feature_metadata_valid$featureType %in%
+      fusion_layers_common]
+    feature_table_train <- feature_table_train[, concat_feature_ids,
       drop = FALSE
     ]
     fulldat <- as.data.frame(feature_table_train)
@@ -224,7 +289,7 @@ update.learner <- function(
       SL_fit_concat$validY <- validY
     }
 
-    fulldat_valid <- as.data.frame(t(feature_table_valid))
+    fulldat_valid <- as.data.frame(t(feature_table_valid[concat_feature_ids, , drop = FALSE]))
     concat_prediction_valid <- SuperLearner::predict.SuperLearner(SL_fit_concat,
       newdata = fulldat_valid
     )$pred
@@ -242,20 +307,29 @@ update.learner <- function(
 
   # ---- rebuild yhat.train columns ----
   keep_cols <- name_layers_common
-  if (isTRUE(fit$run_stacked)) {
+  if (run_intermediate_update) {
+    keep_cols <- c(keep_cols, "intermediate_multiview")
+  }
+  if (run_stacked_update) {
     keep_cols <- c(keep_cols, "stacked")
   }
-  if (isTRUE(fit$run_concat)) {
+  if (run_concat_update) {
     keep_cols <- c(keep_cols, "concatenated")
   }
   fit$yhat.train <- fit$yhat.train[, keep_cols, drop = FALSE]
 
   # ---- rebuild yhat.test ----
   yhat.test <- combo_valid
-  if (isTRUE(fit$run_stacked)) {
+  if (run_intermediate_update) {
+    yhat.test <- cbind(
+      yhat.test,
+      intermediate_multiview = intermediate_prediction_valid
+    )
+  }
+  if (run_stacked_update) {
     yhat.test <- cbind(yhat.test, fit$SL_fits$SL_fit_stacked$validPrediction)
   }
-  if (isTRUE(fit$run_concat)) {
+  if (run_concat_update) {
     yhat.test <- cbind(yhat.test, fit$SL_fits$SL_fit_concat$validPrediction)
   }
 
@@ -270,9 +344,16 @@ update.learner <- function(
   }
 
   # weights for nnls meta learner
-  if (identical(fit$meta_learner, "SL.nnls.auc") && isTRUE(fit$run_stacked)) {
+  fit$run_stacked <- run_stacked_update
+  fit$run_concat <- run_concat_update
+  fit$fusion_layers_retained <- fusion_layers_common
+  fit$fusion_layers_removed <- setdiff(name_layers_common, fusion_layers_common)
+
+  if (identical(fit$meta_learner, "SL.nnls.auc") && run_stacked_update) {
     fit$weights <- fit$model_fits$model_stacked$solution
-    names(fit$weights) <- colnames(combo)
+    names(fit$weights) <- fusion_layers_common
+  } else if (!run_stacked_update) {
+    fit$weights <- NULL
   }
 
   # ---- performance ----

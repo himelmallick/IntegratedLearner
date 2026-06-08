@@ -132,6 +132,513 @@ NULL
   )
 }
 
+.binary_auc_values_raw <- function(pred_mat, y_true) {
+  pred_mat <- as.matrix(pred_mat)
+  if (is.null(colnames(pred_mat))) {
+    colnames(pred_mat) <- paste0("model", seq_len(ncol(pred_mat)))
+  }
+
+  y_bin <- .coerce_binary_truth(y_true)
+  auc <- stats::setNames(rep(NA_real_, ncol(pred_mat)), colnames(pred_mat))
+
+  for (i in seq_len(ncol(pred_mat))) {
+    preds <- as.numeric(pred_mat[, i])
+    ok <- is.finite(preds) & !is.na(y_bin)
+    if (!any(ok)) {
+      next
+    }
+
+    pred_obj <- tryCatch(
+      ROCR::prediction(predictions = preds[ok], labels = y_bin[ok]),
+      error = function(e) NULL
+    )
+    if (is.null(pred_obj)) {
+      next
+    }
+
+    auc_obj <- tryCatch(ROCR::performance(pred_obj, "auc"),
+      error = function(e) NULL
+    )
+    if (!is.null(auc_obj) && length(auc_obj@y.values) > 0L) {
+      auc_val <- as.numeric(auc_obj@y.values[[1]])
+      if (is.finite(auc_val)) {
+        auc[i] <- auc_val
+      }
+    }
+  }
+
+  auc
+}
+
+.single_layer_fusion_scores <- function(pred_mat, y_true, family_name) {
+  family_name <- .safe_family_name(family_name)
+  if (identical(family_name, "binomial")) {
+    return(list(
+      metric = "AUC",
+      threshold = 0.5,
+      scores = .binary_auc_values_raw(pred_mat, y_true)
+    ))
+  }
+
+  if (identical(family_name, "gaussian")) {
+    pred_mat <- as.matrix(pred_mat)
+    if (is.null(colnames(pred_mat))) {
+      colnames(pred_mat) <- paste0("model", seq_len(ncol(pred_mat)))
+    }
+    scores <- vapply(seq_len(ncol(pred_mat)), function(i) {
+      preds <- as.numeric(pred_mat[, i])
+      ok <- is.finite(preds) & is.finite(y_true)
+      if (sum(ok) < 2L) {
+        return(NA_real_)
+      }
+      as.numeric(stats::cor(preds[ok], y_true[ok])^2)
+    }, numeric(1))
+    names(scores) <- colnames(pred_mat)
+    return(list(metric = "R2", threshold = 0.5, scores = scores))
+  }
+
+  stop("Unsupported family for fusion-layer screening: ", family_name, call. = FALSE)
+}
+
+.select_fusion_layers <- function(
+  scores, threshold, metric_label,
+  drop_layers = FALSE, context = "early/late fusion"
+) {
+  score_names <- names(scores)
+  scores <- as.numeric(scores)
+  names(scores) <- score_names
+  all_layers <- names(scores)
+
+  if (!isTRUE(drop_layers) || length(all_layers) == 0L) {
+    return(list(
+      retained = all_layers,
+      removed = character(0),
+      scores = scores,
+      threshold = threshold,
+      metric = metric_label
+    ))
+  }
+
+  poor <- !is.finite(scores) | scores < threshold
+  removed <- all_layers[poor]
+  retained <- all_layers[!poor]
+
+  if (length(retained) == 0L) {
+    safe_scores <- scores
+    safe_scores[!is.finite(safe_scores)] <- -Inf
+    keep_idx <- which.max(safe_scores)
+    if (length(keep_idx) == 0L || !is.finite(safe_scores[keep_idx])) {
+      keep_idx <- 1L
+    }
+    retained <- all_layers[keep_idx]
+    removed <- setdiff(all_layers, retained)
+    message(
+      "All layers fell below the ", metric_label, " threshold for ", context,
+      "; retaining best-available layer '", retained, "' to avoid an empty fusion model."
+    )
+  }
+
+  if (length(removed) > 0L) {
+    removed_msg <- paste(
+      removed,
+      sprintf("(%s=%s)", metric_label, vapply(scores[removed], function(x) {
+        if (is.finite(x)) sprintf("%.3f", x) else "NA"
+      }, character(1))),
+      collapse = ", "
+    )
+    message(
+      "Dropping poor-performing layers from ", context, ": ",
+      removed_msg
+    )
+  }
+
+  list(
+    retained = retained,
+    removed = removed,
+    scores = scores,
+    threshold = threshold,
+    metric = metric_label
+  )
+}
+
+.feature_ids_for_layers <- function(feature_metadata, layers) {
+  if (length(layers) == 0L) {
+    return(character(0))
+  }
+  rownames(feature_metadata)[as.character(feature_metadata$featureType) %in% layers]
+}
+
+.multiview_family_spec <- function(family_name) {
+  if (identical(family_name, "gaussian")) {
+    return(list(
+      family = stats::gaussian(),
+      type.measure = "mse",
+      predict_type = "response",
+      metric_label = "R2"
+    ))
+  }
+  if (identical(family_name, "binomial")) {
+    return(list(
+      family = stats::binomial(),
+      type.measure = "auc",
+      predict_type = "response",
+      metric_label = "AUC"
+    ))
+  }
+  if (identical(family_name, "survival")) {
+    return(list(
+      family = "cox",
+      type.measure = "C",
+      predict_type = "link",
+      metric_label = "C-index"
+    ))
+  }
+  stop("Unsupported family for multiview intermediate fusion: ", family_name, call. = FALSE)
+}
+
+.remap_fold_id <- function(fold_id) {
+  fold_id <- as.integer(fold_id)
+  u <- sort(unique(fold_id[is.finite(fold_id)]))
+  if (length(u) == 0L) {
+    stop("Fold IDs for multiview cannot be empty.", call. = FALSE)
+  }
+  out <- match(fold_id, u)
+  if (anyNA(out)) {
+    stop("Fold IDs for multiview must be finite integers.", call. = FALSE)
+  }
+  out
+}
+
+.make_multiview_fold_id <- function(
+  family_name, nobs, y = NULL, times = NULL, events = NULL,
+  folds = 5, seed = 1234
+) {
+  if (!is.finite(nobs) || nobs < 3L) {
+    stop("multiview intermediate fusion requires at least 3 samples.", call. = FALSE)
+  }
+  folds <- min(as.integer(folds), nobs)
+  if (!is.finite(folds) || folds < 3L) {
+    folds <- min(3L, nobs)
+  }
+  .set_seed_internal(seed)
+
+  if (identical(family_name, "survival")) {
+    return(.make_stratified_folds(times, events, folds = folds, seed = seed))
+  }
+
+  if (identical(family_name, "binomial") && !is.null(y)) {
+    idx_list <- caret::createFolds(as.factor(y), k = folds, returnTrain = FALSE)
+    fold_id <- integer(length(y))
+    for (k in seq_along(idx_list)) {
+      fold_id[idx_list[[k]]] <- k
+    }
+    return(fold_id)
+  }
+
+  sample(rep(seq_len(folds), length.out = nobs))
+}
+
+.prepare_multiview_x_list <- function(x_list) {
+  if (!is.list(x_list) || length(x_list) == 0L) {
+    stop("multiview requires a non-empty list of view matrices.", call. = FALSE)
+  }
+
+  out <- lapply(x_list, function(x) {
+    xx <- as.matrix(x)
+    storage.mode(xx) <- "double"
+    xx
+  })
+
+  n_rows <- unique(vapply(out, nrow, integer(1)))
+  if (length(n_rows) != 1L) {
+    stop("All multiview layers must have the same number of rows (samples).", call. = FALSE)
+  }
+
+  out
+}
+
+.multiview_lambda_index <- function(cvfit, s = c("lambda.min", "lambda.1se")) {
+  s <- match.arg(s)
+  idx_obj <- cvfit$index
+  if (!is.null(idx_obj)) {
+    if (is.matrix(idx_obj) || is.data.frame(idx_obj)) {
+      rn <- rownames(idx_obj)
+      if (!is.null(rn) && s %in% rn) {
+        return(as.integer(idx_obj[s, 1, drop = TRUE]))
+      }
+      if (nrow(idx_obj) >= 2L) {
+        return(as.integer(idx_obj[if (s == "lambda.min") 1L else 2L, 1, drop = TRUE]))
+      }
+    }
+    if (is.numeric(idx_obj)) {
+      nm <- names(idx_obj)
+      if (!is.null(nm) && s %in% nm) {
+        return(as.integer(idx_obj[[s]]))
+      }
+      if (length(idx_obj) >= 2L) {
+        return(as.integer(idx_obj[[if (s == "lambda.min") 1L else 2L]]))
+      }
+    }
+  }
+
+  lambda_target <- cvfit[[s]]
+  lambda_seq <- cvfit$lambda
+  if (!is.null(lambda_target) && !is.null(lambda_seq) && length(lambda_seq) > 0L) {
+    return(which.min(abs(as.numeric(lambda_seq) - as.numeric(lambda_target[[1]]))))
+  }
+
+  1L
+}
+
+.coerce_multiview_prediction <- function(pred, index = NULL) {
+  if (is.null(dim(pred))) {
+    return(as.numeric(pred))
+  }
+
+  d <- dim(pred)
+  if (length(d) == 2L) {
+    if (!is.null(index) && ncol(pred) >= index) {
+      return(as.numeric(pred[, index, drop = TRUE]))
+    }
+    if (ncol(pred) >= 1L) {
+      return(as.numeric(pred[, 1, drop = TRUE]))
+    }
+  }
+
+  if (length(d) == 3L) {
+    idx <- index %||% 1L
+    if (d[2] == 1L && d[3] >= idx) {
+      return(as.numeric(pred[, 1, idx, drop = TRUE]))
+    }
+    if (d[3] == 1L && d[2] >= idx) {
+      return(as.numeric(pred[, idx, 1, drop = TRUE]))
+    }
+    if (d[1] == 1L && d[3] >= idx) {
+      return(as.numeric(pred[1, , idx, drop = TRUE]))
+    }
+  }
+
+  stop("Unable to coerce multiview prediction object into a numeric vector.", call. = FALSE)
+}
+
+.extract_multiview_preval <- function(cvfit, s = c("lambda.min", "lambda.1se")) {
+  s <- match.arg(s)
+  preval <- cvfit$fit.preval
+  if (is.null(preval)) {
+    stop("cv.multiview fit is missing 'fit.preval'; set keep = TRUE when fitting.", call. = FALSE)
+  }
+  idx <- .multiview_lambda_index(cvfit, s = s)
+  .coerce_multiview_prediction(preval, index = idx)
+}
+
+.multiview_metric_value <- function(
+  pred, family_name, y = NULL, times = NULL, events = NULL
+) {
+  if (identical(family_name, "binomial")) {
+    auc <- .binary_auc_values_raw(matrix(pred, ncol = 1L), y_true = y)
+    return(as.numeric(auc[[1]]))
+  }
+  if (identical(family_name, "gaussian")) {
+    ok <- is.finite(pred) & is.finite(y)
+    if (sum(ok) < 2L) {
+      return(NA_real_)
+    }
+    return(as.numeric(stats::cor(pred[ok], y[ok])^2))
+  }
+  if (identical(family_name, "survival")) {
+    return(as.numeric(.compute_auc_cindex(times, events, pred)$cindex))
+  }
+  stop("Unsupported family for multiview metric evaluation: ", family_name, call. = FALSE)
+}
+
+.fit_multiview_cv_grid <- function(
+  x_list, family_name, fold_id, rho_grid = c(0, 0.1, 0.25, 0.5, 1),
+  s = c("lambda.min", "lambda.1se"), alpha = 1, y = NULL, times = NULL,
+  events = NULL, verbose = FALSE, extra_args = list()
+) {
+  .require_package("multiview")
+
+  x_use <- .prepare_multiview_x_list(x_list)
+  fold_id <- .remap_fold_id(fold_id)
+  s <- match.arg(s)
+  spec <- .multiview_family_spec(family_name)
+
+  if (identical(family_name, "survival")) {
+    y_input <- survival::Surv(times, events)
+  } else {
+    y_input <- y
+  }
+
+  rho_grid <- unique(as.numeric(rho_grid[is.finite(rho_grid)]))
+  if (length(rho_grid) == 0L) {
+    stop("'multiview_rho_grid' must contain at least one finite rho value.", call. = FALSE)
+  }
+
+  fits <- vector("list", length(rho_grid))
+  names(fits) <- as.character(rho_grid)
+  scores <- rep(NA_real_, length(rho_grid))
+
+  base_args <- list(
+    x_list = x_use,
+    y = y_input,
+    family = spec$family,
+    alpha = alpha,
+    keep = TRUE,
+    foldid = fold_id,
+    nfolds = length(unique(fold_id)),
+    type.measure = spec$type.measure,
+    trace.it = if (isTRUE(verbose)) 1 else 0
+  )
+
+  for (i in seq_along(rho_grid)) {
+    rho_val <- rho_grid[[i]]
+    fit_i <- tryCatch(
+      {
+        do.call(
+          multiview::cv.multiview,
+          utils::modifyList(base_args, utils::modifyList(list(rho = rho_val), extra_args))
+        )
+      },
+      error = function(e) e
+    )
+
+    if (inherits(fit_i, "error")) {
+      warning(
+        "Skipping multiview rho=", rho_val, " due to fit error: ",
+        conditionMessage(fit_i),
+        call. = FALSE
+      )
+      next
+    }
+
+    pred_i <- tryCatch(.extract_multiview_preval(fit_i, s = s), error = function(e) NULL)
+    if (is.null(pred_i)) {
+      next
+    }
+
+    score_i <- .multiview_metric_value(
+      pred = pred_i, family_name = family_name,
+      y = y, times = times, events = events
+    )
+
+    fits[[i]] <- fit_i
+    scores[[i]] <- score_i
+  }
+
+  if (!any(is.finite(scores))) {
+    stop(
+      "All multiview intermediate fits failed. Check that the 'multiview' package is installed ",
+      "and that the layer matrices are suitable for cooperative learning.",
+      call. = FALSE
+    )
+  }
+
+  best_idx <- which.max(scores)
+  list(
+    cvfit = fits[[best_idx]],
+    rho = rho_grid[[best_idx]],
+    score = scores[[best_idx]],
+    all_scores = data.frame(rho = rho_grid, score = scores, stringsAsFactors = FALSE),
+    preval_pred = .extract_multiview_preval(fits[[best_idx]], s = s),
+    s = s,
+    alpha = alpha
+  )
+}
+
+.predict_multiview_cv <- function(
+  cvfit, x_list, family_name,
+  s = c("lambda.min", "lambda.1se")
+) {
+  .require_package("multiview")
+  spec <- .multiview_family_spec(family_name)
+  x_use <- .prepare_multiview_x_list(x_list)
+  s <- match.arg(s)
+  pred <- stats::predict(cvfit, newx = x_use, s = s, type = spec$predict_type)
+  .coerce_multiview_prediction(pred)
+}
+
+.fit_multiview_intermediate <- function(
+  x_list, family_name, fold_id, rho_grid = c(0, 0.1, 0.25, 0.5, 1),
+  s = c("lambda.min", "lambda.1se"), alpha = 1, y = NULL, times = NULL,
+  events = NULL, verbose = FALSE, seed = 1234, extra_args = list()
+) {
+  x_use <- .prepare_multiview_x_list(x_list)
+  fold_id <- .remap_fold_id(fold_id)
+  s <- match.arg(s)
+
+  n <- nrow(x_use[[1]])
+  oof <- rep(NA_real_, n)
+  uniq_folds <- sort(unique(fold_id))
+
+  for (f in uniq_folds) {
+    train_idx <- which(fold_id != f)
+    test_idx <- which(fold_id == f)
+    x_train <- lapply(x_use, function(x) x[train_idx, , drop = FALSE])
+    x_test <- lapply(x_use, function(x) x[test_idx, , drop = FALSE])
+
+    inner_fold_id <- .make_multiview_fold_id(
+      family_name = family_name,
+      nobs = length(train_idx),
+      y = if (identical(family_name, "survival")) NULL else y[train_idx],
+      times = if (identical(family_name, "survival")) times[train_idx] else NULL,
+      events = if (identical(family_name, "survival")) events[train_idx] else NULL,
+      folds = min(length(uniq_folds), 5L),
+      seed = seed + as.integer(f)
+    )
+
+    fit_inner <- .fit_multiview_cv_grid(
+      x_list = x_train,
+      family_name = family_name,
+      fold_id = inner_fold_id,
+      rho_grid = rho_grid,
+      s = s,
+      alpha = alpha,
+      y = if (identical(family_name, "survival")) NULL else y[train_idx],
+      times = if (identical(family_name, "survival")) times[train_idx] else NULL,
+      events = if (identical(family_name, "survival")) events[train_idx] else NULL,
+      verbose = verbose,
+      extra_args = extra_args
+    )
+
+    oof[test_idx] <- .predict_multiview_cv(
+      cvfit = fit_inner$cvfit,
+      x_list = x_test,
+      family_name = family_name,
+      s = s
+    )
+  }
+
+  full_fit <- .fit_multiview_cv_grid(
+    x_list = x_use,
+    family_name = family_name,
+    fold_id = fold_id,
+    rho_grid = rho_grid,
+    s = s,
+    alpha = alpha,
+    y = if (identical(family_name, "survival")) NULL else y,
+    times = if (identical(family_name, "survival")) times else NULL,
+    events = if (identical(family_name, "survival")) events else NULL,
+    verbose = verbose,
+    extra_args = extra_args
+  )
+
+  list(
+    oof_pred = as.numeric(oof),
+    train_pred = .predict_multiview_cv(
+      cvfit = full_fit$cvfit,
+      x_list = x_use,
+      family_name = family_name,
+      s = s
+    ),
+    cvfit = full_fit$cvfit,
+    rho = full_fit$rho,
+    score = full_fit$score,
+    all_scores = full_fit$all_scores,
+    lambda_rule = s,
+    alpha = alpha
+  )
+}
+
 ############################### Print learner summary ####
 
 #' @export
@@ -139,8 +646,24 @@ NULL
 print.learner <- function(x, ...) {
   res <- x
   num_layers <- length(res$X_train_layers)
+  inter_cols <- if (!is.null(res$yhat.train)) {
+    grep("^intermediate_", colnames(res$yhat.train), value = TRUE)
+  } else {
+    character(0)
+  }
 
   cat("Time for model fit :", res$time, "minutes \n")
+  if (isTRUE(res$drop_poor_performing_layers)) {
+    if (length(res$fusion_layers_removed) > 0L) {
+      cat(
+        "Layers removed from early/late fusion:",
+        paste(res$fusion_layers_removed, collapse = ", "),
+        "\n"
+      )
+    } else {
+      cat("Layers removed from early/late fusion: none\n")
+    }
+  }
   if (res$family == "binomial") {
     cat("========================================\n")
     cat("Model fit for individual layers:", res$base_learner, "\n")
@@ -156,6 +679,11 @@ print.learner <- function(x, ...) {
     cat("Individual layers: \n")
     print(res$AUC.train[seq_len(num_layers)])
     cat("======================\n")
+    if (length(inter_cols) > 0L) {
+      cat("Intermediate model(s):\n")
+      print(res$AUC.train[inter_cols])
+      cat("======================\n")
+    }
 
     if (res$run_stacked == TRUE) {
       cat("Stacked model:")
@@ -174,6 +702,11 @@ print.learner <- function(x, ...) {
       cat("Individual layers: \n")
       print(res$AUC.test[seq_len(num_layers)])
       cat("======================\n")
+      if (length(inter_cols) > 0L) {
+        cat("Intermediate model(s):\n")
+        print(res$AUC.test[inter_cols])
+        cat("======================\n")
+      }
 
       if (res$run_stacked == TRUE) {
         cat("Stacked model:")
@@ -202,6 +735,11 @@ print.learner <- function(x, ...) {
     cat("Individual layers: \n")
     print(res$R2.train[seq_len(num_layers)])
     cat("======================\n")
+    if (length(inter_cols) > 0L) {
+      cat("Intermediate model(s):\n")
+      print(res$R2.train[inter_cols])
+      cat("======================\n")
+    }
     if (res$run_stacked == TRUE) {
       cat("Stacked model:")
       cat(as.numeric(res$R2.train["stacked"]), "\n")
@@ -219,6 +757,11 @@ print.learner <- function(x, ...) {
       cat("Individual layers: \n")
       print(res$R2.test[seq_len(num_layers)])
       cat("======================\n")
+      if (length(inter_cols) > 0L) {
+        cat("Intermediate model(s):\n")
+        print(res$R2.test[inter_cols])
+        cat("======================\n")
+      }
       if (res$run_stacked == TRUE) {
         cat("Stacked model:")
         cat(as.numeric(res$R2.test["stacked"]), "\n")

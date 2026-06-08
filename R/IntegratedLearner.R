@@ -78,6 +78,24 @@
 #' @param run_concat Should early fusion be run? Default is TRUE.
 #'   Uses the specified \code{base_learner} as the learning algorithm.
 #' @param run_stacked Should stacked model (late fusion) be run? Default is TRUE.
+#' @param intermediate_learners Optional character vector of intermediate-fusion
+#'   learners. For continuous/binary outcomes, currently supports
+#'   \code{"multiview"} via the \pkg{multiview} package. For survival
+#'   outcomes, this is forwarded to \code{ILsurv()} and may include
+#'   \code{"surv.coxph"} and \code{"surv.multiview"}. Multiclass support is
+#'   not yet implemented.
+#' @param multiview_rho_grid Numeric vector of cooperative-learning \code{rho}
+#'   values to compare when \code{"multiview"} / \code{"surv.multiview"} is
+#'   used for intermediate fusion.
+#' @param multiview_s Lambda rule used for multiview prediction extraction;
+#'   either \code{"lambda.min"} or \code{"lambda.1se"}.
+#' @param multiview_alpha Elastic-net \code{alpha} value passed to
+#'   \pkg{multiview} when fitting intermediate fusion models.
+#' @param drop_poor_performing_layers Logical; if \code{TRUE}, layers with
+#'   poor single-layer performance are removed from early and late fusion only.
+#'   The thresholds are AUC < 0.5 for binary, R\eqn{^2} < 0.5 for continuous,
+#'   and C-index < 0.5 for survival outcomes. Single-layer outputs are still
+#'   retained and reported.
 #' @param verbose logical; TRUE for \code{SuperLearner} printing progress
 #'   (helpful for debugging). Default is FALSE.
 #' @param print_learner logical; Should a detailed summary be printed?
@@ -140,8 +158,11 @@ IntegratedLearner <- function(
   subject_id_col = "subjectID", na.rm = FALSE, folds = 5,
   seed = 1234, base_learner = "SL.BART", base_screener = "All", run_screening = FALSE,
   screen_pct = NULL, filter_method = NULL, filter_pct = NULL, prevalence_pct = NULL,
-  meta_learner = "SL.nnls.auc", run_concat = TRUE, run_stacked = TRUE, verbose = FALSE,
-  print_learner = TRUE, refit.stack = FALSE, family = stats::gaussian(), ...
+  meta_learner = "SL.nnls.auc", run_concat = TRUE, run_stacked = TRUE,
+  intermediate_learners = NULL, multiview_rho_grid = c(0, 0.1, 0.25, 0.5, 1),
+  multiview_s = c("lambda.min", "lambda.1se")[1], multiview_alpha = 1,
+  drop_poor_performing_layers = FALSE, verbose = FALSE, print_learner = TRUE,
+  refit.stack = FALSE, family = stats::gaussian(), ...
 ) {
   if (!.is_a_string(outcome_col)) {
     stop("'outcome_col' must be a single character value.", call. = FALSE)
@@ -236,6 +257,11 @@ IntegratedLearner <- function(
   ## ------------------------------------------------------------ 3. Dispatch
   ## to IL_conbin() or IL_survival()
   ## ------------------------------------------------------------
+  if (is.null(intermediate_learners) && is_survival) {
+    intermediate_learners <- c("surv.coxph")
+  }
+
+  ## ------------------------------------------------------------
   if (is_survival) {
     filtered_surv <- .filter_features_by_method(
       feature_table = feature_table,
@@ -252,7 +278,9 @@ IntegratedLearner <- function(
       feature_metadata = feature_metadata, valid_feature_table = feature_table_valid,
       valid_sample_metadata = sample_metadata_valid, base_learner = base_learner,
       folds = folds, seed = seed, run_screening = run_screening, screen_pct = screen_pct,
-      verbose = verbose, ...
+      verbose = verbose, drop_poor_performing_layers = drop_poor_performing_layers,
+      intermediate_learners = intermediate_learners, multiview_rho_grid = multiview_rho_grid,
+      multiview_s = multiview_s, multiview_alpha = multiview_alpha, ...
     )
     res$family <- "survival"
     res$feature.names <- rownames(feature_table)
@@ -260,6 +288,12 @@ IntegratedLearner <- function(
     res$filter_pct <- filtered_surv$filter_pct
     res$prevalence_pct <- filtered_surv$prevalence_pct
   } else if (is_multiclass) {
+    if (isTRUE(drop_poor_performing_layers)) {
+      message("'drop_poor_performing_layers' is ignored for multiclass outcomes.")
+    }
+    if (!is.null(intermediate_learners) && length(intermediate_learners) > 0L) {
+      message("'intermediate_learners' is currently ignored for multiclass outcomes.")
+    }
     res <- IL_multiclass(
       feature_table = feature_table, sample_metadata = sample_metadata,
       feature_metadata = feature_metadata, feature_table_valid = feature_table_valid,
@@ -278,8 +312,11 @@ IntegratedLearner <- function(
       base_learner = base_learner, base_screener = base_screener, run_screening = run_screening,
       screen_pct = screen_pct, filter_method = filter_method, filter_pct = filter_pct,
       prevalence_pct = prevalence_pct, meta_learner = meta_learner, run_concat = run_concat,
-      run_stacked = run_stacked, verbose = verbose, print_learner = print_learner,
-      refit.stack = refit.stack, family = family, ...
+      run_stacked = run_stacked, intermediate_learners = intermediate_learners,
+      multiview_rho_grid = multiview_rho_grid, multiview_s = multiview_s,
+      multiview_alpha = multiview_alpha,
+      drop_poor_performing_layers = drop_poor_performing_layers,
+      verbose = verbose, print_learner = print_learner, refit.stack = refit.stack, family = family, ...
     )
   }
 

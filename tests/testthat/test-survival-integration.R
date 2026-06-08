@@ -61,6 +61,30 @@ test_that("IntegratedLearner survival IBS branch returns train metrics without v
   expect_true(all(c("time", "AUC") %in% colnames(fit$train_out$late$train_auc)))
 })
 
+test_that("IntegratedLearner survival fit records fusion-layer screening metadata", {
+  skip_if_not_installed("survival")
+  skip_if_not_installed("timeROC")
+
+  suppressPackageStartupMessages(library(survival))
+
+  tcga <- make_tcga_survival_pcl(
+    n_samples = 170, n_train = 130, n_gene_features = 8,
+    n_mirna_features = 6, seed = 2034
+  )
+
+  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+    PCL_train = tcga$train,
+    folds = 2, seed = 2034, base_learner = "surv.coxph", weight_method = "COX",
+    drop_poor_performing_layers = TRUE, verbose = FALSE
+  ))
+
+  expect_true(isTRUE(fit$drop_poor_performing_layers))
+  expect_true(is.character(fit$fusion_layers_retained))
+  expect_true(length(fit$fusion_layers_retained) >= 1L)
+  expect_true(all(names(fit$train_out$late$weights) %in% fit$fusion_layers_retained))
+  expect_identical(names(fit$fusion_layer_scores), names(fit$train_out$single$metrics))
+})
+
 test_that("plot.learner returns survival AUC and KM payloads", {
   skip_if_not_installed("survival")
   skip_if_not_installed("timeROC")
@@ -98,4 +122,29 @@ test_that("plot.learner returns survival AUC and KM payloads", {
   expect_true(is.data.frame(out$KM_table_train))
   expect_true(all(c("time", "AUC", "model") %in% colnames(out$AUC_table_train)))
   expect_true(all(c("time", "surv", "strata") %in% colnames(out$KM_table_train)))
+})
+
+test_that("IntegratedLearner survival can use surv.multiview intermediate fusion", {
+  skip_if_not_installed("survival")
+  skip_if_not_installed("timeROC")
+  skip_if_not_installed("multiview")
+
+  suppressPackageStartupMessages(library(survival))
+
+  tcga <- make_tcga_survival_pcl(
+    n_samples = 190, n_train = 145, n_gene_features = 8,
+    n_mirna_features = 6, seed = 2041
+  )
+
+  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+    PCL_train = tcga$train,
+    PCL_valid = tcga$valid, folds = 3, seed = 2041, base_learner = "surv.coxph",
+    weight_method = "COX", intermediate_learners = "surv.multiview", verbose = FALSE
+  ))
+
+  expect_true("surv.multiview" %in% names(fit$train_out$intermediate))
+  expect_true("surv.multiview" %in% names(fit$valid_out$intermediate))
+  expect_true(is.list(fit$intermediate_details$surv.multiview))
+  expect_true(is.finite(fit$train_out$intermediate$surv.multiview$train_cindex))
+  expect_true(is.finite(fit$valid_out$intermediate$surv.multiview$valid_cindex))
 })
