@@ -5,7 +5,7 @@ NULL
 utils::globalVariables(c(
   ".", ".N", ".BY", "featureID", "featureType", "id", "layer",
   "type", "ID", "displayItem", "sd", "specificity", "sensitivity", "e", "obs",
-  "truth", "model", "accuracy", "dataset"
+  "truth", "model", "accuracy", "balanced_accuracy", "dataset"
 ))
 NULL
 
@@ -39,6 +39,97 @@ NULL
   }
   do.call(get("set.seed", envir = baseenv()), list(as.integer(seed[1])))
   invisible(NULL)
+}
+
+.coerce_binary_truth <- function(y) {
+  if (is.factor(y)) {
+    y <- as.character(y)
+  }
+  if (is.logical(y)) {
+    return(as.integer(y))
+  }
+  if (is.numeric(y)) {
+    yy <- as.numeric(y)
+    if (all(yy %in% c(0, 1, NA_real_))) {
+      return(as.integer(yy))
+    }
+  }
+
+  yy <- as.character(y)
+  lev <- unique(yy[!is.na(yy)])
+  if (length(lev) != 2L) {
+    stop("Binary metrics require exactly two outcome classes.", call. = FALSE)
+  }
+  as.integer(yy == lev[2])
+}
+
+.binary_model_metrics <- function(pred_mat, y_true, threshold = 0.5) {
+  pred_mat <- as.matrix(pred_mat)
+  if (is.null(colnames(pred_mat))) {
+    colnames(pred_mat) <- paste0("model", seq_len(ncol(pred_mat)))
+  }
+
+  y_bin <- .coerce_binary_truth(y_true)
+
+  auc <- stats::setNames(rep(NA_real_, ncol(pred_mat)), colnames(pred_mat))
+  accuracy <- auc
+  balanced_accuracy <- auc
+
+  for (i in seq_len(ncol(pred_mat))) {
+    preds <- as.numeric(pred_mat[, i])
+    ok <- is.finite(preds) & !is.na(y_bin)
+    if (!any(ok)) {
+      next
+    }
+
+    pred_obj <- tryCatch(
+      ROCR::prediction(predictions = preds[ok], labels = y_bin[ok]),
+      error = function(e) NULL
+    )
+    if (!is.null(pred_obj)) {
+      auc_obj <- tryCatch(ROCR::performance(pred_obj, "auc"), error = function(e) NULL)
+      if (!is.null(auc_obj) && length(auc_obj@y.values) > 0L) {
+        auc_val <- as.numeric(auc_obj@y.values[[1]])
+        if (is.finite(auc_val)) {
+          auc[i] <- round(auc_val, 3)
+        }
+      }
+    }
+
+    cls <- as.integer(preds[ok] >= threshold)
+    yy <- y_bin[ok]
+    accuracy[i] <- mean(cls == yy)
+
+    sens_den <- sum(yy == 1L)
+    spec_den <- sum(yy == 0L)
+    sens <- if (sens_den > 0L) {
+      mean(cls[yy == 1L] == 1L)
+    } else {
+      NA_real_
+    }
+    spec <- if (spec_den > 0L) {
+      mean(cls[yy == 0L] == 0L)
+    } else {
+      NA_real_
+    }
+    balanced_accuracy[i] <- mean(c(sens, spec), na.rm = TRUE)
+  }
+
+  metrics <- data.frame(
+    model = colnames(pred_mat),
+    auc = as.numeric(auc),
+    accuracy = as.numeric(accuracy),
+    balanced_accuracy = as.numeric(balanced_accuracy),
+    stringsAsFactors = FALSE,
+    check.names = FALSE
+  )
+
+  list(
+    auc = auc,
+    accuracy = accuracy,
+    balanced_accuracy = balanced_accuracy,
+    metrics = metrics
+  )
 }
 
 ############################### Print learner summary ####

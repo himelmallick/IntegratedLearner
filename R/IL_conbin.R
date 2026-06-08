@@ -652,27 +652,18 @@ IL_conbin <- function(
   }
 
   if (res$family == "binomial") {
-    # Calculate AUC for each layer, stacked and concatenated
-    pred <- apply(res$yhat.train, 2, ROCR::prediction, labels = res$Y_train)
-    AUC <- vector(length = length(pred))
-    names(AUC) <- names(pred)
-    for (i in seq_along(pred)) {
-      AUC[i] <- round(ROCR::performance(pred[[i]], "auc")@y.values[[1]], 3)
-    }
-    res$AUC.train <- AUC
+    train_metrics <- .binary_model_metrics(res$yhat.train, res$Y_train)
+    res$AUC.train <- train_metrics$auc
+    res$accuracy.train <- train_metrics$accuracy
+    res$balanced_accuracy.train <- train_metrics$balanced_accuracy
+    res$metrics.train <- train_metrics$metrics
 
     if (res$test == TRUE) {
-      # Calculate AUC for each layer, stacked and concatenated
-      pred <- apply(res$yhat.test, 2, ROCR::prediction, labels = res$Y_test)
-      AUC <- vector(length = length(pred))
-      names(AUC) <- names(pred)
-      for (i in seq_along(pred)) {
-        AUC[i] <- round(
-          ROCR::performance(pred[[i]], "auc")@y.values[[1]],
-          3
-        )
-      }
-      res$AUC.test <- AUC
+      test_metrics <- .binary_model_metrics(res$yhat.test, res$Y_test)
+      res$AUC.test <- test_metrics$auc
+      res$accuracy.test <- test_metrics$accuracy
+      res$balanced_accuracy.test <- test_metrics$balanced_accuracy
+      res$metrics.test <- test_metrics$metrics
     }
   }
   if (res$family == "gaussian") {

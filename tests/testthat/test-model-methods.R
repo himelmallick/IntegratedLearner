@@ -14,7 +14,13 @@ test_that("IntegratedLearner binomial stacked + concat returns expected structur
   expected_cols <- c(unique(pcl$feature_metadata$featureType), "stacked", "concatenated")
   expect_identical(colnames(fit$yhat.train), expected_cols)
   expect_identical(names(fit$AUC.train), expected_cols)
+  expect_identical(names(fit$accuracy.train), expected_cols)
+  expect_identical(names(fit$balanced_accuracy.train), expected_cols)
   expect_true(all(is.finite(fit$AUC.train)))
+  expect_true(all(is.finite(fit$accuracy.train)))
+  expect_true(all(is.finite(fit$balanced_accuracy.train)))
+  expect_true(is.data.frame(fit$metrics.train))
+  expect_true(all(c("model", "auc", "accuracy", "balanced_accuracy") %in% colnames(fit$metrics.train)))
 
   expect_true(!is.null(fit$weights))
   expect_equal(sum(fit$weights), 1, tolerance = 1e-06)
@@ -99,6 +105,9 @@ test_that("predict.learner validates inputs and returns aligned predictions", {
   expect_equal(NROW(pred$yhat.test), length(valid_ids))
   expect_true(all(c("stacked", "concatenated") %in% colnames(pred$yhat.test)))
   expect_true(all(is.finite(pred$AUC.test)))
+  expect_true(all(is.finite(pred$accuracy.test)))
+  expect_true(all(is.finite(pred$balanced_accuracy.test)))
+  expect_true(is.data.frame(pred$metrics.test))
 
   bad_ft <- feature_table_valid
   rownames(bad_ft)[1] <- "bad_feature"

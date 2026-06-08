@@ -76,6 +76,38 @@ test_that("predict.learner returns multiclass probabilities and metrics", {
   expect_true(all(c("accuracy", "balanced_accuracy", "logloss") %in% colnames(pred$metrics.test)))
 })
 
+test_that("plot.learner returns multiclass ROC payloads", {
+  skip_if_not_installed("glmnet")
+  skip_if_not_installed("ggplot2")
+  skip_if_not_installed("cowplot")
+  skip_if_not_installed("stringr")
+
+  tmp_plot <- tempfile(fileext = ".pdf")
+  grDevices::pdf(tmp_plot)
+  on.exit(
+    {
+      if (grDevices::dev.cur() > 1L) grDevices::dev.off()
+      unlink(tmp_plot)
+    },
+    add = TRUE
+  )
+
+  pcl <- make_toy_multiclass_pcl(n_samples = 30, n_features = 12, seed = 2039)
+
+  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl,
+    folds = 2, seed = 2039, base_learner = "SL.glmnet",
+    run_stacked = TRUE, run_concat = TRUE, print_learner = FALSE,
+    family = stats::binomial()
+  ))
+
+  out <- suppressWarnings(IntegratedLearner:::plot.learner(fit))
+  expect_true(is.list(out))
+  expect_true(all(c("plot", "ROC_table", "metrics_train") %in% names(out)))
+  expect_true(is.data.frame(out$ROC_table))
+  expect_true(all(c("layer", "class", "AUC") %in% colnames(out$ROC_table)))
+})
+
 test_that("update.learner is blocked with explicit message for multiclass fits", {
   skip_if_not_installed("glmnet")
 

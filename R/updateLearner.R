@@ -277,24 +277,18 @@ update.learner <- function(
 
   # ---- performance ----
   if (identical(fit$family, "binomial")) {
-    pred <- apply(fit$yhat.train, 2, ROCR::prediction, labels = fit$Y_train)
-    AUC <- vapply(pred, function(p) {
-      round(
-        ROCR::performance(p, "auc")@y.values[[1]],
-        3
-      )
-    }, numeric(1))
-    fit$AUC.train <- AUC
+    train_metrics <- .binary_model_metrics(fit$yhat.train, fit$Y_train)
+    fit$AUC.train <- train_metrics$auc
+    fit$accuracy.train <- train_metrics$accuracy
+    fit$balanced_accuracy.train <- train_metrics$balanced_accuracy
+    fit$metrics.train <- train_metrics$metrics
 
     if (fit$test) {
-      pred2 <- apply(fit$yhat.test, 2, ROCR::prediction, labels = fit$Y_test)
-      AUC2 <- vapply(pred2, function(p) {
-        round(
-          ROCR::performance(p, "auc")@y.values[[1]],
-          3
-        )
-      }, numeric(1))
-      fit$AUC.test <- AUC2
+      test_metrics <- .binary_model_metrics(fit$yhat.test, fit$Y_test)
+      fit$AUC.test <- test_metrics$auc
+      fit$accuracy.test <- test_metrics$accuracy
+      fit$balanced_accuracy.test <- test_metrics$balanced_accuracy
+      fit$metrics.test <- test_metrics$metrics
     }
   } else if (identical(fit$family, "gaussian")) {
     R2 <- vapply(colnames(fit$yhat.train), function(nm) {

@@ -17,19 +17,55 @@
   tt
 }
 
-.compute_auc_cindex <- function(times, events, marker, probs = c(0.25, 0.5, 0.75)) {
+.auc_time_grid <- function(times, events, n_grid = 25L, fallback_probs = c(0.25, 0.5, 0.75)) {
+  event_times <- sort(unique(as.numeric(times[is.finite(times) & events == 1])))
+  event_times <- event_times[is.finite(event_times)]
+  if (length(event_times) >= 2L) {
+    if (length(event_times) <= n_grid) {
+      return(event_times)
+    }
+    probs <- seq(0.05, 0.95, length.out = n_grid)
+    out <- as.numeric(stats::quantile(event_times, probs = probs, na.rm = TRUE))
+    out <- sort(unique(out[is.finite(out)]))
+    if (length(out) >= 2L) {
+      return(out)
+    }
+  }
+  .safe_quantile_times(times, probs = fallback_probs)
+}
+
+.compute_auc_cindex <- function(
+  times, events, marker,
+  probs = c(0.25, 0.5, 0.75),
+  time_grid = NULL,
+  n_auc_grid = 25L
+) {
   obj_surv <- survival::Surv(times, events)
   cindex <- tryCatch(survival::concordance(obj_surv ~ I(-marker))$concordance,
     error = function(e) NA_real_
   )
-  auc_times <- .safe_quantile_times(times, probs = probs)
+  auc_times <- if (is.null(time_grid)) {
+    .auc_time_grid(times, events, n_grid = n_auc_grid, fallback_probs = probs)
+  } else {
+    sort(unique(as.numeric(time_grid[is.finite(time_grid)])))
+  }
+  if (length(auc_times) == 0L) {
+    auc_times <- .safe_quantile_times(times, probs = probs)
+  }
   auc_df <- tryCatch(
     {
+      Surv <- survival::Surv
       roc <- timeROC::timeROC(
         T = times, delta = events, marker = marker, cause = 1,
         times = auc_times, iid = TRUE
       )
-      data.frame(time = roc$times, AUC = roc$AUC)
+      out <- data.frame(time = roc$times, AUC = roc$AUC)
+      keep <- is.finite(out$time) & is.finite(out$AUC)
+      if (any(keep)) {
+        out[keep, , drop = FALSE]
+      } else {
+        out
+      }
     },
     error = function(e) {
       data.frame(time = auc_times, AUC = NA_real_)
@@ -1532,7 +1568,8 @@
       met <- .compute_auc_cindex(times, events, inter_oof$oof_risk)
       intermediate_train[[learner_id]] <- list(
         train_cindex = met$cindex, train_auc = met$auc,
-        train_auc_mean = met$auc_mean, train_brier = met$brier, train_ibs = met$ibs
+        train_auc_mean = met$auc_mean, train_brier = met$brier, train_ibs = met$ibs,
+        train_risk = inter_oof$oof_risk
       )
       intermediate_models[[learner_id]] <- .train_full(
         method = learner_id,
@@ -1638,7 +1675,7 @@
         intermediate_valid[[learner_id]] <- list(
           valid_cindex = mv$cindex,
           valid_auc = mv$auc, valid_auc_mean = mv$auc_mean, valid_brier = mv$brier,
-          valid_ibs = mv$ibs
+          valid_ibs = mv$ibs, valid_risk = rv
         )
         .vmsg("  [valid intermediate:", learner_id, "] cindex=", .fmt(mv$cindex))
       }
@@ -1653,38 +1690,39 @@
       valid_brier = lapply(single_valid_metrics, function(x) x$brier), valid_ibs = lapply(
         single_valid_metrics,
         function(x) x$ibs
-      )
+      ), valid_risk = preds_valid_list
     ), early = if (is.null(early_valid)) {
       NULL
     } else {
       list(
         valid_cindex = early_valid$cindex,
         valid_auc = early_valid$auc, valid_auc_mean = early_valid$auc_mean, valid_brier = early_valid$brier,
-        valid_ibs = early_valid$ibs
+        valid_ibs = early_valid$ibs, valid_risk = risk_early_v
       )
     }, late = list(
       valid_cindex = late_valid$cindex,
       valid_auc = late_valid$auc, valid_auc_mean = late_valid$auc_mean, valid_brier = late_valid$brier,
-      valid_ibs = late_valid$ibs
+      valid_ibs = late_valid$ibs, valid_risk = combined_valid_risk
     ), intermediate = intermediate_valid)
   } else {
     .vmsg("No validation data provided; skipping validation metrics")
   }
 
   train_out <- list(
-    single = list(metrics = single_layer_metrics), early = if (is.null(early_fusion_out)) {
+    single = list(metrics = single_layer_metrics, train_risk = preds_list), early = if (is.null(early_fusion_out)) {
       NULL
     } else {
       list(
         train_cindex = early_fusion_out$train_cindex,
         train_auc = early_fusion_out$train_auc, train_auc_mean = early_fusion_out$train_auc_mean,
         train_brier = early_fusion_out$train_brier, train_ibs = early_fusion_out$train_ibs,
-        combined_importance = early_fusion_out$combined_importance
+        combined_importance = early_fusion_out$combined_importance, train_risk = early_fusion_out$train_risk
       )
     }, late = list(
       weights = weights,
       train_cindex = late_train$cindex, train_auc = late_train$auc, train_auc_mean = late_train$auc_mean,
-      train_brier = late_train$brier, train_ibs = late_train$ibs, combined_importance = combined_importance
+      train_brier = late_train$brier, train_ibs = late_train$ibs, combined_importance = combined_importance,
+      train_risk = combined_train_risk
     ),
     intermediate = intermediate_train
   )
@@ -1694,7 +1732,14 @@
     train_out = train_out, valid_out = valid_out_formatted, backend = "bioc_prototype",
     base_learner = base_learner, supported_learners = supported, fold_id = fold_id,
     screening_used = isTRUE(screening$enabled), screen_method = if (isTRUE(screening$enabled)) "cox" else NULL,
-    screen_pct = screening$screen_pct
+    screen_pct = screening$screen_pct, surv_plot_data = list(
+      train = list(time = times, event = events),
+      valid = if (!is.null(valid_sample_metadata)) {
+        list(time = as.numeric(valid_sample_metadata$time), event = as.numeric(valid_sample_metadata$event))
+      } else {
+        NULL
+      }
+    )
   )
 }
 
@@ -1815,7 +1860,10 @@ ILsurv <- function(
 
   list(
     train_out = res$train_out, valid_out = res$valid_out, screening_used = res$screening_used,
-    screen_method = res$screen_method, screen_pct = res$screen_pct
+    screen_method = res$screen_method, screen_pct = res$screen_pct,
+    surv_plot_data = res$surv_plot_data, backend = res$backend,
+    base_learner = base_learner, supported_learners = res$supported_learners,
+    fold_id = res$fold_id, folds = folds, test = !is.null(valid_sample_metadata)
   )
 }
 

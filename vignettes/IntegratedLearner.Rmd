@@ -85,7 +85,7 @@ The goal is to show a complete end-to-end pattern you can adapt to your own mult
 
 1. Build correctly formatted training/validation inputs.
 2. Fit per-layer, stacked, and concatenated learners.
-3. Interpret model outputs (AUC/R2, layer weights, and feature signals).
+3. Interpret model outputs (AUC, accuracy, balanced accuracy, R2, survival discrimination curves, layer weights, and feature signals).
 
 `IntegratedLearner` supports three integration paradigms:
 
@@ -372,10 +372,11 @@ This section summarizes the outputs produced by each integration method and wher
 
 | Method | What it returns | Where to access |
 |---|---|---|
-| Single-layer (per omics layer) | Layer-specific predictions and metrics | `fit$yhat.train[, layer_name]`, `fit$yhat.test[, layer_name]` (if validation), `fit$AUC.train` / `fit$AUC.test` (binomial), `fit$R2.train` / `fit$R2.test` (gaussian) |
+| Single-layer (per omics layer) | Layer-specific predictions and metrics | `fit$yhat.train[, layer_name]`, `fit$yhat.test[, layer_name]` (if validation), `fit$AUC.train` / `fit$AUC.test`, `fit$accuracy.train` / `fit$accuracy.test`, `fit$balanced_accuracy.train` / `fit$balanced_accuracy.test` (binomial), `fit$R2.train` / `fit$R2.test` (gaussian) |
 | Early fusion (concatenated) | One model on all features concatenated | Enable with `run_concat = TRUE`; outputs in `fit$yhat.train[, "concatenated"]`, `fit$model_fits$model_concat`, `fit$SL_fits$SL_fit_concat` |
 | Late fusion (stacked) | Meta-model over layer-level predictions | Enable with `run_stacked = TRUE`; outputs in `fit$yhat.train[, "stacked"]`, `fit$model_fits$model_stacked`, `fit$SL_fits$SL_fit_stacked` |
 | Layer weights (stacked) | Relative contribution of each layer in late fusion | `fit$weights` (available when `meta_learner = "SL.nnls.auc"` and `run_stacked = TRUE`) |
+| Binary metric table | Per-model AUC, accuracy, and balanced accuracy | `fit$metrics.train` and `fit$metrics.test` (if validation provided) |
 
 ### Multiclass Outputs
 
@@ -384,7 +385,7 @@ This section summarizes the outputs produced by each integration method and wher
 | Single-layer (per omics layer) | Layer-wise multiclass probability and class predictions | `fit$prob.train[[layer_name]]`, `fit$class.train[, layer_name]`, plus validation analogs `fit$prob.test[[layer_name]]`, `fit$class.test[, layer_name]` |
 | Early fusion (concatenated) | One multiclass model on concatenated features | Enable with `run_concat = TRUE`; outputs in `fit$prob.train$concatenated`, `fit$class.train[, "concatenated"]`, `fit$model_fits$model_concat` |
 | Late fusion (stacked) | Multiclass meta-model over OOF layer probabilities | Enable with `run_stacked = TRUE`; outputs in `fit$prob.train$stacked`, `fit$class.train[, "stacked"]`, `fit$model_fits$model_stacked` |
-| Multiclass performance metrics | Accuracy, balanced accuracy, and log-loss | `fit$metrics.train` and `fit$metrics.test` (if validation provided) |
+| Multiclass performance metrics | Accuracy, balanced accuracy, one-vs-rest AUC, and log-loss | `fit$metrics.train` and `fit$metrics.test` (if validation provided) |
 | Feature-selection metadata | Filtering/screening settings used in fit | `fit$filter_method`, `fit$filter_pct`, `fit$prevalence_pct`, `fit$screening_used`, `fit$screen_method`, `fit$screen_pct` |
 | Screened feature sets | Features retained by fold-safe screening | `fit$selected_features_by_layer`, `fit$selected_features_concat` |
 
@@ -392,10 +393,11 @@ This section summarizes the outputs produced by each integration method and wher
 
 | Method | Training outputs | Validation outputs |
 |---|---|---|
-| Single-layer | `fit$train_out$single$metrics` | `fit$valid_out$single$valid_cindex`, `fit$valid_out$single$valid_auc` |
-| Early fusion | `fit$train_out$early$train_cindex`, `fit$train_out$early$train_auc` | `fit$valid_out$early$valid_cindex`, `fit$valid_out$early$valid_auc` |
-| Late fusion | `fit$train_out$late$weights`, `fit$train_out$late$train_cindex`, `fit$train_out$late$train_auc` | `fit$valid_out$late$valid_cindex`, `fit$valid_out$late$valid_auc` |
+| Single-layer | `fit$train_out$single$metrics`, `fit$train_out$single$train_risk` | `fit$valid_out$single$valid_cindex`, `fit$valid_out$single$valid_auc`, `fit$valid_out$single$valid_risk` |
+| Early fusion | `fit$train_out$early$train_cindex`, `fit$train_out$early$train_auc`, `fit$train_out$early$train_risk` | `fit$valid_out$early$valid_cindex`, `fit$valid_out$early$valid_auc`, `fit$valid_out$early$valid_risk` |
+| Late fusion | `fit$train_out$late$weights`, `fit$train_out$late$train_cindex`, `fit$train_out$late$train_auc`, `fit$train_out$late$train_risk` | `fit$valid_out$late$valid_cindex`, `fit$valid_out$late$valid_auc`, `fit$valid_out$late$valid_risk` |
 | Intermediate fusion | `fit$train_out$intermediate` (per learner listed in `intermediate_learners`) | `fit$valid_out$intermediate` |
+| Survival plotting payload | `fit$surv_plot_data$train` | `fit$surv_plot_data$valid` |
 
 ### Importance Outputs (Conbin, Multiclass, and Survival)
 
@@ -527,12 +529,18 @@ fit <- IntegratedLearner(
 Core outputs for binary tasks include:
 
 - `fit$AUC.train` and `fit$AUC.test`: AUC per layer and fusion model.
+- `fit$accuracy.train` and `fit$accuracy.test`: thresholded accuracy per layer and fusion model.
+- `fit$balanced_accuracy.train` and `fit$balanced_accuracy.test`: balanced accuracy per layer and fusion model.
+- `fit$metrics.train` and `fit$metrics.test`: compact metric tables with AUC, accuracy, and balanced accuracy.
 - `fit$weights`: layer contributions in the stacked model (when `SL.nnls.auc` is used).
 - `fit$yhat.train` and `fit$yhat.test`: predicted probabilities.
 
 ```{r chunk-08}
 fit$AUC.train
 fit$AUC.test
+fit$accuracy.train
+fit$balanced_accuracy.train
+fit$metrics.test
 fit$weights
 ```
 
@@ -916,9 +924,17 @@ Useful multiclass outputs:
 - `fit$metrics.test`
 - `fit$class.train`
 - `fit$class.test`
+- `fit$prob.train`
+- `fit$prob.test`
 - `fit$feature_importance_signed_by_class`
 - `fit$filter_method`, `fit$filter_pct`
 - `fit$screening_used`, `fit$screen_pct`
+
+The multiclass metric tables now report accuracy, balanced accuracy, one-vs-rest AUC, and log-loss. The plotting helper also returns a single one-vs-rest ROC figure with all class curves overlaid for each fitted model.
+
+```{r chunk-17b, warning=FALSE, fig.height=9, fig.width=8}
+plot.obj.mc <- IntegratedLearner:::plot.learner(fit)
+```
 
 ## Example 4: Survival Outcome (Time-to-event)
 
@@ -929,6 +945,11 @@ For survival tasks, `IntegratedLearner` dispatches to `ILsurv` when survival met
 - optional `Y`: `Surv(time, event)` convenience column.
 
 This path uses the package-native survival backend (no `mlr3` dependency required).
+
+For plotting, the survival backend now stores:
+
+- a time-dependent AUC table evaluated over a denser event-time grid (rather than only a few summary quantiles), and
+- Kaplan-Meier curve payloads built from predicted risk groups for the best fused survival model.
 
 This section provides a complete MAE workflow, followed by an equivalent PCL sketch.
 
@@ -1083,6 +1104,12 @@ fit_surv_mae$train_out$late$train_auc
 fit_surv_mae$valid_out$late$valid_cindex
 fit_surv_mae$valid_out$late$valid_auc
 fit_surv_mae$valid_out$single$valid_cindex
+```
+
+The `train_auc` and `valid_auc` objects are data frames with `time` and `AUC` columns, so they can be plotted as true time-dependent discrimination curves.
+
+```{r chunk-19b, warning=FALSE, fig.height=9, fig.width=8}
+plot.obj.surv <- IntegratedLearner:::plot.learner(fit_surv_mae)
 ```
 
 

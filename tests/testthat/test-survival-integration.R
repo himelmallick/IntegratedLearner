@@ -60,3 +60,42 @@ test_that("IntegratedLearner survival IBS branch returns train metrics without v
   expect_true(is.data.frame(fit$train_out$late$train_auc))
   expect_true(all(c("time", "AUC") %in% colnames(fit$train_out$late$train_auc)))
 })
+
+test_that("plot.learner returns survival AUC and KM payloads", {
+  skip_if_not_installed("survival")
+  skip_if_not_installed("timeROC")
+  skip_if_not_installed("ggplot2")
+  skip_if_not_installed("cowplot")
+  skip_if_not_installed("stringr")
+
+  suppressPackageStartupMessages(library(survival))
+
+  tmp_plot <- tempfile(fileext = ".pdf")
+  grDevices::pdf(tmp_plot)
+  on.exit(
+    {
+      if (grDevices::dev.cur() > 1L) grDevices::dev.off()
+      unlink(tmp_plot)
+    },
+    add = TRUE
+  )
+
+  tcga <- make_tcga_survival_pcl(
+    n_samples = 200, n_train = 150, n_gene_features = 8,
+    n_mirna_features = 6, seed = 2030
+  )
+
+  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+    PCL_train = tcga$train,
+    PCL_valid = tcga$valid, folds = 2, seed = 2030,
+    base_learner = "surv.coxph", weight_method = "COX", verbose = FALSE
+  ))
+
+  out <- suppressWarnings(IntegratedLearner:::plot.learner(fit))
+  expect_true(is.list(out))
+  expect_true(all(c("plot", "AUC_table_train", "KM_table_train") %in% names(out)))
+  expect_true(is.data.frame(out$AUC_table_train))
+  expect_true(is.data.frame(out$KM_table_train))
+  expect_true(all(c("time", "AUC", "model") %in% colnames(out$AUC_table_train)))
+  expect_true(all(c("time", "surv", "strata") %in% colnames(out$KM_table_train)))
+})
