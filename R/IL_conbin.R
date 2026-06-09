@@ -10,8 +10,7 @@
 #' validation set. It also performs V-fold nested cross-validation to estimate
 #' the prediction accuracy of various fusion algorithms.
 #'
-#' Three types of integration paradigms are supported: early, late, and
-#' intermediate. The software includes multiple ML models based on the
+#' Two integration paradigms are supported: early and late. The software includes multiple ML models based on the
 #' \code{\link[SuperLearner]{SuperLearner}} R package as well as several data
 #' exploration capabilities and visualization modules in a unified estimation
 #' framework.
@@ -19,10 +18,10 @@
 #' Although \code{IL_conbin()} is typically called internally by
 #' \code{IntegratedLearner()} after extracting multi-view feature tables from
 #' \code{MultiAssayExperiment} objects, advanced users may call
-#' \code{IL_conbin()} directly when they already have multiview feature tables
+#' \code{IL_conbin()} directly when they already have multi-layer feature tables
 #' and metadata in matrix/data.frame form.
 #'
-#' @param feature_table An R data frame containing multiview features (in rows)
+#' @param feature_table An R data frame containing multi-layer features (in rows)
 #'   and samples (in columns).
 #'   Column names of \code{feature_metadata} must match the row names of
 #'   \code{sample_metadata}.
@@ -71,15 +70,6 @@
 #'   Defaults to \code{SL.nnls.auc}.
 #' @param run_concat Should early fusion be run? Default is TRUE.
 #' @param run_stacked Should stacked model (late fusion) be run? Default is TRUE.
-#' @param intermediate_learners Optional character vector of intermediate-fusion
-#'   learners. Currently supports \code{"multiview"} via the \pkg{multiview}
-#'   package for binary and continuous outcomes.
-#' @param multiview_rho_grid Numeric vector of cooperative-learning \code{rho}
-#'   values to compare when \code{"multiview"} is used.
-#' @param multiview_s Lambda rule used for multiview prediction extraction;
-#'   either \code{"lambda.min"} or \code{"lambda.1se"}.
-#' @param multiview_alpha Elastic-net \code{alpha} passed to
-#'   \pkg{multiview} for intermediate fusion.
 #' @param drop_poor_performing_layers Logical; if \code{TRUE}, layers with
 #'   single-layer performance below the screening threshold are removed from
 #'   early and late fusion only. The threshold is AUC < 0.5 for binary and
@@ -138,9 +128,7 @@ IL_conbin <- function(
   sample_metadata_valid = NULL, folds = 5, seed = 1234, base_learner = "SL.BART",
   base_screener = "All", run_screening = FALSE, screen_pct = NULL, filter_method = NULL,
   filter_pct = NULL, prevalence_pct = NULL, meta_learner = "SL.nnls.auc", run_concat = TRUE,
-  run_stacked = TRUE, intermediate_learners = NULL,
-  multiview_rho_grid = c(0, 0.1, 0.25, 0.5, 1), multiview_s = c("lambda.min", "lambda.1se")[1],
-  multiview_alpha = 1, drop_poor_performing_layers = FALSE, verbose = FALSE,
+  run_stacked = TRUE, drop_poor_performing_layers = FALSE, verbose = FALSE,
   print_learner = TRUE, refit.stack = FALSE, family = stats::gaussian(), ...
 ) {
   ############## Track time #
@@ -402,64 +390,6 @@ IL_conbin <- function(
 
   fusion_feature_ids <- .feature_ids_for_layers(feature_metadata, fusion_layers_retained)
 
-  intermediate_train_pred <- list()
-  intermediate_valid_pred <- list()
-  intermediate_model_fits <- list()
-  intermediate_details <- list()
-
-  if (!is.null(intermediate_learners) && length(intermediate_learners) > 0L) {
-    for (learner_id in unique(intermediate_learners)) {
-      if (!identical(learner_id, "multiview")) {
-        warning("Skipping unsupported intermediate learner for IL_conbin: ", learner_id,
-          call. = FALSE
-        )
-        next
-      }
-
-      if (length(X_train_layers) < 2L) {
-        warning("Skipping multiview intermediate fusion because fewer than 2 layers are available.",
-          call. = FALSE
-        )
-        next
-      }
-
-      if (isTRUE(verbose)) {
-        message("Running intermediate multiview model...")
-      }
-
-      mv_fit <- .fit_multiview_intermediate(
-        x_list = X_train_layers,
-        family_name = family_name,
-        fold_id = fold_id,
-        rho_grid = multiview_rho_grid,
-        s = multiview_s,
-        alpha = multiview_alpha,
-        y = Y,
-        verbose = verbose,
-        seed = seed + 9000
-      )
-
-      intermediate_train_pred[[learner_id]] <- mv_fit$oof_pred
-      intermediate_model_fits[[learner_id]] <- mv_fit$cvfit
-      intermediate_details[[learner_id]] <- list(
-        rho = mv_fit$rho,
-        score = mv_fit$score,
-        rho_grid = mv_fit$all_scores,
-        lambda_rule = mv_fit$lambda_rule,
-        alpha = mv_fit$alpha
-      )
-
-      if (!is.null(feature_table_valid)) {
-        intermediate_valid_pred[[learner_id]] <- .predict_multiview_cv(
-          cvfit = mv_fit$cvfit,
-          x_list = X_test_layers,
-          family_name = family_name,
-          s = multiview_s
-        )
-      }
-    }
-  }
-
   #################### Stack all models #
 
   if (run_stacked) {
@@ -577,24 +507,12 @@ IL_conbin <- function(
     model_layers[[i]] <- SL_fit_layers[[i]]$fitLibrary[[1]]$object
   }
 
-  intermediate_train_df <- NULL
-  intermediate_valid_df <- NULL
-  if (length(intermediate_train_pred) > 0L) {
-    intermediate_train_df <- as.data.frame(do.call(cbind, intermediate_train_pred), check.names = FALSE)
-    colnames(intermediate_train_df) <- paste0("intermediate_", names(intermediate_train_pred))
-  }
-  if (!is.null(feature_table_valid) && length(intermediate_valid_pred) > 0L) {
-    intermediate_valid_df <- as.data.frame(do.call(cbind, intermediate_valid_pred), check.names = FALSE)
-    colnames(intermediate_valid_df) <- paste0("intermediate_", names(intermediate_valid_pred))
-  }
-
   ################## CONCAT + STACK #
 
   if (run_concat & run_stacked) {
     model_fits <- list(
       model_layers = model_layers, model_stacked = model_stacked,
-      model_concat = model_concat,
-      model_intermediate = intermediate_model_fits
+      model_concat = model_concat
     )
 
     SL_fits <- list(
@@ -605,9 +523,6 @@ IL_conbin <- function(
     ############################### Prediction (Stack + Concat) #
 
     yhat.train <- combo
-    if (!is.null(intermediate_train_df)) {
-      yhat.train <- cbind(yhat.train, intermediate_train_df)
-    }
     if (refit.stack) {
       yhat.train <- cbind(yhat.train, stacked_prediction_train)
     } else {
@@ -620,9 +535,6 @@ IL_conbin <- function(
 
     if (!is.null(feature_table_valid)) {
       yhat.test <- combo_valid
-      if (!is.null(intermediate_valid_df)) {
-        yhat.test <- cbind(yhat.test, intermediate_valid_df)
-      }
       yhat.test <- cbind(yhat.test, SL_fit_stacked$validPrediction, SL_fit_concat$validPrediction)
       colnames(yhat.test)[(ncol(yhat.test) - 1L):ncol(yhat.test)] <- c("stacked", "concatenated")
 
@@ -644,8 +556,7 @@ IL_conbin <- function(
   } else if (run_concat & !run_stacked) {
     model_fits <- list(
       model_layers = model_layers,
-      model_concat = model_concat,
-      model_intermediate = intermediate_model_fits
+      model_concat = model_concat
     )
 
     SL_fits <- list(SL_fit_layers = SL_fit_layers, SL_fit_concat = SL_fit_concat)
@@ -654,9 +565,6 @@ IL_conbin <- function(
     ############################ Prediction (Concat Only) #
 
     yhat.train <- combo
-    if (!is.null(intermediate_train_df)) {
-      yhat.train <- cbind(yhat.train, intermediate_train_df)
-    }
     yhat.train <- cbind(yhat.train, SL_fit_concat$Z)
     colnames(yhat.train)[ncol(yhat.train)] <- "concatenated"
 
@@ -664,9 +572,6 @@ IL_conbin <- function(
 
     if (!is.null(feature_table_valid)) {
       yhat.test <- combo_valid
-      if (!is.null(intermediate_valid_df)) {
-        yhat.test <- cbind(yhat.test, intermediate_valid_df)
-      }
       yhat.test <- cbind(yhat.test, SL_fit_concat$validPrediction)
       colnames(yhat.test)[ncol(yhat.test)] <- "concatenated"
 
@@ -687,8 +592,7 @@ IL_conbin <- function(
   } else if (!run_concat & run_stacked) {
     model_fits <- list(
       model_layers = model_layers,
-      model_stacked = model_stacked,
-      model_intermediate = intermediate_model_fits
+      model_stacked = model_stacked
     )
 
     SL_fits <- list(SL_fit_layers = SL_fit_layers, SL_fit_stacked = SL_fit_stacked)
@@ -696,9 +600,6 @@ IL_conbin <- function(
     ########################### Prediction (Stack Only) #
 
     yhat.train <- combo
-    if (!is.null(intermediate_train_df)) {
-      yhat.train <- cbind(yhat.train, intermediate_train_df)
-    }
     if (refit.stack) {
       yhat.train <- cbind(yhat.train, stacked_prediction_train)
     } else {
@@ -710,9 +611,6 @@ IL_conbin <- function(
 
     if (!is.null(feature_table_valid)) {
       yhat.test <- combo_valid
-      if (!is.null(intermediate_valid_df)) {
-        yhat.test <- cbind(yhat.test, intermediate_valid_df)
-      }
       yhat.test <- cbind(yhat.test, SL_fit_stacked$validPrediction)
       colnames(yhat.test)[ncol(yhat.test)] <- "stacked"
 
@@ -733,28 +631,19 @@ IL_conbin <- function(
 
     ############################ NEITHER CONCAT NOR STACK #
   } else {
-    model_fits <- list(
-      model_layers = model_layers,
-      model_intermediate = intermediate_model_fits
-    )
+    model_fits <- list(model_layers = model_layers)
     SL_fits <- list(SL_fit_layers = SL_fit_layers)
 
     ######################################### Prediction (Neither Stack nor
     ######################################### Concat) #
 
     yhat.train <- combo
-    if (!is.null(intermediate_train_df)) {
-      yhat.train <- cbind(yhat.train, intermediate_train_df)
-    }
 
     ######################################### Validation (Neither Stack nor
     ######################################### Concat) #
 
     if (!is.null(feature_table_valid)) {
       yhat.test <- combo_valid
-      if (!is.null(intermediate_valid_df)) {
-        yhat.test <- cbind(yhat.test, intermediate_valid_df)
-      }
 
       ######### Save #
 
@@ -793,11 +682,6 @@ IL_conbin <- function(
   res$prevalence_pct <- filtered$prevalence_pct
   res$run_concat <- run_concat
   res$run_stacked <- run_stacked
-  res$intermediate_learners <- names(intermediate_model_fits)
-  res$intermediate_details <- intermediate_details
-  res$multiview_rho_grid <- multiview_rho_grid
-  res$multiview_s <- multiview_s
-  res$multiview_alpha <- multiview_alpha
   res$drop_poor_performing_layers <- isTRUE(drop_poor_performing_layers)
   res$fusion_layers_retained <- fusion_layers_retained
   res$fusion_layers_removed <- fusion_layers_removed

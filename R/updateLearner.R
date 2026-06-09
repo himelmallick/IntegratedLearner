@@ -166,61 +166,9 @@ update.learner <- function(
   fusion_layers_common <- intersect(name_layers_common, fusion_layers_target)
   run_stacked_update <- isTRUE(fit$run_stacked) && length(fusion_layers_common) > 0L
   run_concat_update <- isTRUE(fit$run_concat) && length(fusion_layers_common) > 0L
-  run_intermediate_update <- !is.null(fit$model_fits$model_intermediate$multiview) &&
-    length(name_layers_common) >= 2L
 
   if ((isTRUE(fit$run_stacked) || isTRUE(fit$run_concat)) && length(fusion_layers_common) == 0L) {
     message("No retained fusion layers are available in the validation subset; returning single-layer predictions only.")
-  }
-  if (!is.null(fit$model_fits$model_intermediate$multiview) && length(name_layers_common) < 2L) {
-    message("Skipping multiview intermediate fusion update because fewer than 2 common layers are available.")
-  }
-
-  intermediate_prediction_valid <- NULL
-  if (run_intermediate_update) {
-    if (!is.list(fit$cvControl$validRows) || length(fit$cvControl$validRows) == 0L) {
-      stop("Cannot refit multiview intermediate model because fold assignments are missing from the fit object.",
-        call. = FALSE
-      )
-    }
-
-    fold_id <- integer(length(fit$Y_train))
-    for (k in seq_along(fit$cvControl$validRows)) {
-      fold_id[fit$cvControl$validRows[[k]]] <- k
-    }
-
-    mv_fit <- .fit_multiview_intermediate(
-      x_list = fit$X_train_layers[name_layers_common],
-      family_name = fit$family,
-      fold_id = fold_id,
-      rho_grid = fit$multiview_rho_grid %||% c(0, 0.1, 0.25, 0.5, 1),
-      s = fit$multiview_s %||% "lambda.min",
-      alpha = fit$multiview_alpha %||% 1,
-      y = fit$Y_train,
-      verbose = verbose,
-      seed = seed
-    )
-
-    intermediate_prediction_valid <- .predict_multiview_cv(
-      cvfit = mv_fit$cvfit,
-      x_list = X_test_layers,
-      family_name = fit$family,
-      s = fit$multiview_s %||% "lambda.min"
-    )
-
-    fit$model_fits$model_intermediate$multiview <- mv_fit$cvfit
-    fit$intermediate_details$multiview <- list(
-      rho = mv_fit$rho,
-      score = mv_fit$score,
-      rho_grid = mv_fit$all_scores,
-      lambda_rule = mv_fit$lambda_rule,
-      alpha = mv_fit$alpha
-    )
-    fit$yhat.train$intermediate_multiview <- mv_fit$oof_pred
-  } else {
-    fit$model_fits$model_intermediate <- list()
-    fit$intermediate_details <- list()
-    fit$yhat.train$intermediate_multiview <- NULL
   }
 
   # ---- refit stacked ----
@@ -307,9 +255,6 @@ update.learner <- function(
 
   # ---- rebuild yhat.train columns ----
   keep_cols <- name_layers_common
-  if (run_intermediate_update) {
-    keep_cols <- c(keep_cols, "intermediate_multiview")
-  }
   if (run_stacked_update) {
     keep_cols <- c(keep_cols, "stacked")
   }
@@ -320,12 +265,6 @@ update.learner <- function(
 
   # ---- rebuild yhat.test ----
   yhat.test <- combo_valid
-  if (run_intermediate_update) {
-    yhat.test <- cbind(
-      yhat.test,
-      intermediate_multiview = intermediate_prediction_valid
-    )
-  }
   if (run_stacked_update) {
     yhat.test <- cbind(yhat.test, fit$SL_fits$SL_fit_stacked$validPrediction)
   }

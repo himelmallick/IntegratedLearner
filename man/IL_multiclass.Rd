@@ -30,7 +30,7 @@ IL_multiclass(
 )
 }
 \arguments{
-\item{feature_table}{An R data frame containing multiview features (in rows)
+\item{feature_table}{An R data frame containing multi-layer features (in rows)
 and samples (in columns).
 Column names of \code{feature_metadata} must match the row names of
 \code{sample_metadata}.}

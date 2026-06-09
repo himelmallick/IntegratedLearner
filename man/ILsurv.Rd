@@ -16,6 +16,7 @@ ILsurv(
   seed = 123,
   run_screening = FALSE,
   screen_pct = NULL,
+  drop_poor_performing_layers = FALSE,
   verbose = FALSE,
   do_early_fusion = TRUE,
   weight_method = c("IBS", "COX"),
@@ -29,7 +30,6 @@ ILsurv(
   optim_maxit_cox = 4000,
   optim_maxit_ibs = 300,
   ibs_shrink_to_uniform = 0,
-  intermediate_learners = c("surv.coxph"),
   ...
 )
 
@@ -44,6 +44,7 @@ IL_survival(
   seed = 123,
   run_screening = FALSE,
   screen_pct = NULL,
+  drop_poor_performing_layers = FALSE,
   verbose = FALSE,
   do_early_fusion = TRUE,
   weight_method = c("IBS", "COX"),
@@ -57,12 +58,11 @@ IL_survival(
   optim_maxit_cox = 4000,
   optim_maxit_ibs = 300,
   ibs_shrink_to_uniform = 0,
-  intermediate_learners = c("surv.coxph"),
   ...
 )
 }
 \arguments{
-\item{feature_table}{An R data frame containing multiview features (in rows)
+\item{feature_table}{An R data frame containing multi-layer features (in rows)
 and samples (in columns).
 Column names of \code{feature_metadata} must match the row names of
 \code{sample_metadata}.}
@@ -101,6 +101,12 @@ base models.}
 \item{screen_pct}{Percentage of features to retain during screening
 (\code{(0,100]}). Applied after any optional filtering.}
 
+\item{drop_poor_performing_layers}{Logical; if \code{TRUE}, layers with
+single-layer performance below the screening threshold are removed from
+early and late fusion only. The threshold is AUC < 0.5 for binary and
+R\eqn{^2} < 0.5 for continuous outcomes. Single-layer outputs are still
+retained and reported.}
+
 \item{verbose}{logical; TRUE for printing SuperLearner progress. Default FALSE.}
 
 \item{do_early_fusion}{Logical; run early fusion model.}
@@ -132,8 +138,6 @@ is \code{NULL}.}
 
 \item{ibs_shrink_to_uniform}{Optional convex shrinkage of IBS weights toward
 uniform.}
-
-\item{intermediate_learners}{Vector of learner IDs for intermediate fusion.}
 
 \item{...}{Additional base-learner hyperparameters passed to
 \code{base_learner}. You may also pass \code{model_args = list(...)} as a

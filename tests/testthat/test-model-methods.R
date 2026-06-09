@@ -266,29 +266,3 @@ test_that("plot.learner returns plotting payloads for binomial and gaussian fits
   expect_true(all(c("plot", "R2_table") %in% names(out_gauss)))
   expect_true(is.data.frame(out_gauss$R2_table))
 })
-
-test_that("IntegratedLearner can add multiview intermediate fusion for gaussian", {
-  skip_if_not_installed("SuperLearner")
-  skip_if_not_installed("multiview")
-  suppressPackageStartupMessages(library(SuperLearner))
-
-  pcl <- make_toy_pcl(n_samples = 32, n_features = 12, seed = 460, binary = FALSE)
-  train_ids <- rownames(pcl$sample_metadata)[1:24]
-  valid_ids <- rownames(pcl$sample_metadata)[25:32]
-  pcl_train <- subset_pcl(pcl, feature_ids = rownames(pcl$feature_table), sample_ids = train_ids)
-  pcl_valid <- subset_pcl(pcl, feature_ids = rownames(pcl$feature_table), sample_ids = valid_ids)
-
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
-    PCL_train = pcl_train,
-    PCL_valid = pcl_valid, folds = 3, seed = 2040, base_learner = "SL.glm",
-    run_stacked = FALSE, run_concat = FALSE, intermediate_learners = "multiview",
-    print_learner = FALSE, verbose = FALSE, family = stats::gaussian()
-  ))
-
-  expect_true("intermediate_multiview" %in% colnames(fit$yhat.train))
-  expect_true("intermediate_multiview" %in% colnames(fit$yhat.test))
-  expect_true("multiview" %in% names(fit$model_fits$model_intermediate))
-  expect_true(is.list(fit$intermediate_details$multiview))
-  expect_true(is.finite(fit$R2.train["intermediate_multiview"]))
-  expect_true(is.finite(fit$R2.test["intermediate_multiview"]))
-})

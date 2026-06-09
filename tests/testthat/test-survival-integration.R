@@ -19,9 +19,9 @@ test_that("IntegratedLearner survival mode works with TCGA fixture and validatio
   expect_identical(fit$input_mode, "PCL")
 
   expect_true(is.list(fit$train_out))
-  expect_true(all(c("single", "early", "late", "intermediate") %in% names(fit$train_out)))
+  expect_true(all(c("single", "early", "late") %in% names(fit$train_out)))
   expect_true(is.list(fit$valid_out))
-  expect_true(all(c("single", "early", "late", "intermediate") %in% names(fit$valid_out)))
+  expect_true(all(c("single", "early", "late") %in% names(fit$valid_out)))
 
   expected_layers <- unique(as.character(tcga$train$feature_metadata$featureType))
   expect_equal(length(expected_layers), 2)
@@ -122,29 +122,4 @@ test_that("plot.learner returns survival AUC and KM payloads", {
   expect_true(is.data.frame(out$KM_table_train))
   expect_true(all(c("time", "AUC", "model") %in% colnames(out$AUC_table_train)))
   expect_true(all(c("time", "surv", "strata") %in% colnames(out$KM_table_train)))
-})
-
-test_that("IntegratedLearner survival can use surv.multiview intermediate fusion", {
-  skip_if_not_installed("survival")
-  skip_if_not_installed("timeROC")
-  skip_if_not_installed("multiview")
-
-  suppressPackageStartupMessages(library(survival))
-
-  tcga <- make_tcga_survival_pcl(
-    n_samples = 190, n_train = 145, n_gene_features = 8,
-    n_mirna_features = 6, seed = 2041
-  )
-
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
-    PCL_train = tcga$train,
-    PCL_valid = tcga$valid, folds = 3, seed = 2041, base_learner = "surv.coxph",
-    weight_method = "COX", intermediate_learners = "surv.multiview", verbose = FALSE
-  ))
-
-  expect_true("surv.multiview" %in% names(fit$train_out$intermediate))
-  expect_true("surv.multiview" %in% names(fit$valid_out$intermediate))
-  expect_true(is.list(fit$intermediate_details$surv.multiview))
-  expect_true(is.finite(fit$train_out$intermediate$surv.multiview$train_cindex))
-  expect_true(is.finite(fit$valid_out$intermediate$surv.multiview$valid_cindex))
 })

@@ -51,7 +51,6 @@ Suggests:
     glmnetUtils,
     mlbench,
     mboost,
-    multiview,
     nloptr,
     prediction,
     quadprog,

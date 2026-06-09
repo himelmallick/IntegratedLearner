@@ -87,11 +87,10 @@ The goal is to show a complete end-to-end pattern you can adapt to your own mult
 2. Fit per-layer, stacked, and concatenated learners.
 3. Interpret model outputs (AUC, accuracy, balanced accuracy, R2, survival discrimination curves, layer weights, and feature signals).
 
-`IntegratedLearner` supports three integration paradigms:
+`IntegratedLearner` supports two integration paradigms:
 
 - Early fusion: concatenated features across layers.
 - Late fusion: layer-specific models combined by a meta-learner.
-- Intermediate fusion: additional integration strategies for downstream analysis.
 
 Optional feature selection workflow used in this vignette:
 
@@ -119,7 +118,6 @@ library(S4Vectors)
 library(SummarizedExperiment)
 library(MultiAssayExperiment)
 library(survival)
-library(multiview)
 if (use_sl_bart) {
   library(bartMachine)
 }
@@ -303,10 +301,6 @@ The returned object is the same style as `PCL` mode, so downstream interpretatio
 | `run_screening` | `FALSE` | all | Enable supervised screening. |
 | `screen_pct` | `NULL` | all | Retention percentage in `(0,100]` for screening. Required when screening is enabled. |
 | `prevalence_pct` | `NULL` | all | Deprecated alias for prevalence filtering (`filter_method = "prevalence"`). |
-| `intermediate_learners` | `NULL` (non-survival), `c("surv.coxph")` (survival default) | all | Optional intermediate-fusion learners. Continuous/binary currently support `"multiview"`. Survival additionally supports `"surv.multiview"`. Multiclass intermediate fusion is not yet implemented. |
-| `multiview_rho_grid` | `c(0, 0.1, 0.25, 0.5, 1)` | continuous, binary, survival | Cooperative-learning `rho` grid used when `multiview`-based intermediate fusion is enabled. |
-| `multiview_s` | `"lambda.min"` | continuous, binary, survival | Lambda rule used when extracting `multiview` predictions (`"lambda.min"` or `"lambda.1se"`). |
-| `multiview_alpha` | `1` | continuous, binary, survival | Elastic-net `alpha` passed to `multiview`. |
 | `drop_poor_performing_layers` | `FALSE` | continuous, binary, survival | If `TRUE`, removes layers with poor single-layer performance from early and late fusion only (AUC < 0.5 for binary, R² < 0.5 for continuous, C-index < 0.5 for survival). Single-layer results are still retained. |
 | `verbose` | `FALSE` | all | Print progress. |
 | `family` | `gaussian()` | all | Non-survival: `gaussian()`/`binomial()`. Multiclass is auto-detected when `family = binomial()` and outcome has more than two classes. Survival is auto-detected from metadata or family. |
@@ -320,8 +314,6 @@ The returned object is the same style as `PCL` mode, so downstream interpretatio
 | `meta_learner` | `"SL.nnls.auc"` | Stacked meta learner for late fusion. |
 | `run_stacked` | `TRUE` | Enables late-fusion stacked model. |
 | `run_concat` | `TRUE` | Enables early-fusion concatenated model. |
-| `intermediate_learners` | `NULL` | Optional intermediate learners; currently supports `"multiview"` via the CRAN `multiview` package. |
-| `multiview_rho_grid`, `multiview_s`, `multiview_alpha` | defaults above | Cooperative-learning tuning controls used when `"multiview"` is enabled. |
 | `print_learner` | `TRUE` | Prints fit summary. |
 | `refit.stack` | `FALSE` | Refit stacked learner on full data for final predictions. |
 
@@ -334,7 +326,6 @@ The returned object is the same style as `PCL` mode, so downstream interpretatio
 | `base_screener` | `"All"` | Deprecated compatibility parameter. Prefer `run_screening` + `screen_pct`. |
 | `run_stacked` | `TRUE` | Enables late-fusion stacked multiclass model. |
 | `run_concat` | `TRUE` | Enables early-fusion concatenated multiclass model. |
-| `intermediate_learners` | ignored | Reserved for future multiclass intermediate fusion; currently ignored with a message. |
 | `folds` | `5` | Subject-level CV folds for OOF multiclass probabilities. |
 | `run_screening`, `screen_pct` | `FALSE`, `NULL` | Fold-safe multiclass screening (glmnet-based) after optional filtering. |
 
@@ -344,8 +335,6 @@ The returned object is the same style as `PCL` mode, so downstream interpretatio
 |---|---|---|
 | `do_early_fusion` | `TRUE` | Train an early-fusion survival model on all features. |
 | `weight_method` | `"IBS"` | Late-fusion weighting objective (`"IBS"` or `"COX"`). |
-| `intermediate_learners` | `c("surv.coxph")` | Intermediate fusion learners. Supports risk-level learners such as `"surv.coxph"` and cooperative feature-level fusion via `"surv.multiview"`. |
-| `multiview_rho_grid`, `multiview_s`, `multiview_alpha` | defaults above | Cooperative-learning tuning controls used when `"surv.multiview"` is enabled. |
 | `t_vec`, `t_vec_probs` | `NULL`, quantiles | Time grid used in COX-style weighting summaries. |
 | `layer_score` | `"sum"` | Aggregation of cumulative hazard increments (`sum`, `mean`, `l2`). |
 | `weight_lambda` | `0.02` | Regularization strength for COX weighting optimizer. |
@@ -367,11 +356,11 @@ The returned object is the same style as `PCL` mode, so downstream interpretatio
 
 ### Supported Fusion Outputs
 
-| Path | Single-layer | Early fusion | Late fusion | Intermediate fusion |
-|---|---|---|---|---|
-| Continuous/Binary | Yes | `run_concat = TRUE` | `run_stacked = TRUE` with `meta_learner` | `intermediate_learners = "multiview"` |
-| Multiclass | Yes | `run_concat = TRUE` | `run_stacked = TRUE` with native multiclass `meta_learner` | Not yet implemented |
-| Survival | Yes (`train_out$single`) | `do_early_fusion = TRUE` | Weighted layer blending (`weight_method = "IBS"` or `"COX"`) | `intermediate_learners`, including `surv.multiview` |
+| Path | Single-layer | Early fusion | Late fusion |
+|---|---|---|---|
+| Continuous/Binary | Yes | `run_concat = TRUE` | `run_stacked = TRUE` with `meta_learner` |
+| Multiclass | Yes | `run_concat = TRUE` | `run_stacked = TRUE` with native multiclass `meta_learner` |
+| Survival | Yes (`train_out$single`) | `do_early_fusion = TRUE` | Weighted layer blending (`weight_method = "IBS"` or `"COX"`) |
 
 ## Output Reference: What You Get and How to Access It
 
@@ -384,7 +373,6 @@ This section summarizes the outputs produced by each integration method and wher
 | Single-layer (per omics layer) | Layer-specific predictions and metrics | `fit$yhat.train[, layer_name]`, `fit$yhat.test[, layer_name]` (if validation), `fit$AUC.train` / `fit$AUC.test`, `fit$accuracy.train` / `fit$accuracy.test`, `fit$balanced_accuracy.train` / `fit$balanced_accuracy.test` (binomial), `fit$R2.train` / `fit$R2.test` (gaussian) |
 | Early fusion (concatenated) | One model on all features concatenated | Enable with `run_concat = TRUE`; outputs in `fit$yhat.train[, "concatenated"]`, `fit$model_fits$model_concat`, `fit$SL_fits$SL_fit_concat` |
 | Late fusion (stacked) | Meta-model over layer-level predictions | Enable with `run_stacked = TRUE`; outputs in `fit$yhat.train[, "stacked"]`, `fit$model_fits$model_stacked`, `fit$SL_fits$SL_fit_stacked` |
-| Intermediate fusion | Cooperative learner over per-layer feature matrices | Enable with `intermediate_learners = "multiview"`; outputs in `fit$yhat.train[, "intermediate_multiview"]`, `fit$model_fits$model_intermediate$multiview`, `fit$intermediate_details$multiview` |
 | Layer weights (stacked) | Relative contribution of each layer in late fusion | `fit$weights` (available when `meta_learner = "SL.nnls.auc"` and `run_stacked = TRUE`) |
 | Binary metric table | Per-model AUC, accuracy, and balanced accuracy | `fit$metrics.train` and `fit$metrics.test` (if validation provided) |
 
@@ -399,14 +387,13 @@ This section summarizes the outputs produced by each integration method and wher
 | Feature-selection metadata | Filtering/screening settings used in fit | `fit$filter_method`, `fit$filter_pct`, `fit$prevalence_pct`, `fit$screening_used`, `fit$screen_method`, `fit$screen_pct` |
 | Screened feature sets | Features retained by fold-safe screening | `fit$selected_features_by_layer`, `fit$selected_features_concat` |
 
-### Survival Outputs (Single/Early/Late/Intermediate)
+### Survival Outputs (Single/Early/Late)
 
 | Method | Training outputs | Validation outputs |
 |---|---|---|
 | Single-layer | `fit$train_out$single$metrics`, `fit$train_out$single$train_risk` | `fit$valid_out$single$valid_cindex`, `fit$valid_out$single$valid_auc`, `fit$valid_out$single$valid_risk` |
 | Early fusion | `fit$train_out$early$train_cindex`, `fit$train_out$early$train_auc`, `fit$train_out$early$train_risk` | `fit$valid_out$early$valid_cindex`, `fit$valid_out$early$valid_auc`, `fit$valid_out$early$valid_risk` |
 | Late fusion | `fit$train_out$late$weights`, `fit$train_out$late$train_cindex`, `fit$train_out$late$train_auc`, `fit$train_out$late$train_risk` | `fit$valid_out$late$valid_cindex`, `fit$valid_out$late$valid_auc`, `fit$valid_out$late$valid_risk` |
-| Intermediate fusion | `fit$train_out$intermediate` (per learner listed in `intermediate_learners`) | `fit$valid_out$intermediate` |
 | Survival plotting payload | `fit$surv_plot_data$train` | `fit$surv_plot_data$valid` |
 
 ### Importance Outputs (Conbin, Multiclass, and Survival)
@@ -448,7 +435,6 @@ head(fit_surv$train_out$late$combined_importance, 20)
 fit_surv$train_out$single
 fit_surv$train_out$early
 fit_surv$train_out$late
-fit_surv$train_out$intermediate
 ```
 
 ## Example 1: Binary Outcome (IBD Classification)
@@ -1109,10 +1095,8 @@ fit_surv_mae$train_out$late$weights
 fit_surv_mae$train_out$late$train_cindex
 fit_surv_mae$train_out$late$train_auc
 
-# Early and intermediate fusion summaries
-#fit_surv_mae$train_out$early
-#fit_surv_mae$train_out$intermediate
-
+# Early fusion summary
+# fit_surv_mae$train_out$early
 # Validation metrics
 fit_surv_mae$valid_out$late$valid_cindex
 fit_surv_mae$valid_out$late$valid_auc
@@ -1125,7 +1109,6 @@ The `train_auc` and `valid_auc` objects are data frames with `time` and `AUC` co
 plot.obj.surv <- IntegratedLearner:::plot.learner(fit_surv_mae)
 plot.obj.surv$plot
 ```
-
 
 ## Session Information
 

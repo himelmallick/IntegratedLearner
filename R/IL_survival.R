@@ -1339,10 +1339,8 @@
   ), cox_eps = 1e-12, cox_weight_lambda = 0.02, cox_weight_penalty = c(
     "l2_to_uniform",
     "entropy"
-  ), cox_weight_cap = 1, cox_optim_maxit = 4000, intermediate_learners = c("surv.coxph"),
-  multiview_rho_grid = c(0, 0.1, 0.25, 0.5, 1), multiview_s = c("lambda.min", "lambda.1se")[1],
-  multiview_alpha = 1,
-  verbose = FALSE, model_args = list()
+  ), cox_weight_cap = 1,
+  cox_optim_maxit = 4000, verbose = FALSE, model_args = list()
 ) {
   .vmsg <- function(...) {
     if (isTRUE(verbose)) {
@@ -1399,8 +1397,6 @@
   importance_list <- list()
   sign_list <- list()
   full_layer_models <- list()
-  X_layer_list <- list()
-
   for (lay in layers) {
     lay_features <- rownames(feature_metadata)[feature_metadata$featureType ==
       lay]
@@ -1409,7 +1405,6 @@
       .vmsg("[", lay, "] skipped (no features)")
       next
     }
-    X_layer_list[[lay]] <- X
     .vmsg("[", lay, "] fitting OOF + full model (", ncol(X), " features)")
     method_opts <- model_args[[base_learner]]
     if (is.null(method_opts)) {
@@ -1562,88 +1557,6 @@
   }), use.names = TRUE)
   combined_importance <- sort(combined_importance, decreasing = TRUE)
 
-  intermediate_train <- list()
-  intermediate_models <- list()
-  intermediate_details <- list()
-  if (length(intermediate_learners) > 0L) {
-    .vmsg("Running intermediate fusion learners: ", paste(intermediate_learners,
-      collapse = ", "
-    ))
-    for (learner_id in intermediate_learners) {
-      if (!(learner_id %in% c(supported, "surv.multiview"))) {
-        warning("Skipping unsupported intermediate learner: ", learner_id,
-          call. = FALSE
-        )
-        .vmsg("  [intermediate:", learner_id, "] skipped (unsupported)")
-        next
-      }
-      .vmsg("  [intermediate:", learner_id, "] fitting")
-      if (identical(learner_id, "surv.multiview")) {
-        if (length(X_layer_list) < 2L) {
-          warning("Skipping surv.multiview because fewer than 2 layers are available.",
-            call. = FALSE
-          )
-          .vmsg("  [intermediate:", learner_id, "] skipped (<2 layers)")
-          next
-        }
-        method_opts <- model_args[[learner_id]]
-        if (is.null(method_opts)) {
-          method_opts <- list()
-        }
-        mv_fit <- .fit_multiview_intermediate(
-          x_list = X_layer_list,
-          family_name = "survival",
-          fold_id = fold_id,
-          rho_grid = multiview_rho_grid,
-          s = multiview_s,
-          alpha = multiview_alpha,
-          times = times,
-          events = events,
-          verbose = verbose,
-          seed = seed + 7000,
-          extra_args = method_opts
-        )
-        met <- .compute_auc_cindex(times, events, mv_fit$oof_pred)
-        intermediate_train[[learner_id]] <- list(
-          train_cindex = met$cindex, train_auc = met$auc,
-          train_auc_mean = met$auc_mean, train_brier = met$brier, train_ibs = met$ibs,
-          train_risk = mv_fit$oof_pred
-        )
-        intermediate_models[[learner_id]] <- mv_fit$cvfit
-        intermediate_details[[learner_id]] <- list(
-          rho = mv_fit$rho,
-          score = mv_fit$score,
-          rho_grid = mv_fit$all_scores,
-          lambda_rule = mv_fit$lambda_rule,
-          alpha = mv_fit$alpha
-        )
-        .vmsg("  [intermediate:", learner_id, "] cindex=", .fmt(met$cindex))
-        next
-      }
-      method_opts <- model_args[[learner_id]]
-      if (is.null(method_opts)) {
-        method_opts <- list()
-      }
-      inter_oof <- .fit_oof(
-        method = learner_id, X = layer_risk_mat, times = times,
-        events = events, fold_id = fold_id, method_args = method_opts
-      )
-      met <- .compute_auc_cindex(times, events, inter_oof$oof_risk)
-      intermediate_train[[learner_id]] <- list(
-        train_cindex = met$cindex, train_auc = met$auc,
-        train_auc_mean = met$auc_mean, train_brier = met$brier, train_ibs = met$ibs,
-        train_risk = inter_oof$oof_risk
-      )
-      intermediate_models[[learner_id]] <- .train_full(
-        method = learner_id,
-        X = layer_risk_mat, times = times, events = events, method_args = method_opts
-      )
-      .vmsg("  [intermediate:", learner_id, "] cindex=", .fmt(met$cindex))
-    }
-  } else {
-    .vmsg("Skipping intermediate fusion (no learners provided)")
-  }
-
   valid_out_formatted <- NULL
   if (!is.null(valid_feature_table) && !is.null(valid_sample_metadata)) {
     .vmsg("Running validation")
@@ -1727,37 +1640,6 @@
       .vmsg("  [valid early] cindex=", .fmt(early_valid$cindex))
     }
 
-    intermediate_valid <- list()
-    if (length(intermediate_models) > 0L) {
-      for (learner_id in names(intermediate_models)) {
-        rv <- if (identical(learner_id, "surv.multiview")) {
-          valid_x_list <- lapply(names(X_layer_list), function(lay) {
-            lay_features <- rownames(feature_metadata)[feature_metadata$featureType == lay]
-            t(valid_feature_table[lay_features, , drop = FALSE])
-          })
-          names(valid_x_list) <- names(X_layer_list)
-          .predict_multiview_cv(
-            cvfit = intermediate_models[[learner_id]],
-            x_list = valid_x_list,
-            family_name = "survival",
-            s = multiview_s
-          )
-        } else {
-          .predict_surv_risk(
-            learner_id, intermediate_models[[learner_id]],
-            layer_risk_valid
-          )
-        }
-        mv <- .compute_auc_cindex(V_times, V_events, rv)
-        intermediate_valid[[learner_id]] <- list(
-          valid_cindex = mv$cindex,
-          valid_auc = mv$auc, valid_auc_mean = mv$auc_mean, valid_brier = mv$brier,
-          valid_ibs = mv$ibs, valid_risk = rv
-        )
-        .vmsg("  [valid intermediate:", learner_id, "] cindex=", .fmt(mv$cindex))
-      }
-    }
-
     valid_out_formatted <- list(single = list(
       valid_cindex = lapply(
         single_valid_metrics,
@@ -1780,7 +1662,7 @@
       valid_cindex = late_valid$cindex,
       valid_auc = late_valid$auc, valid_auc_mean = late_valid$auc_mean, valid_brier = late_valid$brier,
       valid_ibs = late_valid$ibs, valid_risk = combined_valid_risk
-    ), intermediate = intermediate_valid)
+    ))
   } else {
     .vmsg("No validation data provided; skipping validation metrics")
   }
@@ -1800,8 +1682,7 @@
       train_cindex = late_train$cindex, train_auc = late_train$auc, train_auc_mean = late_train$auc_mean,
       train_brier = late_train$brier, train_ibs = late_train$ibs, combined_importance = combined_importance,
       train_risk = combined_train_risk
-    ),
-    intermediate = intermediate_train
+    )
   )
 
   .vmsg("ILsurv completed")
@@ -1822,11 +1703,7 @@
     fusion_layers_removed = fusion_layers_removed,
     fusion_layer_scores = fusion_layer_filter$scores,
     fusion_layer_metric = fusion_layer_filter$metric,
-    fusion_layer_threshold = fusion_layer_filter$threshold,
-    intermediate_details = intermediate_details,
-    multiview_rho_grid = multiview_rho_grid,
-    multiview_s = multiview_s,
-    multiview_alpha = multiview_alpha
+    fusion_layer_threshold = fusion_layer_filter$threshold
   )
 }
 
@@ -1860,15 +1737,6 @@
 #' @param optim_maxit_ibs Maximum iterations for IBS-weight optimization.
 #' @param ibs_shrink_to_uniform Optional convex shrinkage of IBS weights toward
 #'   uniform.
-#' @param intermediate_learners Vector of learner IDs for intermediate fusion.
-#'   Supported values include \code{"surv.coxph"} and
-#'   \code{"surv.multiview"}.
-#' @param multiview_rho_grid Numeric vector of cooperative-learning
-#'   \code{rho} values to compare when \code{"surv.multiview"} is used.
-#' @param multiview_s Lambda rule used for multiview prediction extraction;
-#'   either \code{"lambda.min"} or \code{"lambda.1se"}.
-#' @param multiview_alpha Elastic-net \code{alpha} passed to
-#'   \pkg{multiview} for intermediate fusion.
 #' @param ... Additional base-learner hyperparameters passed to
 #'   \code{base_learner}. You may also pass \code{model_args = list(...)} as a
 #'   named list where each entry is keyed by learner ID.
@@ -1915,9 +1783,7 @@ ILsurv <- function(
     0.75, 0.95
   ), layer_score = c("sum", "mean", "l2"), eps = 1e-12, weight_lambda = 0.02,
   weight_penalty = c("l2_to_uniform", "entropy"), weight_cap = 1, optim_maxit_cox = 4000,
-  optim_maxit_ibs = 300, ibs_shrink_to_uniform = 0, intermediate_learners = c("surv.coxph"),
-  multiview_rho_grid = c(0, 0.1, 0.25, 0.5, 1), multiview_s = c("lambda.min", "lambda.1se")[1],
-  multiview_alpha = 1,
+  optim_maxit_ibs = 300, ibs_shrink_to_uniform = 0,
   ...
 ) {
   weight_method <- match.arg(weight_method)
@@ -1953,8 +1819,6 @@ ILsurv <- function(
     cox_t_vec = t_vec, cox_t_vec_probs = t_vec_probs, cox_layer_score = layer_score,
     cox_eps = eps, cox_weight_lambda = weight_lambda, cox_weight_penalty = weight_penalty,
     cox_weight_cap = weight_cap, cox_optim_maxit = optim_maxit_cox,
-    intermediate_learners = intermediate_learners, multiview_rho_grid = multiview_rho_grid,
-    multiview_s = multiview_s, multiview_alpha = multiview_alpha,
     verbose = verbose, model_args = model_args
   )
 
@@ -1969,12 +1833,7 @@ ILsurv <- function(
     fusion_layers_removed = res$fusion_layers_removed,
     fusion_layer_scores = res$fusion_layer_scores,
     fusion_layer_metric = res$fusion_layer_metric,
-    fusion_layer_threshold = res$fusion_layer_threshold,
-    intermediate_details = res$intermediate_details,
-    intermediate_learners = intermediate_learners,
-    multiview_rho_grid = multiview_rho_grid,
-    multiview_s = multiview_s,
-    multiview_alpha = multiview_alpha
+    fusion_layer_threshold = res$fusion_layer_threshold
   )
 }
 

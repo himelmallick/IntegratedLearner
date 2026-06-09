@@ -2,7 +2,7 @@
 % Please edit documentation in R/plotLearner.R
 \name{plot.learner}
 \alias{plot.learner}
-\title{Plot the summary curves produced by IntegratedLearner object}
+\title{Plot the summary curves produced by an IntegratedLearner object}
 \usage{
 \method{plot}{learner}(
   x,
@@ -15,23 +15,35 @@
 )
 }
 \arguments{
-\item{x}{Fitted 'IntegratedLearner' object}
+\item{x}{Fitted \code{IntegratedLearner} object.}
 
-\item{y}{Unused (required for S3 signature)}
+\item{y}{Unused (required for S3 signature).}
 
-\item{label_size}{(optional) Numerical value indicating the label size. Default is 8.}
+\item{label_size}{Optional numeric label size for subplot tags. Default is 8.}
 
-\item{label_x}{(optional) Single value or vector of x positions for plot labels, relative to each subplot. Defaults to 0.3 for all labels. (Each label is placed all the way to the left of each plot.)}
+\item{label_x}{Optional single value or vector of x positions for subplot
+labels, relative to each subplot. Defaults to 0.3 for all labels.}
 
-\item{vjust}{Adjusts the vertical position of each label. More positive values move the label further down on the plot canvas. Can be a single value (applied to all labels) or a vector of values (one for each label). Default is 0.1.}
+\item{vjust}{Adjusts the vertical position of each label. More positive
+values move the label further down on the plot canvas. Can be a single
+value (applied to all labels) or a vector of values (one for each label).
+Default is 0.1.}
 
-\item{rowwise_plot}{If both train and test data is available, should the train and test plots be rowwise_plot. Default is TRUE. If FALSE, plots are aligned column-wise.}
+\item{rowwise_plot}{If both train and test data are available, should the
+train and test plots be arranged row-wise? Default is \code{TRUE}. If
+\code{FALSE}, plots are aligned column-wise.}
 
-\item{...}{Additional arguments (currently unused)}
+\item{...}{Additional arguments (currently unused).}
 }
 \value{
-ggplot2 object
+A list whose \code{$plot} entry is a \pkg{ggplot2}/\pkg{cowplot}
+composite object, along with the underlying tabular data used to generate
+the plot.
 }
 \description{
-Plots the R^2/AUC curves for the training (and test, if provided) set produced by IntegratedLearner object
+Plots outcome-appropriate performance summaries for the
+training set and, if available, the validation set produced by an
+\code{IntegratedLearner} fit. Depending on the outcome family, this may
+include ROC curves, R-squared bar plots, multiclass one-vs-rest ROC
+curves, or survival AUC / Kaplan-Meier panels.
 }

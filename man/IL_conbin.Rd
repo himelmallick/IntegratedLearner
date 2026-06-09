@@ -22,6 +22,7 @@ IL_conbin(
   meta_learner = "SL.nnls.auc",
   run_concat = TRUE,
   run_stacked = TRUE,
+  drop_poor_performing_layers = FALSE,
   verbose = FALSE,
   print_learner = TRUE,
   refit.stack = FALSE,
@@ -30,7 +31,7 @@ IL_conbin(
 )
 }
 \arguments{
-\item{feature_table}{An R data frame containing multiview features (in rows)
+\item{feature_table}{An R data frame containing multi-layer features (in rows)
 and samples (in columns).
 Column names of \code{feature_metadata} must match the row names of
 \code{sample_metadata}.}
@@ -96,6 +97,12 @@ Defaults to \code{SL.nnls.auc}.}
 
 \item{run_stacked}{Should stacked model (late fusion) be run? Default is TRUE.}
 
+\item{drop_poor_performing_layers}{Logical; if \code{TRUE}, layers with
+single-layer performance below the screening threshold are removed from
+early and late fusion only. The threshold is AUC < 0.5 for binary and
+R\eqn{^2} < 0.5 for continuous outcomes. Single-layer outputs are still
+retained and reported.}
+
 \item{verbose}{logical; TRUE for printing SuperLearner progress. Default FALSE.}
 
 \item{print_learner}{logical; Should a detailed summary be printed? Default TRUE.}
@@ -126,8 +133,7 @@ a corresponding validation set, and returns predicted values based on the
 validation set. It also performs V-fold nested cross-validation to estimate
 the prediction accuracy of various fusion algorithms.
 
-Three types of integration paradigms are supported: early, late, and
-intermediate. The software includes multiple ML models based on the
+Two integration paradigms are supported: early and late. The software includes multiple ML models based on the
 \code{\link[SuperLearner]{SuperLearner}} R package as well as several data
 exploration capabilities and visualization modules in a unified estimation
 framework.
@@ -135,7 +141,7 @@ framework.
 Although \code{IL_conbin()} is typically called internally by
 \code{IntegratedLearner()} after extracting multi-view feature tables from
 \code{MultiAssayExperiment} objects, advanced users may call
-\code{IL_conbin()} directly when they already have multiview feature tables
+\code{IL_conbin()} directly when they already have multi-layer feature tables
 and metadata in matrix/data.frame form.
 }
 \examples{

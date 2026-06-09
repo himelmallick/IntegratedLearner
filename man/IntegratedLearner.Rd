@@ -26,6 +26,7 @@ IntegratedLearner(
   meta_learner = "SL.nnls.auc",
   run_concat = TRUE,
   run_stacked = TRUE,
+  drop_poor_performing_layers = FALSE,
   verbose = FALSE,
   print_learner = TRUE,
   refit.stack = FALSE,
@@ -113,6 +114,12 @@ Uses the specified \code{base_learner} as the learning algorithm.}
 
 \item{run_stacked}{Should stacked model (late fusion) be run? Default is TRUE.}
 
+\item{drop_poor_performing_layers}{Logical; if \code{TRUE}, layers with
+poor single-layer performance are removed from early and late fusion only.
+The thresholds are AUC < 0.5 for binary, R\eqn{^2} < 0.5 for continuous,
+and C-index < 0.5 for survival outcomes. Single-layer outputs are still
+retained and reported.}
+
 \item{verbose}{logical; TRUE for \code{SuperLearner} printing progress
 (helpful for debugging). Default is FALSE.}
 
@@ -140,12 +147,11 @@ Performs integrated machine learning to predict a binary, continuous, or
 time-to-event outcome based on two or more omics layers (views).
 The \code{IntegratedLearner} function takes a training
 \code{MultiAssayExperiment} and, optionally, a validation
-\code{MultiAssayExperiment}, extracts multiview feature tables, and returns
+\code{MultiAssayExperiment}, extracts multi-layer feature tables, and returns
 predicted values based on the validation set.
 It also performs V-fold nested cross-validation to estimate the prediction
 accuracy of various fusion algorithms.
-Three types of integration paradigms are supported: early, late, and
-intermediate.
+Two integration paradigms are supported: early and late.
 The software includes multiple ML models based on the
 \code{\link[SuperLearner]{SuperLearner}} R package as well as several data
 exploration capabilities and visualization modules in a unified estimation

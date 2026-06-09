@@ -1,18 +1,3 @@
-#' Plot the summary curves produced by IntegratedLearner object
-#'
-#' @description Plots the R^2/AUC curves for the training (and test, if provided) set produced by IntegratedLearner object
-#'
-#' @param x Fitted 'IntegratedLearner' object
-#' @param y Unused (required for S3 signature)
-#' @param label_size (optional) Numerical value indicating the label size. Default is 8.
-#' @param label_x (optional) Single value or vector of x positions for plot labels, relative to each subplot. Defaults to 0.3 for all labels. (Each label is placed all the way to the left of each plot.)
-#' @param vjust Adjusts the vertical position of each label. More positive values move the label further down on the plot canvas. Can be a single value (applied to all labels) or a vector of values (one for each label). Default is 0.1.
-#' @param rowwise_plot If both train and test data is available, should the train and test plots be rowwise_plot. Default is TRUE. If FALSE, plots are aligned column-wise.
-#' @param ... Additional arguments (currently unused)
-#'
-#' @return ggplot2 object
-#' @export
-
 .clean_plot_method_label <- function(fit) {
   base_lab <- fit$base_learner
   if (is.null(base_lab) || length(base_lab) == 0L || is.na(base_lab)) {
@@ -251,25 +236,6 @@
     }
   }
 
-  if (!is.null(src$intermediate)) {
-    for (nm in names(src$intermediate)) {
-      obj <- src$intermediate[[nm]]
-      if (!is.null(obj) && !is.null(obj[[auc_name]])) {
-        tab <- obj[[auc_name]]
-        if (nrow(tab) > 0L) {
-          out[[idx]] <- data.frame(
-            tab,
-            model = paste0("intermediate_", nm),
-            stage = "intermediate",
-            dataset = dataset,
-            stringsAsFactors = FALSE
-          )
-          idx <- idx + 1L
-        }
-      }
-    }
-  }
-
   if (length(out) == 0L) {
     return(data.frame(
       time = numeric(0), AUC = numeric(0), model = character(0),
@@ -317,25 +283,13 @@
     }
   }
 
-  if (!is.null(src$intermediate)) {
-    for (nm in names(src$intermediate)) {
-      obj <- src$intermediate[[nm]]
-      if (!is.null(obj) && !is.null(obj[[risk_name]])) {
-        key <- paste0("intermediate_", nm)
-        risks[[key]] <- as.numeric(obj[[risk_name]])
-        cindex[key] <- obj[[cindex_name]]
-      }
-    }
-  }
-
   list(risks = risks, cindex = cindex)
 }
 
 .best_survival_model_name <- function(fit, dataset = c("train", "valid")) {
   dataset <- match.arg(dataset)
   risk_map <- .survival_risk_map(fit, dataset = dataset)
-  candidate_names <- names(risk_map$cindex)[names(risk_map$cindex) %in% c("early", "late") |
-    grepl("^intermediate_", names(risk_map$cindex))]
+  candidate_names <- names(risk_map$cindex)[names(risk_map$cindex) %in% c("early", "late")]
   if (length(candidate_names) == 0L) {
     candidate_names <- names(risk_map$cindex)
   }
@@ -456,6 +410,32 @@
     ggplot2::labs(title = title, color = "")
 }
 
+#' Plot the summary curves produced by an IntegratedLearner object
+#'
+#' @description Plots outcome-appropriate performance summaries for the
+#'   training set and, if available, the validation set produced by an
+#'   \code{IntegratedLearner} fit. Depending on the outcome family, this may
+#'   include ROC curves, R-squared bar plots, multiclass one-vs-rest ROC
+#'   curves, or survival AUC / Kaplan-Meier panels.
+#'
+#' @param x Fitted \code{IntegratedLearner} object.
+#' @param y Unused (required for S3 signature).
+#' @param label_size Optional numeric label size for subplot tags. Default is 8.
+#' @param label_x Optional single value or vector of x positions for subplot
+#'   labels, relative to each subplot. Defaults to 0.3 for all labels.
+#' @param vjust Adjusts the vertical position of each label. More positive
+#'   values move the label further down on the plot canvas. Can be a single
+#'   value (applied to all labels) or a vector of values (one for each label).
+#'   Default is 0.1.
+#' @param rowwise_plot If both train and test data are available, should the
+#'   train and test plots be arranged row-wise? Default is \code{TRUE}. If
+#'   \code{FALSE}, plots are aligned column-wise.
+#' @param ... Additional arguments (currently unused).
+#'
+#' @return A list whose \code{$plot} entry is a \pkg{ggplot2}/\pkg{cowplot}
+#'   composite object, along with the underlying tabular data used to generate
+#'   the plot.
+#' @export
 plot.learner <- function(
   x, y = NULL, label_size = 8, label_x = 0.3, vjust = 0.1,
   rowwise_plot = TRUE, ...
