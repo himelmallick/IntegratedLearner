@@ -90,13 +90,11 @@ your own multi-omics study:</p>
 survival discrimination curves, layer weights, and feature
 signals).</li>
 </ol>
-<p><code>IntegratedLearner</code> supports three integration
+<p><code>IntegratedLearner</code> supports two integration
 paradigms:</p>
 <ul>
 <li>Early fusion: concatenated features across layers.</li>
 <li>Late fusion: layer-specific models combined by a meta-learner.</li>
-<li>Intermediate fusion: additional integration strategies for
-downstream analysis.</li>
 </ul>
 <p>Optional feature selection workflow used in this vignette:</p>
 <ol style="list-style-type: decimal">
@@ -130,7 +128,6 @@ downstream analysis.</li>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://bioconductor.org/packages/SummarizedExperiment" class="external-link">SummarizedExperiment</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="http://waldronlab.io/MultiAssayExperiment/" class="external-link">MultiAssayExperiment</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/therneau/survival" class="external-link">survival</a></span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">multiview</span><span class="op">)</span></span>
 <span><span class="kw">if</span> <span class="op">(</span><span class="va">use_sl_bart</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">bartMachine</span><span class="op">)</span></span>
 <span><span class="op">}</span></span></code></pre></div>
@@ -435,38 +432,6 @@ when screening is enabled.</td>
 (<code>filter_method = "prevalence"</code>).</td>
 </tr>
 <tr class="even">
-<td><code>intermediate_learners</code></td>
-<td>
-<code>NULL</code> (non-survival), <code>c("surv.coxph")</code>
-(survival default)</td>
-<td>all</td>
-<td>Optional intermediate-fusion learners. Continuous/binary currently
-support <code>"multiview"</code>. Survival additionally supports
-<code>"surv.multiview"</code>. Multiclass intermediate fusion is not yet
-implemented.</td>
-</tr>
-<tr class="odd">
-<td><code>multiview_rho_grid</code></td>
-<td><code>c(0, 0.1, 0.25, 0.5, 1)</code></td>
-<td>continuous, binary, survival</td>
-<td>Cooperative-learning <code>rho</code> grid used when
-<code>multiview</code>-based intermediate fusion is enabled.</td>
-</tr>
-<tr class="even">
-<td><code>multiview_s</code></td>
-<td><code>"lambda.min"</code></td>
-<td>continuous, binary, survival</td>
-<td>Lambda rule used when extracting <code>multiview</code> predictions
-(<code>"lambda.min"</code> or <code>"lambda.1se"</code>).</td>
-</tr>
-<tr class="odd">
-<td><code>multiview_alpha</code></td>
-<td><code>1</code></td>
-<td>continuous, binary, survival</td>
-<td>Elastic-net <code>alpha</code> passed to
-<code>multiview</code>.</td>
-</tr>
-<tr class="even">
 <td><code>drop_poor_performing_layers</code></td>
 <td><code>FALSE</code></td>
 <td>continuous, binary, survival</td>
@@ -537,22 +502,6 @@ metadata or family.</td>
 <td>Enables early-fusion concatenated model.</td>
 </tr>
 <tr class="odd">
-<td><code>intermediate_learners</code></td>
-<td><code>NULL</code></td>
-<td>Optional intermediate learners; currently supports
-<code>"multiview"</code> via the CRAN <code>multiview</code>
-package.</td>
-</tr>
-<tr class="even">
-<td>
-<code>multiview_rho_grid</code>, <code>multiview_s</code>,
-<code>multiview_alpha</code>
-</td>
-<td>defaults above</td>
-<td>Cooperative-learning tuning controls used when
-<code>"multiview"</code> is enabled.</td>
-</tr>
-<tr class="odd">
 <td><code>print_learner</code></td>
 <td><code>TRUE</code></td>
 <td>Prints fit summary.</td>
@@ -610,17 +559,11 @@ Supported: <code>glmnet</code>, <code>randomforest</code>,
 <td>Enables early-fusion concatenated multiclass model.</td>
 </tr>
 <tr class="even">
-<td><code>intermediate_learners</code></td>
-<td>ignored</td>
-<td>Reserved for future multiclass intermediate fusion; currently
-ignored with a message.</td>
-</tr>
-<tr class="odd">
 <td><code>folds</code></td>
 <td><code>5</code></td>
 <td>Subject-level CV folds for OOF multiclass probabilities.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>
 <code>run_screening</code>, <code>screen_pct</code>
 </td>
@@ -658,22 +601,6 @@ filtering.</td>
 <td><code>"IBS"</code></td>
 <td>Late-fusion weighting objective (<code>"IBS"</code> or
 <code>"COX"</code>).</td>
-</tr>
-<tr class="odd">
-<td><code>intermediate_learners</code></td>
-<td><code>c("surv.coxph")</code></td>
-<td>Intermediate fusion learners. Supports risk-level learners such as
-<code>"surv.coxph"</code> and cooperative feature-level fusion via
-<code>"surv.multiview"</code>.</td>
-</tr>
-<tr class="even">
-<td>
-<code>multiview_rho_grid</code>, <code>multiview_s</code>,
-<code>multiview_alpha</code>
-</td>
-<td>defaults above</td>
-<td>Cooperative-learning tuning controls used when
-<code>"surv.multiview"</code> is enabled.</td>
 </tr>
 <tr class="odd">
 <td>
@@ -774,18 +701,16 @@ available in your R session. Package wrappers include:
 </h3>
 <table class="table">
 <colgroup>
-<col width="20%">
-<col width="20%">
-<col width="20%">
-<col width="20%">
-<col width="20%">
+<col width="25%">
+<col width="25%">
+<col width="25%">
+<col width="25%">
 </colgroup>
 <thead><tr class="header">
 <th>Path</th>
 <th>Single-layer</th>
 <th>Early fusion</th>
 <th>Late fusion</th>
-<th>Intermediate fusion</th>
 </tr></thead>
 <tbody>
 <tr class="odd">
@@ -795,7 +720,6 @@ available in your R session. Package wrappers include:
 <td>
 <code>run_stacked = TRUE</code> with <code>meta_learner</code>
 </td>
-<td><code>intermediate_learners = "multiview"</code></td>
 </tr>
 <tr class="even">
 <td>Multiclass</td>
@@ -805,7 +729,6 @@ available in your R session. Package wrappers include:
 <code>run_stacked = TRUE</code> with native multiclass
 <code>meta_learner</code>
 </td>
-<td>Not yet implemented</td>
 </tr>
 <tr class="odd">
 <td>Survival</td>
@@ -813,10 +736,6 @@ available in your R session. Package wrappers include:
 <td><code>do_early_fusion = TRUE</code></td>
 <td>Weighted layer blending (<code>weight_method = "IBS"</code> or
 <code>"COX"</code>)</td>
-<td>
-<code>intermediate_learners</code>, including
-<code>surv.multiview</code>
-</td>
 </tr>
 </tbody>
 </table>
@@ -873,15 +792,6 @@ method and where to find weights/importance values.</p>
 </td>
 </tr>
 <tr class="even">
-<td>Intermediate fusion</td>
-<td>Cooperative learner over per-layer feature matrices</td>
-<td>Enable with <code>intermediate_learners = "multiview"</code>;
-outputs in <code>fit$yhat.train[, "intermediate_multiview"]</code>,
-<code>fit$model_fits$model_intermediate$multiview</code>,
-<code>fit$intermediate_details$multiview</code>
-</td>
-</tr>
-<tr class="odd">
 <td>Layer weights (stacked)</td>
 <td>Relative contribution of each layer in late fusion</td>
 <td>
@@ -889,7 +799,7 @@ outputs in <code>fit$yhat.train[, "intermediate_multiview"]</code>,
 <code>meta_learner = "SL.nnls.auc"</code> and
 <code>run_stacked = TRUE</code>)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Binary metric table</td>
 <td>Per-model AUC, accuracy, and balanced accuracy</td>
 <td>
@@ -970,7 +880,7 @@ validation provided)</td>
 </table>
 </div>
 <div class="section level3">
-<h3 id="survival-outputs-singleearlylateintermediate">Survival Outputs (Single/Early/Late/Intermediate)<a class="anchor" aria-label="anchor" href="#survival-outputs-singleearlylateintermediate"></a>
+<h3 id="survival-outputs-singleearlylate">Survival Outputs (Single/Early/Late)<a class="anchor" aria-label="anchor" href="#survival-outputs-singleearlylate"></a>
 </h3>
 <table class="table">
 <colgroup>
@@ -1024,13 +934,6 @@ validation provided)</td>
 </td>
 </tr>
 <tr class="even">
-<td>Intermediate fusion</td>
-<td>
-<code>fit$train_out$intermediate</code> (per learner listed in
-<code>intermediate_learners</code>)</td>
-<td><code>fit$valid_out$intermediate</code></td>
-</tr>
-<tr class="odd">
 <td>Survival plotting payload</td>
 <td><code>fit$surv_plot_data$train</code></td>
 <td><code>fit$surv_plot_data$valid</code></td>
@@ -1125,8 +1028,7 @@ by effect magnitude/sign.</td>
 <span><span class="co"># ---- Survival: inspect all fusion branches ----</span></span>
 <span><span class="va">fit_surv</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">single</span></span>
 <span><span class="va">fit_surv</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">early</span></span>
-<span><span class="va">fit_surv</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span></span>
-<span><span class="va">fit_surv</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">intermediate</span></span></code></pre></div>
+<span><span class="va">fit_surv</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span></span></code></pre></div>
 </div>
 </div>
 <div class="section level2">
@@ -1278,7 +1180,7 @@ with a meta-learner (<code>meta_learner</code>).</p>
 <span><span class="co">#&gt; CV SL.randomForest_screen.il.glmnet</span></span>
 <span><span class="co">#&gt; Non-Negative least squares convergence: TRUE</span></span>
 <span><span class="co">#&gt; full SL.randomForest_screen.il.glmnet</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.092 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.09 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Model fit for individual layers: SL.randomForest </span></span>
 <span><span class="co">#&gt; Model fit for stacked layer: SL.nnls.auc </span></span>
@@ -1462,7 +1364,7 @@ bytecode). In that case, either:</p>
 <span>  screen_pct <span class="op">=</span> <span class="fl">30</span>,</span>
 <span>  family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">gaussian</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.467 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.512 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Model fit for individual layers: SL.BART </span></span>
 <span><span class="co">#&gt; Model fit for stacked layer: SL.nnls.auc </span></span>
@@ -1827,7 +1729,7 @@ and pass them through <code>outcome_col</code> and
 <span><span class="co">#&gt; Running multiclass base model for layer 2...</span></span>
 <span><span class="co">#&gt; Running multiclass stacked model...</span></span>
 <span><span class="co">#&gt; Running multiclass concatenated model...</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.148 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.14 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Multiclass model fit with 3 classes</span></span>
 <span><span class="co">#&gt; Base learner: glmnet </span></span>
@@ -2050,15 +1952,11 @@ equivalent PCL sketch.</p>
 <span><span class="co">#&gt; Learning late-fusion weights</span></span>
 <span><span class="co">#&gt;   [late] weights: gene = 0.3299, mirna = 0.6701</span></span>
 <span><span class="co">#&gt;   [late] cindex=0.5035</span></span>
-<span><span class="co">#&gt; Running intermediate fusion learners: surv.coxph</span></span>
-<span><span class="co">#&gt;   [intermediate:surv.coxph] fitting</span></span>
-<span><span class="co">#&gt;   [intermediate:surv.coxph] cindex=0.4268</span></span>
 <span><span class="co">#&gt; Running validation</span></span>
 <span><span class="co">#&gt;   [valid single:gene] cindex=0.7192</span></span>
 <span><span class="co">#&gt;   [valid single:mirna] cindex=0.6485</span></span>
 <span><span class="co">#&gt;   [valid late] cindex=0.7111</span></span>
 <span><span class="co">#&gt;   [valid early] cindex=0.6364</span></span>
-<span><span class="co">#&gt;   [valid intermediate:surv.coxph] cindex=0.6263</span></span>
 <span><span class="co">#&gt; ILsurv completed</span></span></code></pre></div>
 <div class="section level3">
 <h3 id="interpret-survival-outputs">Interpret Survival Outputs<a class="anchor" aria-label="anchor" href="#interpret-survival-outputs"></a>
@@ -2362,10 +2260,8 @@ equivalent PCL sketch.</p>
 <span><span class="co">#&gt; t=2628.6 2628.6 0.6403522</span></span>
 <span><span class="co">#&gt; t=3222.6 3222.6 0.7631859</span></span>
 <span></span>
-<span><span class="co"># Early and intermediate fusion summaries</span></span>
-<span><span class="co">#fit_surv_mae$train_out$early</span></span>
-<span><span class="co">#fit_surv_mae$train_out$intermediate</span></span>
-<span></span>
+<span><span class="co"># Early fusion summary</span></span>
+<span><span class="co"># fit_surv_mae$train_out$early</span></span>
 <span><span class="co"># Validation metrics</span></span>
 <span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">valid_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">valid_cindex</span></span>
 <span><span class="co">#&gt; [1] 0.7111111</span></span>
@@ -2428,19 +2324,18 @@ can be plotted as true time-dependent discrimination curves.</p>
 <span><span class="co">#&gt; [8] methods   base     </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; other attached packages:</span></span>
-<span><span class="co">#&gt;  [1] bartMachine_1.4.2           multiview_1.0              </span></span>
-<span><span class="co">#&gt;  [3] survival_3.8-6              MultiAssayExperiment_1.39.0</span></span>
-<span><span class="co">#&gt;  [5] SummarizedExperiment_1.43.0 Biobase_2.73.1             </span></span>
-<span><span class="co">#&gt;  [7] GenomicRanges_1.65.0        Seqinfo_1.3.0              </span></span>
-<span><span class="co">#&gt;  [9] IRanges_2.47.2              MatrixGenerics_1.25.0      </span></span>
-<span><span class="co">#&gt; [11] matrixStats_1.5.0           S4Vectors_0.51.3           </span></span>
-<span><span class="co">#&gt; [13] BiocGenerics_0.59.7         generics_0.1.4             </span></span>
-<span><span class="co">#&gt; [15] bayesplot_1.15.0            cowplot_1.2.0              </span></span>
-<span><span class="co">#&gt; [17] caret_7.0-1                 lattice_0.22-9             </span></span>
-<span><span class="co">#&gt; [19] SuperLearner_2.0-40         gam_1.22-7                 </span></span>
-<span><span class="co">#&gt; [21] foreach_1.5.2               nnls_1.6                   </span></span>
-<span><span class="co">#&gt; [23] ggplot2_4.0.3               dplyr_1.2.1                </span></span>
-<span><span class="co">#&gt; [25] IntegratedLearner_0.99.0   </span></span>
+<span><span class="co">#&gt;  [1] bartMachine_1.4.2           survival_3.8-6             </span></span>
+<span><span class="co">#&gt;  [3] MultiAssayExperiment_1.39.0 SummarizedExperiment_1.43.0</span></span>
+<span><span class="co">#&gt;  [5] Biobase_2.73.1              GenomicRanges_1.65.0       </span></span>
+<span><span class="co">#&gt;  [7] Seqinfo_1.3.0               IRanges_2.47.2             </span></span>
+<span><span class="co">#&gt;  [9] MatrixGenerics_1.25.0       matrixStats_1.5.0          </span></span>
+<span><span class="co">#&gt; [11] S4Vectors_0.51.3            BiocGenerics_0.59.7        </span></span>
+<span><span class="co">#&gt; [13] generics_0.1.4              bayesplot_1.15.0           </span></span>
+<span><span class="co">#&gt; [15] cowplot_1.2.0               caret_7.0-1                </span></span>
+<span><span class="co">#&gt; [17] lattice_0.22-9              SuperLearner_2.0-40        </span></span>
+<span><span class="co">#&gt; [19] gam_1.22-7                  foreach_1.5.2              </span></span>
+<span><span class="co">#&gt; [21] nnls_1.6                    ggplot2_4.0.3              </span></span>
+<span><span class="co">#&gt; [23] dplyr_1.2.1                 IntegratedLearner_0.99.0   </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; loaded via a namespace (and not attached):</span></span>
 <span><span class="co">#&gt;   [1] RColorBrewer_1.1-3    tensorA_0.36.2.1      jsonlite_2.0.0       </span></span>

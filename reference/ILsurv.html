@@ -70,6 +70,7 @@ interface while using model fitting and fusion routines that do not depend on
 <span>  seed <span class="op">=</span> <span class="fl">123</span>,</span>
 <span>  run_screening <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  screen_pct <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  drop_poor_performing_layers <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  do_early_fusion <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  weight_method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"IBS"</span>, <span class="st">"COX"</span><span class="op">)</span>,</span>
@@ -83,7 +84,6 @@ interface while using model fitting and fusion routines that do not depend on
 <span>  optim_maxit_cox <span class="op">=</span> <span class="fl">4000</span>,</span>
 <span>  optim_maxit_ibs <span class="op">=</span> <span class="fl">300</span>,</span>
 <span>  ibs_shrink_to_uniform <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>  intermediate_learners <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"surv.coxph"</span><span class="op">)</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span>
 <span></span>
@@ -98,6 +98,7 @@ interface while using model fitting and fusion routines that do not depend on
 <span>  seed <span class="op">=</span> <span class="fl">123</span>,</span>
 <span>  run_screening <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  screen_pct <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  drop_poor_performing_layers <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  do_early_fusion <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  weight_method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"IBS"</span>, <span class="st">"COX"</span><span class="op">)</span>,</span>
@@ -111,7 +112,6 @@ interface while using model fitting and fusion routines that do not depend on
 <span>  optim_maxit_cox <span class="op">=</span> <span class="fl">4000</span>,</span>
 <span>  optim_maxit_ibs <span class="op">=</span> <span class="fl">300</span>,</span>
 <span>  ibs_shrink_to_uniform <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>  intermediate_learners <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"surv.coxph"</span><span class="op">)</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -121,7 +121,7 @@ interface while using model fitting and fusion routines that do not depend on
 
 
 <dl><dt id="arg-feature-table">feature_table<a class="anchor" aria-label="anchor" href="#arg-feature-table"></a></dt>
-<dd><p>An R data frame containing multiview features (in rows)
+<dd><p>An R data frame containing multi-layer features (in rows)
 and samples (in columns).
 Column names of <code>feature_metadata</code> must match the row names of
 <code>sample_metadata</code>.</p></dd>
@@ -177,6 +177,14 @@ base models.</p></dd>
 <dt id="arg-screen-pct">screen_pct<a class="anchor" aria-label="anchor" href="#arg-screen-pct"></a></dt>
 <dd><p>Percentage of features to retain during screening
 (<code>(0,100]</code>). Applied after any optional filtering.</p></dd>
+
+
+<dt id="arg-drop-poor-performing-layers">drop_poor_performing_layers<a class="anchor" aria-label="anchor" href="#arg-drop-poor-performing-layers"></a></dt>
+<dd><p>Logical; if <code>TRUE</code>, layers with
+single-layer performance below the screening threshold are removed from
+early and late fusion only. The threshold is AUC &lt; 0.5 for binary and
+R\(^2\) &lt; 0.5 for continuous outcomes. Single-layer outputs are still
+retained and reported.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
@@ -235,10 +243,6 @@ is <code>NULL</code>.</p></dd>
 <dt id="arg-ibs-shrink-to-uniform">ibs_shrink_to_uniform<a class="anchor" aria-label="anchor" href="#arg-ibs-shrink-to-uniform"></a></dt>
 <dd><p>Optional convex shrinkage of IBS weights toward
 uniform.</p></dd>
-
-
-<dt id="arg-intermediate-learners">intermediate_learners<a class="anchor" aria-label="anchor" href="#arg-intermediate-learners"></a></dt>
-<dd><p>Vector of learner IDs for intermediate fusion.</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
