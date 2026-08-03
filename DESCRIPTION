@@ -1,16 +1,18 @@
 Package: IntegratedLearner
 Type: Package
 Title: Integrated Multi-Omics Learning for Survival and Other Outcomes
-Version: 0.99.0
+Version: 0.99.1
 Authors@R: c(
     person("Nalin", "Arora", email = "naa4050@med.cornell.edu",
         role = c("aut", "cre", "cph"),
         comment = c(ORCID = "0009-0009-1340-688X")),
     person("Anupreet", "Porwal", role = "aut"),
-    person("Himel", "Mallick", email = "him4004@med.cornell.edu", role = "aut")
+    person("Himel", "Mallick", email = "him4004@med.cornell.edu",
+        role = "aut",
+        comment = c(ORCID = "0000-0003-4956-2429"))
     )
 Description: Provides a unified interface for multi-omics
-    prediction using early, late, and intermediate fusion for continuous,
+    prediction using early and late fusion for continuous,
     binary, multiclass, and survival outcomes. It supports both
     MultiAssayExperiment and PCL-style inputs, performs input validation and
     feature/sample harmonization across layers, and provides model fitting,
@@ -22,10 +24,23 @@ Encoding: UTF-8
 Depends:
     R (>= 4.6.0)
 Imports:
-    methods,
+    BART,
+    CoxBoost,
+    bayesplot,
+    bayesreg,
+    bartMachine,
     stats,
     utils,
+    cowplot,
+    ggplot2,
+    gbm,
+    glmnetUtils,
+    mboost,
     nnet,
+    nloptr,
+    quadprog,
+    randomForest,
+    timeROC,
     SuperLearner,
     survival,
     glmnet,
@@ -35,34 +50,20 @@ Imports:
     caret,
     ROCR,
     dplyr,
-    stringr,
     tibble,
-    tidyr
+    tidyr,
+    withr,
+    xgboost
 Suggests:
-    BART,
     BiocStyle,
-    CoxBoost,
-    bayesplot,
-    bayesreg,
-    bartMachine,
-    cowplot,
-    ggplot2,
-    gbm,
-    glmnetUtils,
     mlbench,
-    mboost,
-    nloptr,
     prediction,
-    quadprog,
-    randomForest,
     S4Vectors,
     testthat (>= 3.0.0),
-    timeROC,
     knitr,
-    rmarkdown,
-    xgboost
+    rmarkdown
 SystemRequirements:
-    Java (optional; required for SL.BART / bartMachine workflows)
+    Java (optional; required for sl_bart / bartMachine workflows)
 VignetteBuilder:
     knitr
 biocViews:

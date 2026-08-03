@@ -2,7 +2,10 @@
 title: "IntegratedLearner"
 author: "Nalin Arora, Anupreet Porwal and Himel Mallick"
 date: "2026-03-10"
-output: rmarkdown::html_vignette
+output:
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
 vignette: >
   %\VignetteIndexEntry{IntegratedLearner}
   %\VignetteEngine{knitr::rmarkdown}
@@ -49,37 +52,30 @@ can_run_sl_bart <- function() {
 }
 
 use_sl_bart <- isTRUE(can_run_sl_bart())
-
-load_il_dataset <- function(dataset_name, envir = parent.frame()) {
-  # Prefer packaged datasets when available.
-  try(utils::data(list = dataset_name, package = "IntegratedLearner", envir = envir), silent = TRUE)
-  if (exists(dataset_name, envir = envir, inherits = FALSE)) {
-    return(invisible(TRUE))
-  }
-
-  # Fallback for local/source rendering (for example, knitting from vignettes/).
-  candidates <- c(
-    file.path("data", paste0(dataset_name, ".RData")),
-    file.path("..", "data", paste0(dataset_name, ".RData"))
-  )
-
-  for (path in unique(candidates)) {
-    if (file.exists(path)) {
-      load(path, envir = envir)
-      if (exists(dataset_name, envir = envir, inherits = FALSE)) {
-        return(invisible(TRUE))
-      }
-    }
-  }
-
-  stop(
-    "Could not load dataset '", dataset_name, "'. ",
-    "Install the latest IntegratedLearner package or ensure source data file exists."
-  )
-}
 ```
 
+## Introduction
+
 This vignette is a practical tutorial for binary, multiclass, continuous, and survival outcome workflows in `IntegratedLearner`.
+
+`IntegratedLearner` is designed for multi-omics studies where each assay layer can carry complementary signal and where users want a unified interface for per-layer modeling, early fusion, and late fusion. This makes the package a natural fit for Bioconductor workflows built around `MultiAssayExperiment`, `SummarizedExperiment`, and curated assay containers.
+
+Within the Bioconductor ecosystem, the package is intended to sit after assay assembly and harmonization, and before downstream interpretation. IntegratedLearner focuses on supervised multi-omics prediction/integration rather than general container management or unsupervised integration.
+
+### How this fits in a Bioconductor workflow
+
+In a standard Bioconductor analysis, you would typically import or construct assay-level data, store those assays in a `MultiAssayExperiment`, inspect the object with standard accessors, fit `IntegratedLearner()`, and then carry predictions, layer weights, and feature-level summaries into downstream interpretation or visualization steps.
+
+### Workflow at a Glance
+
+A compact workflow is:
+
+1. Construct aligned assays in `MultiAssayExperiment`.
+2. Inspect experiments and metadata with `experiments()`, `assay()`, `colData()`, and `sampleMap()`.
+3. Fit single-layer and fused predictive models with `IntegratedLearner()`.
+4. Feed predictions, layer weights, and feature summaries into downstream Bioconductor interpretation workflows.
+
+Compared with packages that primarily focus on assay containers, preprocessing, or narrower outcome families, `IntegratedLearner` is centered on the modeling layer itself: it provides a common interface for continuous, binary, multiclass, and survival prediction while remaining compatible with standard Bioconductor data structures. In that sense, it is intended to complement upstream Bioconductor tools rather than replace them.
 
 The goal is to show a complete end-to-end pattern you can adapt to your own multi-omics study:
 
@@ -100,6 +96,23 @@ Optional feature selection workflow used in this vignette:
    - applied to fold-validation,
    - repeated for each fold,
    - repeated once on full training data for final model fit.
+
+## Installation
+
+Install the release version from Bioconductor with:
+
+```r
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+BiocManager::install("IntegratedLearner")
+```
+
+For the development version, use:
+
+```r
+BiocManager::install("himelmallick/IntegratedLearner")
+```
 
 ## Load Packages
 
@@ -126,37 +139,29 @@ if (use_sl_bart) {
 ```{r chunk-02, include=FALSE}
 if (!use_sl_bart) {
   message(
-    "SL.BART sections are in fallback mode: Java >= 21 with bartMachine is required for SL.BART."
+    "sl_bart sections are in fallback mode: Java >= 21 with bartMachine is required for sl_bart."
   )
 }
 ```
 
 ## Input Data Contract
 
-For the `PCL_*` interface used in this tutorial, each dataset is a list with:
+This vignette uses `MultiAssayExperiment` throughout and treats MAE as the primary user-facing entry point. The older PCL input mode is still supported for backward compatibility, but the recommended workflow is to stay inside standard Bioconductor containers for data inspection and model handoff.
 
-- `feature_table`: data frame with features in rows and samples in columns.
-- `sample_metadata`: data frame with samples in rows. Must include:
-  - one subject identifier column (default name: `subjectID`).
-  - one outcome column (default name: `Y`).
-- `feature_metadata`: data frame with features in rows. Must include:
-  - `featureID`: unique feature identifier.
-  - `featureType`: layer label (for example, species, metabolites).
+For `IntegratedLearner`, each MAE example should satisfy:
 
-Required alignments:
+- each omics layer is stored as a separate experiment, typically a `SummarizedExperiment`
+- samples are aligned across experiments through MAE `colData`
+- the outcome column lives in top-level `colData`
+- the subject identifier column also lives in top-level `colData`
 
-- `rownames(feature_table) == rownames(feature_metadata)`
-- `colnames(feature_table) == rownames(sample_metadata)`
-
-If you provide a validation set, it must use the same feature set and ordering as training.
-
-For survival workflows, include `time` and `event` columns in `sample_metadata` (with `event` coded as 0/1). You can also provide `Y` as a `Surv(time, event)` object.
+For survival workflows, `colData` should contain `time` and `event` columns (with `event` coded as `0/1`). You can also keep a convenience survival column such as `Y` or `outcome_surv` as a `Surv(time, event)` object.
 
 You can keep your own column names and map them in the wrapper:
 
 ```r
 fit <- IntegratedLearner(
-  PCL_train = pcl_train,
+  MAE_train = mae_train,
   outcome_col = "disease_status",
   subject_id_col = "participant_id",
   family = stats::binomial()
@@ -169,116 +174,77 @@ Automatic coercion in the wrapper:
 - binary `family = binomial()`: two classes are mapped internally to `{0,1}`.
 - multiclass `family = binomial()`: class labels are retained.
 
-## Alternative Input Mode: MAE (Complete Binary Example)
+## Standard Bioconductor Accessors
 
-`IntegratedLearner` accepts `MultiAssayExperiment` inputs through `MAE_train`/`MAE_valid`. This is often the cleanest path when each omics layer is already represented as a `SummarizedExperiment`/`TreeSummarizedExperiment`.
+`IntegratedLearner` is intended to plug into a standard Bioconductor workflow,
+not replace one. In practice, users should continue to inspect and manipulate
+their inputs with the usual `MultiAssayExperiment` and `SummarizedExperiment`
+accessors before modeling:
 
+```{r chunk-bioc-accessors}
+data("PRISM_MAE", package = "IntegratedLearner")
 
-```{r chunk-03, eval=TRUE,warning = FALSE, eval=FALSE}
-library(curatedMetagenomicData)
+mae_example <- PRISM_MAE
 
+# Top-level sample annotations used by IntegratedLearner
+head(as.data.frame(S4Vectors::DataFrame(MultiAssayExperiment::colData(mae_example)))[, 1:4])
 
-# 1) Download two aligned layers from curatedMetagenomicData
-asnicar_tax <- curatedMetagenomicData(
-  "DavidLA_2015.relative_abundance",
-  dryrun = FALSE
-)[[1]]
+# Available experiments/layers in the MAE
+names(MultiAssayExperiment::experiments(mae_example))
 
-asnicar_path <- curatedMetagenomicData(
-  "DavidLA_2015.pathway_abundance",
-  dryrun = FALSE
-)[[1]]
+# Pull one layer as a SummarizedExperiment
+se_example <- MultiAssayExperiment::experiments(mae_example)[[1]]
+class(se_example)
 
-tax_tse  <- as(asnicar_tax,  "TreeSummarizedExperiment")
-path_tse <- as(asnicar_path, "TreeSummarizedExperiment")
+# Standard assay extraction from the layer
+assay_names <- SummarizedExperiment::assayNames(se_example)
+assay_names
+head(SummarizedExperiment::assay(se_example, assay_names[1]))
 
-# 2) Keep common samples in both layers
-common_samples <- intersect(colnames(tax_tse), colnames(path_tse))
-common_samples <- as.character(common_samples)
-
-tax_tse  <- tax_tse[, common_samples]
-path_tse <- path_tse[, common_samples]
-
-# 3) Build binary outcome and subject IDs inside each experiment
-Yvec <- ifelse(as.character(colData(tax_tse)$disease) == "healthy", 0L, 1L)
-
-SummarizedExperiment::colData(tax_tse)$Y <- Yvec
-SummarizedExperiment::colData(path_tse)$Y <- Yvec
-
-SummarizedExperiment::colData(tax_tse)$subjectID <- common_samples
-SummarizedExperiment::colData(path_tse)$subjectID <- common_samples
-
-# 4) Build top-level MAE colData
-cd <- S4Vectors::DataFrame(
-  Y = as.integer(Yvec),
-  subjectID = common_samples,
-  row.names = common_samples
-)
-
-# 5) Build explicit sampleMap
-smap <- S4Vectors::DataFrame(
-  assay   = c(rep("taxonomy", length(common_samples)),
-              rep("pathway",  length(common_samples))),
-  primary = c(common_samples, common_samples),
-  colname = c(common_samples, common_samples)
-)
-
-smap$assay   <- as.character(smap$assay)
-smap$primary <- as.character(smap$primary)
-smap$colname <- as.character(smap$colname)
-
-# 6) Build MAE container
-mae <- MultiAssayExperiment(
-  experiments = ExperimentList(
-    taxonomy = tax_tse,
-    pathway  = path_tse
-  ),
-  colData = cd,
-  sampleMap = smap
-)
-
-# 7) Stratified train/validation split
-y <- MultiAssayExperiment::colData(mae)$Y
-names(y) <- rownames(MultiAssayExperiment::colData(mae))
-
-set.seed(1)
-
-i0 <- which(y == 0)
-i1 <- which(y == 1)
-
-train0 <- sample(i0, floor(0.7 * length(i0)))
-train1 <- sample(i1, floor(0.7 * length(i1)))
-
-train_ids <- names(y)[sort(c(train0, train1))]
-valid_ids <- setdiff(names(y), train_ids)
-
-mae_train <- mae[, train_ids]
-mae_valid <- mae[, valid_ids]
-
-# 8) Fit IntegratedLearner in MAE mode
-fit_mae_bin <- IntegratedLearner(
-  MAE_train = mae_train,
-  MAE_valid = mae_valid,
-  experiment = c("taxonomy", "pathway"),
-  assay.type = c("relative_abundance", "pathway_abundance"),
-  folds = 2,
-  base_learner = "SL.randomForest",
-  meta_learner = "SL.nnls.auc",
-  filter_method = "prevalence",
-  filter_pct = 40,
-  run_screening = TRUE,
-  screen_pct = 30,
-  family = binomial(),
-  verbose = TRUE
-)
-
-# 10) Results
-fit_mae_bin$AUC.train
-fit_mae_bin$AUC.test
-fit_mae_bin$weights
+# MAE sample-to-assay mapping
+head(MultiAssayExperiment::sampleMap(mae_example))
 ```
 
-The returned object is the same style as `PCL` mode, so downstream interpretation (`AUC.train`, `R2.train`, `weights`, `plot.learner`) is unchanged.
+This is the expected Bioconductor pipeline pattern:
+
+1. Build assay-level objects as `SummarizedExperiment` instances.
+2. Combine them into a `MultiAssayExperiment`.
+3. Store outcome and subject identifiers in top-level `colData`.
+4. Pass the MAE into `IntegratedLearner()` for layer-wise, early-fusion, and
+   late-fusion modeling.
+
+## Minimal MAE Workflow Example
+
+The shortest end-to-end pattern starts from packaged MAE data, uses standard
+Bioconductor accessors for inspection, and then fits `IntegratedLearner()`.
+
+```{r chunk-mae-minimal, warning=FALSE}
+data("PRISM_MAE", package = "IntegratedLearner")
+
+mae_min <- PRISM_MAE
+
+names(MultiAssayExperiment::experiments(mae_min))
+head(as.data.frame(S4Vectors::DataFrame(MultiAssayExperiment::colData(mae_min)))[, 1:4])
+head(MultiAssayExperiment::sampleMap(mae_min))
+
+se_min <- MultiAssayExperiment::experiments(mae_min)[[1]]
+SummarizedExperiment::assayNames(se_min)
+dim(SummarizedExperiment::assay(se_min, SummarizedExperiment::assayNames(se_min)[1]))
+
+fit_min <- IntegratedLearner(
+  MAE_train = mae_min,
+  experiment = names(MultiAssayExperiment::experiments(mae_min))[1:2],
+  assay.type = rep("abundance", 2),
+  folds = 2,
+  base_learner = "SL.mean",
+  run_stacked = FALSE,
+  run_concat = FALSE,
+  print_learner = FALSE,
+  family = stats::binomial()
+)
+
+names(fit_min)
+```
 
 ## Parameter Reference (Conbin, Multiclass, and Survival)
 
@@ -287,15 +253,15 @@ The returned object is the same style as `PCL` mode, so downstream interpretatio
 | Parameter | Default | Applies to | Description |
 |---|---|---|---|
 | `MAE_train`, `MAE_valid` | `NULL` | all | MAE-mode inputs (training and optional validation). |
-| `PCL_train`, `PCL_valid` | `NULL` | all | PCL-mode inputs (training and optional validation). |
+| `PCL_train`, `PCL_valid` | `NULL` | all | Legacy tabular inputs retained for backward compatibility, but not used in this vignette. |
 | `experiment` | `NULL` | MAE mode | Selected MAE experiment names/indices; defaults to all experiments. |
 | `assay.type` | `NULL` | MAE mode | Assay names per selected experiment. |
-| `outcome_col` | `"Y"` | all | Outcome column name in PCL `sample_metadata` / MAE `colData`. |
-| `subject_id_col` | `"subjectID"` | all | Subject identifier column name in PCL `sample_metadata` / MAE `colData`. |
+| `outcome_col` | `"Y"` | all | Outcome column name in MAE `colData` (or tabular sample metadata, if using PCL mode). |
+| `subject_id_col` | `"subjectID"` | all | Subject identifier column name in MAE `colData` (or tabular sample metadata, if using PCL mode). |
 | `na.rm` | `FALSE` | all | Drop features with missing values after extraction/prep. |
 | `folds` | `5` | all | Outer CV folds. |
 | `seed` | `1234` | all | Reproducibility seed. |
-| `base_learner` | `"SL.BART"` | all | Base learner. Use `SL.*` IDs for continuous/binary, native multiclass IDs (for example `randomforest`, `xgboost`, `mbart`) for multiclass, and explicitly set a supported `surv.*` ID for survival runs. |
+| `base_learner` | `"sl_bart"` | all | Base learner. Standard `SuperLearner` learners still use `SL.*` IDs for continuous/binary, while IntegratedLearner wrappers use snake_case IDs such as `sl_bart`; multiclass uses native IDs (for example `randomforest`, `xgboost`, `mbart`), and survival runs should use a supported `surv.*` ID. |
 | `filter_method` | `NULL` | all | Optional feature filtering method: `"prevalence"` or `"variance"`. |
 | `filter_pct` | `NULL` | all | Optional retention percentage in `(0,100]` for filtering. |
 | `run_screening` | `FALSE` | all | Enable supervised screening. |
@@ -311,7 +277,7 @@ The returned object is the same style as `PCL` mode, so downstream interpretatio
 | Parameter | Default | Description |
 |---|---|---|
 | `base_screener` | `"All"` | Deprecated compatibility parameter. Prefer `run_screening` + `screen_pct`. |
-| `meta_learner` | `"SL.nnls.auc"` | Stacked meta learner for late fusion. |
+| `meta_learner` | `"sl_nnls_auc"` | Stacked meta learner for late fusion. |
 | `run_stacked` | `TRUE` | Enables late-fusion stacked model. |
 | `run_concat` | `TRUE` | Enables early-fusion concatenated model. |
 | `print_learner` | `TRUE` | Prints fit summary. |
@@ -334,7 +300,6 @@ The returned object is the same style as `PCL` mode, so downstream interpretatio
 | Parameter | Default | Description |
 |---|---|---|
 | `do_early_fusion` | `TRUE` | Train an early-fusion survival model on all features. |
-| `weight_method` | `"IBS"` | Late-fusion weighting objective (`"IBS"` or `"COX"`). |
 | `t_vec`, `t_vec_probs` | `NULL`, quantiles | Time grid used in COX-style weighting summaries. |
 | `layer_score` | `"sum"` | Aggregation of cumulative hazard increments (`sum`, `mean`, `l2`). |
 | `weight_lambda` | `0.02` | Regularization strength for COX weighting optimizer. |
@@ -350,7 +315,7 @@ The returned object is the same style as `PCL` mode, so downstream interpretatio
 
 | Path | Supported base models |
 |---|---|
-| Continuous/Binary (`IL_conbin`) | Any `SuperLearner`-compatible `SL.*` learner available in your R session. Package wrappers include: `SL.BART`, `SL.LASSO`, `SL.enet`, `SL.glmnet2`, `SL.horseshoe`, `SL.mxBART` (plus standard SuperLearner learners such as `SL.glm`, `SL.randomForest`, etc.). |
+| Continuous/Binary (`IL_conbin`) | Any `SuperLearner`-compatible learner available in your R session. Package wrappers include `sl_bart`, `sl_lasso`, `sl_enet`, `sl_glmnet2`, and `sl_horseshoe`, while standard SuperLearner learners such as `SL.glm` and `SL.randomForest` keep their original `SL.*` names. |
 | Multiclass (`IL_multiclass`) | Native multiclass learner IDs: `glmnet`, `randomforest`, `ranger`, `xgboost`, `mbart`, `multinom`. |
 | Survival (`ILsurv`) | Built-in survival learner IDs: `surv.coxph`, `surv.glmnet`, `surv.ranger`, `surv.ranger.extratrees`, `surv.ranger.maxstat`, `surv.ranger.C`, `surv.rfsrc`, `surv.coxboost`, `surv.gbm`, `surv.xgboost.cox`, `surv.xgboost.aft`, `surv.mboost`, `surv.bart`. |
 
@@ -360,7 +325,7 @@ The returned object is the same style as `PCL` mode, so downstream interpretatio
 |---|---|---|---|
 | Continuous/Binary | Yes | `run_concat = TRUE` | `run_stacked = TRUE` with `meta_learner` |
 | Multiclass | Yes | `run_concat = TRUE` | `run_stacked = TRUE` with native multiclass `meta_learner` |
-| Survival | Yes (`train_out$single`) | `do_early_fusion = TRUE` | Weighted layer blending (`weight_method = "IBS"` or `"COX"`) |
+| Survival | Yes (`train_out$single`) | `do_early_fusion = TRUE` | Weighted layer blending with both `IBS` and `COX` outputs returned |
 
 ## Output Reference: What You Get and How to Access It
 
@@ -373,7 +338,7 @@ This section summarizes the outputs produced by each integration method and wher
 | Single-layer (per omics layer) | Layer-specific predictions and metrics | `fit$yhat.train[, layer_name]`, `fit$yhat.test[, layer_name]` (if validation), `fit$AUC.train` / `fit$AUC.test`, `fit$accuracy.train` / `fit$accuracy.test`, `fit$balanced_accuracy.train` / `fit$balanced_accuracy.test` (binomial), `fit$R2.train` / `fit$R2.test` (gaussian) |
 | Early fusion (concatenated) | One model on all features concatenated | Enable with `run_concat = TRUE`; outputs in `fit$yhat.train[, "concatenated"]`, `fit$model_fits$model_concat`, `fit$SL_fits$SL_fit_concat` |
 | Late fusion (stacked) | Meta-model over layer-level predictions | Enable with `run_stacked = TRUE`; outputs in `fit$yhat.train[, "stacked"]`, `fit$model_fits$model_stacked`, `fit$SL_fits$SL_fit_stacked` |
-| Layer weights (stacked) | Relative contribution of each layer in late fusion | `fit$weights` (available when `meta_learner = "SL.nnls.auc"` and `run_stacked = TRUE`) |
+| Layer weights (stacked) | Relative contribution of each layer in late fusion | `fit$weights` (available when `meta_learner = "sl_nnls_auc"` and `run_stacked = TRUE`) |
 | Binary metric table | Per-model AUC, accuracy, and balanced accuracy | `fit$metrics.train` and `fit$metrics.test` (if validation provided) |
 
 ### Multiclass Outputs
@@ -393,7 +358,7 @@ This section summarizes the outputs produced by each integration method and wher
 |---|---|---|
 | Single-layer | `fit$train_out$single$metrics`, `fit$train_out$single$train_risk` | `fit$valid_out$single$valid_cindex`, `fit$valid_out$single$valid_auc`, `fit$valid_out$single$valid_risk` |
 | Early fusion | `fit$train_out$early$train_cindex`, `fit$train_out$early$train_auc`, `fit$train_out$early$train_risk` | `fit$valid_out$early$valid_cindex`, `fit$valid_out$early$valid_auc`, `fit$valid_out$early$valid_risk` |
-| Late fusion | `fit$train_out$late$weights`, `fit$train_out$late$train_cindex`, `fit$train_out$late$train_auc`, `fit$train_out$late$train_risk` | `fit$valid_out$late$valid_cindex`, `fit$valid_out$late$valid_auc`, `fit$valid_out$late$valid_risk` |
+| Late fusion | `fit$train_out$late$IBS` and `fit$train_out$late$COX`, each containing weights, C-index, time-dependent AUC, and risks | `fit$valid_out$late$IBS` and `fit$valid_out$late$COX`, with the analogous validation metrics |
 | Survival plotting payload | `fit$surv_plot_data$train` | `fit$surv_plot_data$valid` |
 
 ### Importance Outputs (Conbin, Multiclass, and Survival)
@@ -406,12 +371,12 @@ This section summarizes the outputs produced by each integration method and wher
 | Multiclass signed importance by class | `fit$feature_importance_signed_by_class` | List with one signed vector per class. |
 | Multiclass signed importance by layer and class | `fit$feature_importance_signed_by_layer_by_class` | Nested list by layer then class. |
 | Survival early-fusion combined importance | `fit$train_out$early$combined_importance` | Available when `do_early_fusion = TRUE`. |
-| Survival late-fusion combined importance | `fit$train_out$late$combined_importance` | Weighted signed importance; names are prefixed like `layer::feature`. |
-| BART-specific layer importance (optional) | `bartMachine::investigate_var_importance(fit$model_fits$model_layers[[layer]], plot = FALSE)` | Only for BART-based conbin fits (`base_learner = "SL.BART"`). |
+| Survival late-fusion combined importance | `fit$train_out$late$IBS$combined_importance` or `fit$train_out$late$COX$combined_importance` | Weighted signed importance; names are prefixed like `layer::feature`. |
+| BART-specific layer importance (optional) | `bartMachine::investigate_var_importance(fit$model_fits$model_layers[[layer]], plot = FALSE)` | Only for BART-based conbin fits (`base_learner = "sl_bart"`). |
 
 ### Quick Access Snippets
 
-```{r chunk-04, eval=FALSE}
+```r
 # ---- Conbin: weights + top features ----
 fit$weights
 head(fit$feature_importance_signed, 20)
@@ -428,8 +393,10 @@ head(fit_mc$feature_importance_global, 20)
 head(fit_mc$feature_importance_signed_by_class[[1]], 20)
 
 # ---- Survival: late-fusion weights + top combined features ----
-fit_surv$train_out$late$weights
-head(fit_surv$train_out$late$combined_importance, 20)
+fit_surv$train_out$late$IBS$weights
+fit_surv$train_out$late$COX$weights
+head(fit_surv$train_out$late$IBS$combined_importance, 20)
+head(fit_surv$train_out$late$COX$combined_importance, 20)
 
 # ---- Survival: inspect all fusion branches ----
 fit_surv$train_out$single
@@ -439,64 +406,28 @@ fit_surv$train_out$late
 
 ## Example 1: Binary Outcome (IBD Classification)
 
-This section uses the PRISM dataset (Franzosa et al., 2019) for classifying IBD status. In these fixtures the binary target is in `sample_metadata$Y` (default `outcome_col` behavior).
+This section uses the packaged PRISM and NLIBD `MultiAssayExperiment` fixtures for classifying IBD status.
 
 ### Step 1: Load and Inspect Training and Validation Data
 
 ```{r chunk-05}
-# Training data
-load_il_dataset("PRISM", envir = environment())
-pcl <- PRISM
+data("PRISM_MAE", package = "IntegratedLearner")
+data("NLIBD_MAE", package = "IntegratedLearner")
+mae_train <- PRISM_MAE
+mae_valid <- NLIBD_MAE
 
-feature_table <- pcl$feature_table
-sample_metadata <- pcl$sample_metadata
-feature_metadata <- pcl$feature_metadata
-rm(pcl)
-
-# Quick checks
-head(feature_table[1:5, 1:5])
-head(sample_metadata[1:5, ])
-head(feature_metadata[1:5, ])
-
-table(feature_metadata$featureType)
-table(sample_metadata$Y)
-
-all(rownames(feature_table) == rownames(feature_metadata))
-all(colnames(feature_table) == rownames(sample_metadata))
-
-# Independent validation data
-load_il_dataset("NLIBD", envir = environment())
-pcl <- NLIBD
-feature_table_valid <- pcl$feature_table
-sample_metadata_valid <- pcl$sample_metadata
-rm(pcl)
-
-# Align validation features to training feature set/order (required by IntegratedLearner)
-if (!identical(rownames(feature_table), rownames(feature_table_valid))) {
-  missing_in_valid <- setdiff(rownames(feature_table), rownames(feature_table_valid))
-  if (length(missing_in_valid) > 0) {
-    stop("Validation set is missing training features, e.g.: ", paste(head(missing_in_valid, 5), collapse = ", "))
-  }
-  feature_table_valid <- feature_table_valid[rownames(feature_table), , drop = FALSE]
-}
-
-all(rownames(feature_table) == rownames(feature_table_valid))
-all(colnames(feature_table_valid) == rownames(sample_metadata_valid))
+head(MultiAssayExperiment::colData(mae_train))
+names(MultiAssayExperiment::experiments(mae_train))
+table(MultiAssayExperiment::colData(mae_train)$Y)
 ```
 
-### Step 2: Build PCL Inputs
+### Step 2: Inspect Layer Assays
 
 ```{r chunk-06}
-PCL_train <- list(
-  feature_table = feature_table,
-  sample_metadata = sample_metadata,
-  feature_metadata = feature_metadata
-)
-
-PCL_valid <- list(
-  feature_table = feature_table_valid,
-  sample_metadata = sample_metadata_valid,
-  feature_metadata = feature_metadata
+vapply(
+  MultiAssayExperiment::experiments(mae_train),
+  function(se) nrow(SummarizedExperiment::assay(se, "abundance")),
+  integer(1)
 )
 ```
 
@@ -506,11 +437,11 @@ PCL_valid <- list(
 
 ```{r chunk-07, warning=FALSE}
 fit <- IntegratedLearner(
-  PCL_train = PCL_train,
-  PCL_valid = PCL_valid,
+  MAE_train = mae_train,
+  MAE_valid = mae_valid,
   folds = 2,
   base_learner = "SL.randomForest",
-  meta_learner = "SL.nnls.auc",
+  meta_learner = "sl_nnls_auc",
   filter_method = "prevalence",
   filter_pct = 40,
   run_screening = TRUE,
@@ -528,7 +459,7 @@ Core outputs for binary tasks include:
 - `fit$accuracy.train` and `fit$accuracy.test`: thresholded accuracy per layer and fusion model.
 - `fit$balanced_accuracy.train` and `fit$balanced_accuracy.test`: balanced accuracy per layer and fusion model.
 - `fit$metrics.train` and `fit$metrics.test`: compact metric tables with AUC, accuracy, and balanced accuracy.
-- `fit$weights`: layer contributions in the stacked model (when `SL.nnls.auc` is used).
+- `fit$weights`: layer contributions in the stacked model (when `sl_nnls_auc` is used).
 - `fit$yhat.train` and `fit$yhat.test`: predicted probabilities.
 
 ```{r chunk-08}
@@ -551,49 +482,22 @@ In this PRISM setting, you can compare which single layer is strongest and wheth
 
 ## Example 2: Continuous Outcome (Gestational Age)
 
-This section uses the pregnancy dataset (Ghaemi et al., 2019), where `Y` is continuous gestational age (default `outcome_col` behavior).
+This section uses the pregnancy dataset (Ghaemi et al., 2019), converted into `MultiAssayExperiment` format. Here `Y` is continuous gestational age.
 
 ### Step 1: Load and Inspect Data
 
 ```{r chunk-10}
-load_il_dataset("pregnancy", envir = environment())
-pcl <- pregnancy
+data("pregnancy_MAE", package = "IntegratedLearner")
+mae_train <- pregnancy_MAE
 
-feature_table <- pcl$feature_table
-sample_metadata <- pcl$sample_metadata
-feature_metadata <- pcl$feature_metadata
-rm(pcl)
-
-head(feature_table[1:5, 1:5])
-head(sample_metadata[1:5, ])
-head(feature_metadata[1:5, ])
-
-table(feature_metadata$featureType)
-length(unique(sample_metadata$subjectID))
-
-all(rownames(feature_table) == rownames(feature_metadata))
-all(colnames(feature_table) == rownames(sample_metadata))
-
-# Optional speed-up for local experimentation
-# top_n <- 50
-# subsetIDs <- c(1:top_n, (nrow(feature_table) - top_n + 1):nrow(feature_table))
-# feature_table <- feature_table[subsetIDs, ]
-# feature_metadata <- feature_metadata[subsetIDs, ]
+head(MultiAssayExperiment::colData(mae_train))
+names(MultiAssayExperiment::experiments(mae_train))
+length(unique(MultiAssayExperiment::colData(mae_train)$subjectID))
 ```
 
-### Step 2: Build PCL Input
+### Step 2: Fit Continuous Model
 
-```{r chunk-11}
-PCL_train <- list(
-  feature_table = feature_table,
-  sample_metadata = sample_metadata,
-  feature_metadata = feature_metadata
-)
-```
-
-### Step 3: Fit Continuous Model
-
-For this example, we use BART base learners (`SL.BART`).
+For this example, we use BART base learners (`sl_bart`).
 
 If you hit:
 
@@ -605,11 +509,13 @@ your Java runtime is older than the version used by your installed `bartMachine`
 - use a non-Java learner (example fallback shown below).
 
 ```{r chunk-12, warning=FALSE, eval=use_sl_bart}
+options(java.parameters = c("-Xmx6G", "--add-modules=jdk.incubator.vector"))
+
 fit <- IntegratedLearner(
-  PCL_train = PCL_train,
+  MAE_train = mae_train,
   folds = 2,
-  base_learner = "SL.BART",
-  meta_learner = "SL.nnls.auc",
+  base_learner = "sl_bart",
+  meta_learner = "sl_nnls_auc",
   filter_method = "variance",
   filter_pct = 40,
   run_screening = TRUE,
@@ -622,10 +528,10 @@ Fallback (non-Java) run:
 
 ```{r chunk-13, eval=!use_sl_bart}
 fit <- IntegratedLearner(
-  PCL_train = PCL_train,
+  MAE_train = mae_train,
   folds = 2,
   base_learner = "SL.randomForest",
-  meta_learner = "SL.nnls.auc",
+  meta_learner = "sl_nnls_auc",
   filter_method = "variance",
   filter_pct = 40,
   run_screening = TRUE,
@@ -634,7 +540,7 @@ fit <- IntegratedLearner(
 )
 ```
 
-### Step 4: Evaluate Predictive Accuracy
+### Step 3: Evaluate Predictive Accuracy
 
 For continuous outcomes, `IntegratedLearner` reports `R2.train` (and `R2.test` if validation is provided).
 
@@ -647,9 +553,9 @@ plot.obj <- IntegratedLearner:::plot.learner(fit)
 plot.obj$plot
 ```
 
-### Step 5: Uncertainty and Feature-Level Interpretation (BART)
+### Step 4: Uncertainty and Feature-Level Interpretation (BART)
 
-When using `SL.BART`, you can inspect posterior predictive distributions and derive weighted posterior summaries.
+When using `sl_bart`, you can inspect posterior predictive distributions and derive weighted posterior summaries.
 `r if (!use_sl_bart) "This section is skipped in this session because Java < 21 (or bartMachine is unavailable)." else ""`
 
 ```{r chunk-15, eval=use_sl_bart}
@@ -759,7 +665,7 @@ p4 <- VIMP %>%
 p5 <- VIMP %>%
   dplyr::filter(type != "stack") %>%
   dplyr::arrange(mean) %>%
-  dplyr::mutate(ID = stringr::str_replace_all(ID, stringr::fixed("_"), " ")) %>%
+  dplyr::mutate(ID = gsub("_", " ", ID, fixed = TRUE)) %>%
   ggplot(aes(reorder(ID, -mean), mean, fill = type)) +
   facet_wrap(. ~ type, scales = "free") +
   geom_bar(stat = "identity", fill = "lightsalmon") +
@@ -802,97 +708,11 @@ column (`sample_id`) and pass them through `outcome_col` and
 `subject_id_col`.
 
 ```{r chunk-17}
-load_il_dataset("FranzosaE_2019_CuratedMetabolome", envir = environment())
-load_il_dataset("FranzosaE_2019_CuratedMetadata", envir = environment())
-load_il_dataset("FranzosaE_2019_CuratedSpeciesProfile", envir = environment())
-load_il_dataset("FranzosaE_2019_Validation_CuratedMetabolome", envir = environment())
-load_il_dataset("FranzosaE_2019_Validation_CuratedMetadata", envir = environment())
-load_il_dataset("FranzosaE_2019_Validation_CuratedSpeciesProfile", envir = environment())
+data("Franzosa_MAE_train", package = "IntegratedLearner")
+data("Franzosa_MAE_valid", package = "IntegratedLearner")
 
-as_feature_matrix <- function(df, id_col = "X") {
-  ids <- as.character(df[[id_col]])
-  mat <- as.matrix(df[, setdiff(colnames(df), id_col), drop = FALSE])
-  storage.mode(mat) <- "numeric"
-  rownames(mat) <- ids
-  t(mat)
-}
-
-prep_sample_metadata <- function(df, id_col = "X") {
-  sm <- as.data.frame(df, stringsAsFactors = FALSE)
-  sm$sample_id <- as.character(sm[[id_col]])
-  rownames(sm) <- sm$sample_id
-  sm
-}
-
-met_train <- as_feature_matrix(FranzosaE_2019_CuratedMetabolome)
-met_valid <- as_feature_matrix(FranzosaE_2019_Validation_CuratedMetabolome)
-species_train <- as_feature_matrix(FranzosaE_2019_CuratedSpeciesProfile)
-species_valid <- as_feature_matrix(FranzosaE_2019_Validation_CuratedSpeciesProfile)
-
-# Enforce exact train/validation feature alignment per layer.
-met_shared <- intersect(rownames(met_train), rownames(met_valid))
-species_shared <- intersect(rownames(species_train), rownames(species_valid))
-met_train <- met_train[met_shared, , drop = FALSE]
-met_valid <- met_valid[met_shared, , drop = FALSE]
-species_train <- species_train[species_shared, , drop = FALSE]
-species_valid <- species_valid[species_shared, , drop = FALSE]
-
-sm_train <- prep_sample_metadata(FranzosaE_2019_CuratedMetadata)
-sm_valid <- prep_sample_metadata(FranzosaE_2019_Validation_CuratedMetadata)
-
-train_ids <- Reduce(intersect, list(colnames(met_train), colnames(species_train), rownames(sm_train)))
-valid_ids <- Reduce(intersect, list(colnames(met_valid), colnames(species_valid), rownames(sm_valid)))
-
-met_train <- met_train[, train_ids, drop = FALSE]
-met_valid <- met_valid[, valid_ids, drop = FALSE]
-species_train <- species_train[, train_ids, drop = FALSE]
-species_valid <- species_valid[, valid_ids, drop = FALSE]
-sm_train <- sm_train[train_ids, , drop = FALSE]
-sm_valid <- sm_valid[valid_ids, , drop = FALSE]
-
-class_levels <- sort(unique(as.character(sm_train$diseaseCat)))
-sm_train$diseaseCat <- factor(sm_train$diseaseCat, levels = class_levels)
-sm_valid$diseaseCat <- factor(sm_valid$diseaseCat, levels = class_levels)
-
-cd_train <- S4Vectors::DataFrame(
-  sample_id = sm_train$sample_id,
-  diseaseCat = sm_train$diseaseCat,
-  row.names = sm_train$sample_id
-)
-
-cd_valid <- S4Vectors::DataFrame(
-  sample_id = sm_valid$sample_id,
-  diseaseCat = sm_valid$diseaseCat,
-  row.names = sm_valid$sample_id
-)
-
-MAE_train <- MultiAssayExperiment(
-  experiments = ExperimentList(
-    metabolome = SummarizedExperiment::SummarizedExperiment(
-      assays = list(abundance = met_train),
-      colData = cd_train
-    ),
-    species = SummarizedExperiment::SummarizedExperiment(
-      assays = list(abundance = species_train),
-      colData = cd_train
-    )
-  ),
-  colData = cd_train
-)
-
-MAE_valid <- MultiAssayExperiment(
-  experiments = ExperimentList(
-    metabolome = SummarizedExperiment::SummarizedExperiment(
-      assays = list(abundance = met_valid),
-      colData = cd_valid
-    ),
-    species = SummarizedExperiment::SummarizedExperiment(
-      assays = list(abundance = species_valid),
-      colData = cd_valid
-    )
-  ),
-  colData = cd_valid
-)
+MAE_train <- Franzosa_MAE_train
+MAE_valid <- Franzosa_MAE_valid
 
 fit <- IntegratedLearner::IntegratedLearner(
   MAE_train = MAE_train,
@@ -950,118 +770,14 @@ For plotting, the survival backend now stores:
 - a time-dependent AUC table evaluated over a denser event-time grid (rather than only a few summary quantiles), and
 - Kaplan-Meier curve payloads built from predicted risk groups for the best fused survival model.
 
-This section provides a complete MAE workflow, followed by an equivalent PCL sketch.
+This section provides a complete MAE workflow.
 
 ```{r chunk-18}
-load_il_dataset("gene_all", envir = environment())
-load_il_dataset("mir_all", envir = environment())
+data("TCGA_survival_MAE_train", package = "IntegratedLearner")
+data("TCGA_survival_MAE_valid", package = "IntegratedLearner")
 
-to_feature_matrix <- function(df, id_col = "patient_id", n_keep = 120L) {
-  drop_cols <- c("patient_id", "OS", "OS.time", "age", "race_white", "stage_i", "stage_ii")
-  d <- as.data.frame(df, stringsAsFactors = FALSE)
-  rownames(d) <- as.character(d[[id_col]])
-  feature_cols <- setdiff(colnames(d), drop_cols)
-  feature_cols <- feature_cols[seq_len(min(length(feature_cols), n_keep))]
-  mat <- t(as.matrix(d[, feature_cols, drop = FALSE]))
-  storage.mode(mat) <- "numeric"
-  mat
-}
-
-gene_all <- gene_all[order(gene_all$patient_id), , drop = FALSE]
-mir_all <- mir_all[order(mir_all$patient_id), , drop = FALSE]
-
-common_ids <- intersect(as.character(gene_all$patient_id), as.character(mir_all$patient_id))
-gene_all <- gene_all[match(common_ids, gene_all$patient_id), , drop = FALSE]
-mir_all <- mir_all[match(common_ids, mir_all$patient_id), , drop = FALSE]
-
-gene_mat <- to_feature_matrix(gene_all, n_keep = 120L)
-mirna_mat <- to_feature_matrix(mir_all, n_keep = 100L)
-
-tcga_metadata <- data.frame(
-  patient_id = as.character(gene_all$patient_id),
-  time = as.numeric(gene_all$OS.time),
-  event = as.numeric(gene_all$OS),
-  stringsAsFactors = FALSE
-)
-rownames(tcga_metadata) <- tcga_metadata$patient_id
-
-common_ids <- Reduce(intersect, list(colnames(gene_mat), colnames(mirna_mat), rownames(tcga_metadata)))
-gene_mat <- gene_mat[, common_ids, drop = FALSE]
-mirna_mat <- mirna_mat[, common_ids, drop = FALSE]
-tcga_metadata <- tcga_metadata[common_ids, , drop = FALSE]
-
-tcga_metadata$outcome_surv <- I(survival::Surv(tcga_metadata$time, tcga_metadata$event))
-
-set.seed(123)
-event_ids <- rownames(tcga_metadata)[tcga_metadata$event == 1]
-censor_ids <- rownames(tcga_metadata)[tcga_metadata$event == 0]
-train_ids <- c(
-  sample(event_ids, max(1L, floor(0.7 * length(event_ids)))),
-  sample(censor_ids, max(1L, floor(0.7 * length(censor_ids))))
-)
-train_ids <- sort(unique(train_ids))
-valid_ids <- setdiff(rownames(tcga_metadata), train_ids)
-
-cd_train <- S4Vectors::DataFrame(tcga_metadata[train_ids, c("patient_id", "time", "event"), drop = FALSE])
-cd_train$outcome_surv <- I(survival::Surv(cd_train$time, cd_train$event))
-rownames(cd_train) <- cd_train$patient_id
-
-cd_valid <- S4Vectors::DataFrame(tcga_metadata[valid_ids, c("patient_id", "time", "event"), drop = FALSE])
-cd_valid$outcome_surv <- I(survival::Surv(cd_valid$time, cd_valid$event))
-rownames(cd_valid) <- cd_valid$patient_id
-
-mae_train <- MultiAssayExperiment(
-  experiments = ExperimentList(
-    gene = SummarizedExperiment::SummarizedExperiment(
-      assays = list(abundance = gene_mat[, train_ids, drop = FALSE]),
-      colData = cd_train
-    ),
-    mirna = SummarizedExperiment::SummarizedExperiment(
-      assays = list(abundance = mirna_mat[, train_ids, drop = FALSE]),
-      colData = cd_train
-    )
-  ),
-  colData = cd_train
-)
-
-mae_valid <- MultiAssayExperiment(
-  experiments = ExperimentList(
-    gene = SummarizedExperiment::SummarizedExperiment(
-      assays = list(abundance = gene_mat[, valid_ids, drop = FALSE]),
-      colData = cd_valid
-    ),
-    mirna = SummarizedExperiment::SummarizedExperiment(
-      assays = list(abundance = mirna_mat[, valid_ids, drop = FALSE]),
-      colData = cd_valid
-    )
-  ),
-  colData = cd_valid
-)
-
-feature_metadata_surv <- data.frame(
-  featureID = c(rownames(gene_mat), rownames(mirna_mat)),
-  featureType = c(rep("gene", nrow(gene_mat)), rep("mirna", nrow(mirna_mat))),
-  stringsAsFactors = FALSE
-)
-rownames(feature_metadata_surv) <- feature_metadata_surv$featureID
-
-PCL_train <- list(
-  feature_table = as.data.frame(rbind(
-    gene_mat[, train_ids, drop = FALSE],
-    mirna_mat[, train_ids, drop = FALSE]
-  )),
-  sample_metadata = as.data.frame(cd_train),
-  feature_metadata = feature_metadata_surv
-)
-
-PCL_valid <- list(
-  feature_table = as.data.frame(rbind(
-    gene_mat[, valid_ids, drop = FALSE],
-    mirna_mat[, valid_ids, drop = FALSE]
-  )),
-  sample_metadata = as.data.frame(cd_valid),
-  feature_metadata = feature_metadata_surv
-)
+mae_train <- TCGA_survival_MAE_train
+mae_valid <- TCGA_survival_MAE_valid
 
 fit_surv_mae <- IntegratedLearner(
   MAE_train = mae_train,
@@ -1076,7 +792,6 @@ fit_surv_mae <- IntegratedLearner(
   filter_pct = 40,
   run_screening = TRUE,
   screen_pct = 25,
-  weight_method = "COX",           # alternative: "IBS"
   verbose = TRUE
 )
 ```
@@ -1090,20 +805,25 @@ fit_surv_mae <- IntegratedLearner(
 # Single-layer training metrics
 # fit_surv_mae$train_out$single$metrics
 
-# Late fusion (weighted integration)
-fit_surv_mae$train_out$late$weights
-fit_surv_mae$train_out$late$train_cindex
-fit_surv_mae$train_out$late$train_auc
+# Late fusion (two weighted integration summaries)
+fit_surv_mae$train_out$late$IBS$weights
+fit_surv_mae$train_out$late$IBS$train_cindex
+fit_surv_mae$train_out$late$IBS$train_auc
+fit_surv_mae$train_out$late$COX$weights
+fit_surv_mae$train_out$late$COX$train_cindex
+fit_surv_mae$train_out$late$COX$train_auc
 
 # Early fusion summary
 # fit_surv_mae$train_out$early
 # Validation metrics
-fit_surv_mae$valid_out$late$valid_cindex
-fit_surv_mae$valid_out$late$valid_auc
+fit_surv_mae$valid_out$late$IBS$valid_cindex
+fit_surv_mae$valid_out$late$IBS$valid_auc
+fit_surv_mae$valid_out$late$COX$valid_cindex
+fit_surv_mae$valid_out$late$COX$valid_auc
 fit_surv_mae$valid_out$single$valid_cindex
 ```
 
-The `train_auc` and `valid_auc` objects are data frames with `time` and `AUC` columns, so they can be plotted as true time-dependent discrimination curves.
+The `train_auc` and `valid_auc` objects for both `IBS` and `COX` are data frames with `time` and `AUC` columns, so they can be plotted as true time-dependent discrimination curves. In practice, these two late-fusion outputs provide complementary summaries over the same single-layer and early-fusion backbone, making side-by-side comparison possible within one fit object.
 
 ```{r chunk-19b, warning=FALSE, fig.height=9, fig.width=8}
 plot.obj.surv <- IntegratedLearner:::plot.learner(fit_surv_mae)

@@ -4,7 +4,7 @@
 \alias{update.learner}
 \title{Update IntegratedLearner fit object based on layers available in the test set}
 \usage{
-\method{update}{learner}(
+update.learner(
   object,
   feature_table_valid,
   sample_metadata_valid = NULL,
@@ -39,20 +39,51 @@ If \code{NULL}, uses \code{object$column_map$outcome_col} (or \code{"Y"}).}
 \item{...}{Additional arguments (unused)}
 }
 \value{
-SL object
+An updated IntegratedLearner prediction object with
+\code{yhat.test} and, when validation outcomes are supplied, the observed
+outcomes and corresponding performance summaries.
 }
 \description{
 Allow update of IntegratedLearner if only a subset of omics layers are available in test set. If all layers and features match, it calls predict.learner()
 }
 \examples{
-is.function(getS3method("update", "learner"))
-if (FALSE) {
-  # Build a fit with IntegratedLearner() first, then update with reduced layers.
-  update(
-    object = fit,
-    feature_table_valid = feature_table_valid,
-    sample_metadata_valid = sample_metadata_valid,
-    feature_metadata_valid = feature_metadata_valid
-  )
-}
+set.seed(1)
+sample_ids <- paste0("S", seq_len(18))
+layer1 <- matrix(rnorm(3 * length(sample_ids)),
+  nrow = 3,
+  dimnames = list(paste0("L1_F", 1:3), sample_ids)
+)
+layer2 <- matrix(rnorm(2 * length(sample_ids)),
+  nrow = 2,
+  dimnames = list(paste0("L2_F", 1:2), sample_ids)
+)
+signal <- colMeans(layer1)
+sample_metadata_valid <- data.frame(
+  Y = as.numeric(signal > stats::median(signal)),
+  subjectID = sample_ids,
+  row.names = sample_ids
+)
+feature_table_valid <- as.data.frame(rbind(layer1, layer2))
+feature_metadata_valid <- data.frame(
+  featureID = rownames(feature_table_valid),
+  featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
+  row.names = rownames(feature_table_valid)
+)
+fit <- IntegratedLearner(
+  PCL_train = list(
+    feature_table = feature_table_valid,
+    sample_metadata = sample_metadata_valid,
+    feature_metadata = feature_metadata_valid
+  ),
+  folds = 2, base_learner = "SL.mean",
+  run_stacked = FALSE, run_concat = FALSE,
+  print_learner = FALSE, family = stats::binomial()
+)
+upd <- update.learner(
+  object = fit,
+  feature_table_valid = feature_table_valid,
+  sample_metadata_valid = sample_metadata_valid,
+  feature_metadata_valid = feature_metadata_valid
+)
+names(upd)
 }

@@ -15,19 +15,50 @@
 #' @param verbose Should a summary of fits/ results be printed. Default is FALSE
 #' @param ... Additional arguments (unused)
 #'
-#' @return SL object
+#' @return An updated IntegratedLearner prediction object with
+#'   \code{yhat.test} and, when validation outcomes are supplied, the observed
+#'   outcomes and corresponding performance summaries.
 #'
 #' @examples
-#' is.function(getS3method("update", "learner"))
-#' if (FALSE) {
-#'   # Build a fit with IntegratedLearner() first, then update with reduced layers.
-#'   update(
-#'     object = fit,
-#'     feature_table_valid = feature_table_valid,
-#'     sample_metadata_valid = sample_metadata_valid,
-#'     feature_metadata_valid = feature_metadata_valid
-#'   )
-#' }
+#' set.seed(1)
+#' sample_ids <- paste0("S", seq_len(18))
+#' layer1 <- matrix(rnorm(3 * length(sample_ids)),
+#'   nrow = 3,
+#'   dimnames = list(paste0("L1_F", 1:3), sample_ids)
+#' )
+#' layer2 <- matrix(rnorm(2 * length(sample_ids)),
+#'   nrow = 2,
+#'   dimnames = list(paste0("L2_F", 1:2), sample_ids)
+#' )
+#' signal <- colMeans(layer1)
+#' sample_metadata_valid <- data.frame(
+#'   Y = as.numeric(signal > stats::median(signal)),
+#'   subjectID = sample_ids,
+#'   row.names = sample_ids
+#' )
+#' feature_table_valid <- as.data.frame(rbind(layer1, layer2))
+#' feature_metadata_valid <- data.frame(
+#'   featureID = rownames(feature_table_valid),
+#'   featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
+#'   row.names = rownames(feature_table_valid)
+#' )
+#' fit <- IntegratedLearner(
+#'   PCL_train = list(
+#'     feature_table = feature_table_valid,
+#'     sample_metadata = sample_metadata_valid,
+#'     feature_metadata = feature_metadata_valid
+#'   ),
+#'   folds = 2, base_learner = "SL.mean",
+#'   run_stacked = FALSE, run_concat = FALSE,
+#'   print_learner = FALSE, family = stats::binomial()
+#' )
+#' upd <- update.learner(
+#'   object = fit,
+#'   feature_table_valid = feature_table_valid,
+#'   sample_metadata_valid = sample_metadata_valid,
+#'   feature_metadata_valid = feature_metadata_valid
+#' )
+#' names(upd)
 #' @export
 update.learner <- function(
   object, feature_table_valid, sample_metadata_valid = NULL,
@@ -55,7 +86,7 @@ update.learner <- function(
   } else {
     stop("fit$family must be 'gaussian' or 'binomial'.", call. = FALSE)
   }
-  sl_env <- .make_sl_env()
+  sl_env <- make_sl_env()
 
   if (!is.null(sample_metadata_valid)) {
     if (is.null(outcome_col)) {
@@ -64,7 +95,7 @@ update.learner <- function(
     if (is.null(subject_id_col)) {
       subject_id_col <- fit$column_map$subject_id_col %||% "subjectID"
     }
-    sample_metadata_valid <- .normalize_sample_metadata_columns(
+    sample_metadata_valid <- normalize_sample_metadata_columns(
       sample_metadata = sample_metadata_valid,
       outcome_col = outcome_col,
       subject_id_col = subject_id_col,
@@ -72,7 +103,7 @@ update.learner <- function(
       require_outcome = TRUE
     )
 
-    coerced_valid <- .coerce_outcome_by_family(
+    coerced_valid <- coerce_outcome_by_family(
       sample_metadata = sample_metadata_valid,
       family_name = fit$family,
       context = "sample_metadata_valid",
@@ -113,55 +144,20 @@ update.learner <- function(
   fit$SL_fits$SL_fit_layers <- fit$SL_fits$SL_fit_layers[name_layers_common]
   fit$X_train_layers <- fit$X_train_layers[name_layers_common]
 
-  # layer-wise predictions for validation
-  X_test_layers <- vector("list", length(name_layers_common))
-  names(X_test_layers) <- name_layers_common
-
-  layer_wise_prediction_valid <- vector("list", length(name_layers_common))
-  names(layer_wise_prediction_valid) <- name_layers_common
-
-  for (i in seq_along(name_layers_common)) {
-    layer_i <- name_layers_common[i]
-
-    # subset features for this layer
-    include_list <- feature_metadata_valid[feature_metadata_valid$featureType ==
-      layer_i, , drop = FALSE]
-
-    # check feature names: training layer columns must match validation
-    # featureIDs (same order)
-    train_feat <- colnames(fit$X_train_layers[[layer_i]])
-    valid_feat <- include_list$featureID
-
-    if (!identical(valid_feat, train_feat)) {
-      stop("Validation set feature names for layer '", layer_i, "' do not match training data (must be identical and in same order).",
-        call. = FALSE
-      )
-    }
-
-    # slice validation feature table
-    t_dat_slice_valid <- feature_table_valid[rownames(feature_table_valid) %in%
-      valid_feat, , drop = FALSE]
-    dat_slice_valid <- as.data.frame(t(t_dat_slice_valid))
-    X_test_layers[[i]] <- dat_slice_valid
-
-    # predict
-    layer_pred <- SuperLearner::predict.SuperLearner(fit$SL_fits$SL_fit_layers[[layer_i]],
-      newdata = dat_slice_valid
-    )$pred
-
-    layer_wise_prediction_valid[[i]] <- layer_pred
-    rownames(layer_wise_prediction_valid[[i]]) <- rownames(dat_slice_valid)
-
-    # store inside layer object
-    fit$SL_fits$SL_fit_layers[[layer_i]]$validX <- dat_slice_valid
-    fit$SL_fits$SL_fit_layers[[layer_i]]$validPrediction <- layer_pred
-    colnames(fit$SL_fits$SL_fit_layers[[layer_i]]$validPrediction) <- "validPrediction"
-  }
+  train_feature_lookup <- lapply(fit$X_train_layers, colnames)
+  layer_validation <- predict_layer_validation_set(
+    feature_table_valid = feature_table_valid,
+    feature_metadata = feature_metadata_valid,
+    layer_names = name_layers_common,
+    sl_fit_layers = fit$SL_fits$SL_fit_layers,
+    train_feature_lookup = train_feature_lookup,
+    attach_payload = TRUE
+  )
+  X_test_layers <- layer_validation$X_test_layers
+  combo_valid <- layer_validation$combo_valid
+  fit$SL_fits$SL_fit_layers <- layer_validation$SL_fit_layers
 
   combo <- fit$yhat.train[, name_layers_common, drop = FALSE]
-
-  combo_valid <- as.data.frame(do.call(cbind, layer_wise_prediction_valid))
-  names(combo_valid) <- name_layers_common
   fusion_layers_target <- fit$fusion_layers_retained %||% name_layers_common
   fusion_layers_common <- intersect(name_layers_common, fusion_layers_target)
   run_stacked_update <- isTRUE(fit$run_stacked) && length(fusion_layers_common) > 0L
@@ -194,15 +190,15 @@ update.learner <- function(
       SL_fit_stacked$validY <- validY
     }
 
-    stacked_prediction_valid <- SuperLearner::predict.SuperLearner(SL_fit_stacked,
-      newdata = combo_valid_fusion
-    )$pred
-
-    rownames(stacked_prediction_valid) <- rownames(combo_valid_fusion)
-
-    SL_fit_stacked$validX <- combo_valid_fusion
-    SL_fit_stacked$validPrediction <- stacked_prediction_valid
-    colnames(SL_fit_stacked$validPrediction) <- "validPrediction"
+    stacked_prediction_valid <- predict_superlearner_matrix(
+      SL_fit_stacked,
+      combo_valid_fusion
+    )
+    SL_fit_stacked <- attach_sl_validation_payload(
+      SL_fit_stacked,
+      validX = combo_valid_fusion,
+      validPrediction = stacked_prediction_valid
+    )
 
     fit$model_fits$model_stacked <- model_stacked
     fit$SL_fits$SL_fit_stacked <- SL_fit_stacked
@@ -237,16 +233,16 @@ update.learner <- function(
       SL_fit_concat$validY <- validY
     }
 
-    fulldat_valid <- as.data.frame(t(feature_table_valid[concat_feature_ids, , drop = FALSE]))
-    concat_prediction_valid <- SuperLearner::predict.SuperLearner(SL_fit_concat,
-      newdata = fulldat_valid
-    )$pred
-
-    rownames(concat_prediction_valid) <- rownames(fulldat_valid)
-
-    SL_fit_concat$validX <- fulldat_valid
-    SL_fit_concat$validPrediction <- concat_prediction_valid
-    colnames(SL_fit_concat$validPrediction) <- "validPrediction"
+    fulldat_valid <- slice_feature_table(feature_table_valid, concat_feature_ids)
+    concat_prediction_valid <- predict_superlearner_matrix(
+      SL_fit_concat,
+      fulldat_valid
+    )
+    SL_fit_concat <- attach_sl_validation_payload(
+      SL_fit_concat,
+      validX = fulldat_valid,
+      validPrediction = concat_prediction_valid
+    )
 
     fit$model_fits$model_concat <- model_concat
     fit$SL_fits$SL_fit_concat <- SL_fit_concat
@@ -263,17 +259,12 @@ update.learner <- function(
   }
   fit$yhat.train <- fit$yhat.train[, keep_cols, drop = FALSE]
 
-  # ---- rebuild yhat.test ----
-  yhat.test <- combo_valid
-  if (run_stacked_update) {
-    yhat.test <- cbind(yhat.test, fit$SL_fits$SL_fit_stacked$validPrediction)
-  }
-  if (run_concat_update) {
-    yhat.test <- cbind(yhat.test, fit$SL_fits$SL_fit_concat$validPrediction)
-  }
-
-  colnames(yhat.test) <- keep_cols
-  fit$yhat.test <- yhat.test
+  fit$yhat.test <- append_fusion_predictions(
+    base_predictions = combo_valid,
+    stacked_prediction = if (run_stacked_update) fit$SL_fits$SL_fit_stacked$validPrediction else NULL,
+    concat_prediction = if (run_concat_update) fit$SL_fits$SL_fit_concat$validPrediction else NULL
+  )
+  colnames(fit$yhat.test) <- keep_cols
   fit$X_test_layers <- X_test_layers
 
   # ---- set test flags ----
@@ -288,7 +279,7 @@ update.learner <- function(
   fit$fusion_layers_retained <- fusion_layers_common
   fit$fusion_layers_removed <- setdiff(name_layers_common, fusion_layers_common)
 
-  if (identical(fit$meta_learner, "SL.nnls.auc") && run_stacked_update) {
+  if (identical(fit$meta_learner, "sl_nnls_auc") && run_stacked_update) {
     fit$weights <- fit$model_fits$model_stacked$solution
     names(fit$weights) <- fusion_layers_common
   } else if (!run_stacked_update) {
@@ -296,33 +287,12 @@ update.learner <- function(
   }
 
   # ---- performance ----
-  if (identical(fit$family, "binomial")) {
-    train_metrics <- .binary_model_metrics(fit$yhat.train, fit$Y_train)
-    fit$AUC.train <- train_metrics$auc
-    fit$accuracy.train <- train_metrics$accuracy
-    fit$balanced_accuracy.train <- train_metrics$balanced_accuracy
-    fit$metrics.train <- train_metrics$metrics
-
-    if (fit$test) {
-      test_metrics <- .binary_model_metrics(fit$yhat.test, fit$Y_test)
-      fit$AUC.test <- test_metrics$auc
-      fit$accuracy.test <- test_metrics$accuracy
-      fit$balanced_accuracy.test <- test_metrics$balanced_accuracy
-      fit$metrics.test <- test_metrics$metrics
-    }
-  } else if (identical(fit$family, "gaussian")) {
-    R2 <- vapply(colnames(fit$yhat.train), function(nm) {
-      as.vector(stats::cor(fit$yhat.train[, nm], fit$Y_train)^2)
-    }, numeric(1))
-    fit$R2.train <- R2
-
-    if (fit$test) {
-      R2t <- vapply(colnames(fit$yhat.test), function(nm) {
-        as.vector(stats::cor(fit$yhat.test[, nm], fit$Y_test)^2)
-      }, numeric(1))
-      fit$R2.test <- R2t
-    }
-  }
+  fit <- add_family_metrics(
+    result = fit,
+    family_name = fit$family,
+    y_train = fit$Y_train,
+    y_test = if (isTRUE(fit$test)) fit$Y_test else NULL
+  )
 
   fit$feature.names <- rownames(feature_table_valid)
   print.learner(fit)

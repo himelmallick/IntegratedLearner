@@ -87,6 +87,49 @@
 #' @source Packaged example data for tutorials and tests.
 "pregnancy"
 
+#' PRISM binary-outcome MAE fixture
+#'
+#' PRISM cohort example data converted to `MultiAssayExperiment` format for
+#' binary outcome modeling.
+#'
+#' @format A `MultiAssayExperiment` with one experiment per omics layer and
+#'   sample-level metadata stored in `colData`.
+"PRISM_MAE"
+
+#' NLIBD binary-outcome MAE fixture
+#'
+#' External validation cohort example data converted to
+#' `MultiAssayExperiment` format for binary outcome modeling.
+#'
+#' @format A `MultiAssayExperiment` aligned to the PRISM MAE feature sets.
+"NLIBD_MAE"
+
+#' Pregnancy continuous-outcome MAE fixture
+#'
+#' Multi-omics pregnancy example data converted to `MultiAssayExperiment`
+#' format for continuous outcome modeling.
+#'
+#' @format A `MultiAssayExperiment` with one experiment per omics layer and
+#'   gestational age stored in `colData`.
+"pregnancy_MAE"
+
+#' Franzosa multiclass MAE training fixture
+#'
+#' Franzosa et al. 2019 training cohort packaged as a
+#' `MultiAssayExperiment` for multiclass examples.
+#'
+#' @format A `MultiAssayExperiment` with `metabolome` and `species`
+#'   experiments and multiclass labels in `colData`.
+"Franzosa_MAE_train"
+
+#' Franzosa multiclass MAE validation fixture
+#'
+#' Franzosa et al. 2019 external validation cohort packaged as a
+#' `MultiAssayExperiment` for multiclass examples.
+#'
+#' @format A `MultiAssayExperiment` aligned to `Franzosa_MAE_train`.
+"Franzosa_MAE_valid"
+
 #' TCGA BRCA gene-level table
 #'
 #' Gene-expression and associated covariate/outcome table for TCGA BRCA examples.
@@ -102,3 +145,20 @@
 #' @format A data frame with one row per patient and covariates plus microRNA features in columns.
 #' @source TCGA-derived example data bundled for package tests/tutorials.
 "mir_all"
+
+#' TCGA BRCA survival MAE training fixture
+#'
+#' TCGA BRCA gene and microRNA example data packaged as a
+#' `MultiAssayExperiment` training split for survival modeling examples.
+#'
+#' @format A `MultiAssayExperiment` with `gene` and `mirna` experiments plus
+#'   `time`, `event`, and survival outcome columns in `colData`.
+"TCGA_survival_MAE_train"
+
+#' TCGA BRCA survival MAE validation fixture
+#'
+#' TCGA BRCA gene and microRNA example data packaged as a
+#' `MultiAssayExperiment` validation split for survival modeling examples.
+#'
+#' @format A `MultiAssayExperiment` aligned to `TCGA_survival_MAE_train`.
+"TCGA_survival_MAE_valid"

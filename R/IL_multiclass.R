@@ -7,36 +7,36 @@
 #'
 #' @inheritParams IL_conbin
 #' @param eps Small positive constant used to stabilize probabilities.
-#' @return A fitted multiclass IntegratedLearner object.
+#' @return A fitted multiclass IntegratedLearner object containing class
+#'   probabilities, predicted classes, fitted single-layer and fusion models,
+#'   and training/validation multiclass performance summaries when available.
 #'
 #' @examples
-#' is.function(IL_multiclass)
-#' if (FALSE) {
-#'   set.seed(1)
-#'   n <- 24
-#'   feature_table <- rbind(
-#'     matrix(rnorm(3 * n), nrow = 3, dimnames = list(paste0("L1_F", 1:3), paste0("S", 1:n))),
-#'     matrix(rnorm(2 * n), nrow = 2, dimnames = list(paste0("L2_F", 1:2), paste0("S", 1:n)))
-#'   )
-#'   y <- rep(c("A", "B", "C"), length.out = n)
-#'   sample_metadata <- data.frame(
-#'     subjectID = paste0("ID", 1:n), Y = y,
-#'     row.names = colnames(feature_table)
-#'   )
-#'   feature_metadata <- data.frame(
-#'     featureID = rownames(feature_table),
-#'     featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
-#'     row.names = rownames(feature_table)
-#'   )
-#'   fit <- IL_multiclass(
-#'     feature_table = feature_table,
-#'     sample_metadata = sample_metadata,
-#'     feature_metadata = feature_metadata,
-#'     folds = 3, run_stacked = FALSE, run_concat = FALSE,
-#'     print_learner = FALSE
-#'   )
-#'   fit$family
-#' }
+#' set.seed(1)
+#' n <- 24
+#' feature_table <- as.data.frame(rbind(
+#'   matrix(rnorm(3 * n), nrow = 3, dimnames = list(paste0("L1_F", 1:3), paste0("S", 1:n))),
+#'   matrix(rnorm(2 * n), nrow = 2, dimnames = list(paste0("L2_F", 1:2), paste0("S", 1:n)))
+#' ))
+#' y <- rep(c("A", "B", "C"), length.out = n)
+#' sample_metadata <- data.frame(
+#'   subjectID = paste0("ID", 1:n), Y = y,
+#'   row.names = colnames(feature_table)
+#' )
+#' feature_metadata <- data.frame(
+#'   featureID = rownames(feature_table),
+#'   featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
+#'   row.names = rownames(feature_table)
+#' )
+#' fit <- IL_multiclass(
+#'   feature_table = feature_table,
+#'   sample_metadata = sample_metadata,
+#'   feature_metadata = feature_metadata,
+#'   folds = 3, base_learner = "multinom", meta_learner = "multinom",
+#'   run_stacked = FALSE, run_concat = FALSE,
+#'   print_learner = FALSE
+#' )
+#' fit$family
 #' @export
 IL_multiclass <- function(
   feature_table, sample_metadata, feature_metadata, feature_table_valid = NULL,
@@ -48,14 +48,14 @@ IL_multiclass <- function(
 ) {
   start.time <- Sys.time()
 
-  .validate_IL_inputs(
+  validate_IL_inputs(
     feature_table = feature_table, sample_metadata = sample_metadata,
     feature_metadata = feature_metadata, feature_table_valid = feature_table_valid,
     sample_metadata_valid = sample_metadata_valid, family_name = "binomial",
     is_survival = FALSE
   )
 
-  filtered <- .filter_features_by_method(
+  filtered <- filter_features_by_method(
     feature_table = feature_table, feature_metadata = feature_metadata,
     feature_table_valid = feature_table_valid, filter_method = filter_method,
     filter_pct = filter_pct, prevalence_pct = prevalence_pct, verbose = verbose
@@ -64,16 +64,16 @@ IL_multiclass <- function(
   feature_metadata <- filtered$feature_metadata
   feature_table_valid <- filtered$feature_table_valid
 
-  validated <- .validate_multiclass_training_inputs(
+  validated <- validate_multiclass_training_inputs(
     sample_metadata = sample_metadata,
     folds = folds
   )
   Y <- validated$Y
   class_levels <- validated$class_levels
 
-  learner_id <- .map_multiclass_learner(base_learner)
-  meta_id <- .map_multiclass_meta_learner(meta_learner)
-  screening <- .resolve_screening_args(
+  learner_id <- map_multiclass_learner(base_learner)
+  meta_id <- map_multiclass_meta_learner(meta_learner)
+  screening <- resolve_screening_args(
     run_screening = run_screening, screen_pct = screen_pct,
     base_screener = base_screener, context = "IL_multiclass"
   )
@@ -91,30 +91,18 @@ IL_multiclass <- function(
     list()
   }
 
-  .set_seed_internal(seed)
   subjectID <- validated$subjectID
   folds <- validated$folds
-
-  subjectCvFoldsIN <- caret::createFolds(seq_along(subjectID), k = folds, returnTrain = TRUE)
-  obsIndexIn <- vector("list", folds)
-  for (k in seq_along(obsIndexIn)) {
-    obsIndexIn[[k]] <- which(!sample_metadata$subjectID %in% subjectID[subjectCvFoldsIN[[k]]])
-  }
-  names(obsIndexIn) <- vapply(seq_len(folds), function(x) paste0("fold", x), character(1))
-
-  fold_id <- integer(nrow(sample_metadata))
-  for (k in seq_along(obsIndexIn)) {
-    fold_id[obsIndexIn[[k]]] <- k
-  }
-  if (any(fold_id == 0L)) {
-    fold_id[fold_id == 0L] <- sample.int(folds, sum(fold_id == 0L), replace = TRUE)
-  }
-
-  feature_metadata$featureType <- as.factor(feature_metadata$featureType)
-  name_layers <- with(droplevels(feature_metadata), list(
-    levels = levels(featureType),
-    nlevels = nlevels(featureType)
-  ))$levels
+  cv_partition <- build_subject_cv_partition(
+    sample_metadata = sample_metadata,
+    folds = folds,
+    seed = seed,
+    subject_ids = subjectID,
+    fill_unassigned = TRUE
+  )
+  obsIndexIn <- cv_partition$obs_index_in
+  fold_id <- cv_partition$fold_id
+  name_layers <- extract_layer_names(feature_metadata)
 
   layer_oof_probs <- vector("list", length(name_layers))
   names(layer_oof_probs) <- name_layers
@@ -150,7 +138,7 @@ IL_multiclass <- function(
     dat_slice_all <- as.data.frame(t(feature_table[lay_features, , drop = FALSE]),
       check.names = FALSE
     )
-    layer_screen <- .fit_multiclass_screener(
+    layer_screen <- fit_multiclass_screener(
       X = dat_slice_all, y = Y, screener_id = screener_id,
       seed = seed + 250 + i, screener_args = screener_args
     )
@@ -158,7 +146,7 @@ IL_multiclass <- function(
     selected_features_by_layer[[i]] <- layer_screen$feature_names
     X_train_layers[[i]] <- dat_slice
 
-    oof_obj <- .fit_oof_multiclass(
+    oof_obj <- fit_oof_multiclass(
       X = dat_slice_all, y = Y, fold_id = fold_id,
       learner_id = learner_id, class_levels = class_levels, seed = seed + i,
       eps = eps, model_args = dots, screener_id = screener_id, screener_args = screener_args
@@ -166,12 +154,12 @@ IL_multiclass <- function(
 
     layer_oof_probs[[i]] <- oof_obj$oof_prob
 
-    full_layer_models[[i]] <- .fit_multiclass_model_impl(
+    full_layer_models[[i]] <- fit_multiclass_model_impl(
       X = dat_slice, y = Y,
       learner_id = learner_id, seed = seed + 1000 + i, model_args = dots
     )
 
-    layer_train_probs[[i]] <- .predict_multiclass_model_impl(
+    layer_train_probs[[i]] <- predict_multiclass_model_impl(
       fit_obj = full_layer_models[[i]],
       newX = dat_slice, class_levels = class_levels, eps = eps
     )
@@ -184,7 +172,7 @@ IL_multiclass <- function(
         drop = FALSE
       ]
       X_test_layers[[i]] <- dat_slice_valid
-      layer_valid_probs[[i]] <- .predict_multiclass_model_impl(
+      layer_valid_probs[[i]] <- predict_multiclass_model_impl(
         fit_obj = full_layer_models[[i]],
         newX = dat_slice_valid, class_levels = class_levels, eps = eps
       )
@@ -200,23 +188,23 @@ IL_multiclass <- function(
       message("Running multiclass stacked model...")
     }
 
-    combo_oof <- .stack_prob_features(layer_oof_probs)
-    combo_full <- .stack_prob_features(layer_train_probs)
+    combo_oof <- stack_prob_features(layer_oof_probs)
+    combo_full <- stack_prob_features(layer_train_probs)
 
-    stacked_oof_prob <- .fit_oof_multiclass(
+    stacked_oof_prob <- fit_oof_multiclass(
       X = combo_oof, y = Y, fold_id = fold_id,
       learner_id = meta_id, class_levels = class_levels, seed = seed + 5000,
       eps = eps, model_args = list()
     )$oof_prob
 
-    stacked_full_model <- .fit_multiclass_model_impl(
+    stacked_full_model <- fit_multiclass_model_impl(
       X = combo_full, y = Y, learner_id = meta_id,
       seed = seed + 7000, model_args = list()
     )
 
     if (!is.null(feature_table_valid)) {
-      combo_valid <- .stack_prob_features(layer_valid_probs)
-      stacked_valid_prob <- .predict_multiclass_model_impl(
+      combo_valid <- stack_prob_features(layer_valid_probs)
+      stacked_valid_prob <- predict_multiclass_model_impl(
         fit_obj = stacked_full_model,
         newX = combo_valid, class_levels = class_levels, eps = eps
       )
@@ -236,7 +224,7 @@ IL_multiclass <- function(
     }
 
     fulldat_all <- as.data.frame(t(feature_table), check.names = FALSE)
-    concat_screen <- .fit_multiclass_screener(
+    concat_screen <- fit_multiclass_screener(
       X = fulldat_all, y = Y, screener_id = screener_id,
       seed = seed + 9000, screener_args = screener_args
     )
@@ -244,13 +232,13 @@ IL_multiclass <- function(
     fulldat <- fulldat_all[, concat_selected_features, drop = FALSE]
     concat_train_matrix <- fulldat
 
-    concat_oof_prob <- .fit_oof_multiclass(
+    concat_oof_prob <- fit_oof_multiclass(
       X = fulldat_all, y = Y, fold_id = fold_id,
       learner_id = learner_id, class_levels = class_levels, seed = seed + 9000,
       eps = eps, model_args = dots, screener_id = screener_id, screener_args = screener_args
     )$oof_prob
 
-    concat_full_model <- .fit_multiclass_model_impl(
+    concat_full_model <- fit_multiclass_model_impl(
       X = fulldat, y = Y, learner_id = learner_id,
       seed = seed + 11000, model_args = dots
     )
@@ -259,7 +247,7 @@ IL_multiclass <- function(
       fulldat_valid_all <- as.data.frame(t(feature_table_valid), check.names = FALSE)
       fulldat_valid <- fulldat_valid_all[, concat_selected_features, drop = FALSE]
       concat_valid_matrix <- fulldat_valid
-      concat_valid_prob <- .predict_multiclass_model_impl(
+      concat_valid_prob <- predict_multiclass_model_impl(
         fit_obj = concat_full_model,
         newX = fulldat_valid, class_levels = class_levels, eps = eps
       )
@@ -274,20 +262,13 @@ IL_multiclass <- function(
     prob_train$concatenated <- concat_oof_prob
   }
 
-  class_train <- as.data.frame(lapply(prob_train, .class_from_prob),
+  class_train <- as.data.frame(lapply(prob_train, class_from_prob),
     stringsAsFactors = FALSE,
     check.names = FALSE
   )
   rownames(class_train) <- rownames(sample_metadata)
 
-  metrics_train <- do.call(rbind, lapply(names(prob_train), function(nm) {
-    met <- .multiclass_metrics(prob_train[[nm]], Y, eps = eps)
-    data.frame(
-      model = nm, accuracy = unname(met["accuracy"]), balanced_accuracy = unname(met["balanced_accuracy"]),
-      auc = unname(met["auc"]), logloss = unname(met["logloss"]), stringsAsFactors = FALSE,
-      check.names = FALSE
-    )
-  }))
+  metrics_train <- build_multiclass_metrics_table(prob_train, Y, eps = eps)
 
   prob_test <- NULL
   class_test <- NULL
@@ -311,7 +292,7 @@ IL_multiclass <- function(
       prob_test$concatenated <- concat_valid_prob
     }
 
-    class_test <- as.data.frame(lapply(prob_test, .class_from_prob),
+    class_test <- as.data.frame(lapply(prob_test, class_from_prob),
       stringsAsFactors = FALSE,
       check.names = FALSE
     )
@@ -319,21 +300,15 @@ IL_multiclass <- function(
 
     valid_metric_idx <- which(!is.na(Y_test))
     if (length(valid_metric_idx) > 0L) {
-      metrics_test <- do.call(rbind, lapply(names(prob_test), function(nm) {
-        met <- .multiclass_metrics(prob_test[[nm]][valid_metric_idx, , drop = FALSE],
-          Y_test[valid_metric_idx],
-          eps = eps
-        )
-        data.frame(
-          model = nm, accuracy = unname(met["accuracy"]), balanced_accuracy = unname(met["balanced_accuracy"]),
-          auc = unname(met["auc"]), logloss = unname(met["logloss"]), stringsAsFactors = FALSE,
-          check.names = FALSE
-        )
-      }))
+      metrics_test <- build_multiclass_metrics_table(
+        lapply(prob_test, function(x) x[valid_metric_idx, , drop = FALSE]),
+        Y_test[valid_metric_idx],
+        eps = eps
+      )
     }
   }
 
-  imp <- .compute_multiclass_univariate_importance(
+  imp <- compute_multiclass_univariate_importance(
     feature_table = feature_table,
     sample_metadata = sample_metadata, feature_metadata = feature_metadata, class_levels = class_levels
   )
@@ -357,10 +332,8 @@ IL_multiclass <- function(
     run_concat = run_concat, run_stacked = run_stacked, family = "multinomial",
     feature.names = rownames(feature_table), feature_importance_signed_by_class = imp$by_class,
     feature_importance_signed_by_layer_by_class = imp$by_layer_class, feature_importance_global = imp$global,
-    folds = folds, fold_id = fold_id, cvControl = list(
-      V = folds, shuffle = FALSE,
-      validRows = obsIndexIn
-    ), test = !is.null(sample_metadata_valid)
+    folds = folds, fold_id = fold_id, cvControl = cv_partition$cv_control,
+    test = !is.null(sample_metadata_valid)
   )
 
   if (!is.null(sample_metadata_valid) && !is.null(feature_table_valid)) {
@@ -378,6 +351,7 @@ IL_multiclass <- function(
     difftime(stop.time, start.time, units = "min"),
     3
   ), units = "mins")
+  class(res) <- unique(c("learner", class(res)))
 
   if (isTRUE(print_learner)) {
     print.learner(res)
@@ -385,9 +359,9 @@ IL_multiclass <- function(
   res
 }
 
-.multiclass_metrics <- function(prob_mat, y_true, eps = 1e-15) {
+multiclass_metrics <- function(prob_mat, y_true, eps = 1e-15) {
   yy <- as.character(y_true)
-  pred <- .class_from_prob(prob_mat)
+  pred <- class_from_prob(prob_mat)
 
   acc <- mean(pred == yy)
 
@@ -404,12 +378,27 @@ IL_multiclass <- function(
   y_idx <- match(yy, cls)
   p_true <- prob_mat[cbind(seq_along(y_idx), y_idx)]
   logloss <- -mean(log(pmax(p_true, eps)))
-  auc <- .multiclass_ovr_auc(prob_mat = prob_mat, y_true = yy)
+  auc <- multiclass_ovr_auc(prob_mat = prob_mat, y_true = yy)
 
   c(accuracy = acc, balanced_accuracy = bal_acc, auc = auc, logloss = logloss)
 }
 
-.multiclass_ovr_auc <- function(prob_mat, y_true) {
+build_multiclass_metrics_table <- function(prob_list, y_true, eps = 1e-15) {
+  dplyr::bind_rows(lapply(names(prob_list), function(nm) {
+    met <- multiclass_metrics(prob_list[[nm]], y_true, eps = eps)
+    data.frame(
+      model = nm,
+      accuracy = unname(met["accuracy"]),
+      balanced_accuracy = unname(met["balanced_accuracy"]),
+      auc = unname(met["auc"]),
+      logloss = unname(met["logloss"]),
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )
+  }))
+}
+
+multiclass_ovr_auc <- function(prob_mat, y_true) {
   cls <- colnames(prob_mat)
   if (is.null(cls) || length(cls) == 0L) {
     return(NA_real_)
@@ -435,11 +424,12 @@ IL_multiclass <- function(
     }
 
     perf_obj <- tryCatch(ROCR::performance(pred_obj, measure = "auc"), error = function(e) NULL)
-    if (is.null(perf_obj) || length(perf_obj@y.values) == 0L) {
+    perf_y_values <- attributes(perf_obj)[["y.values"]]
+    if (is.null(perf_obj) || length(perf_y_values) == 0L) {
       return(NA_real_)
     }
 
-    auc_val <- as.numeric(perf_obj@y.values[[1]])
+    auc_val <- as.numeric(perf_y_values[[1]])
     if (!is.finite(auc_val)) {
       NA_real_
     } else {
@@ -453,19 +443,19 @@ IL_multiclass <- function(
   mean(auc_by_class, na.rm = TRUE)
 }
 
-.class_from_prob <- function(prob_mat) {
+class_from_prob <- function(prob_mat) {
   cls <- colnames(prob_mat)
   cls[max.col(prob_mat, ties.method = "first")]
 }
 
-.default_multiclass_prior <- function(y, class_levels, eps = 1e-15) {
+default_multiclass_prior <- function(y, class_levels, eps = 1e-15) {
   tab <- table(factor(as.character(y), levels = class_levels))
   p <- as.numeric(tab)
   p <- pmax(p, eps)
   p / sum(p)
 }
 
-.stack_prob_features <- function(prob_list) {
+stack_prob_features <- function(prob_list) {
   mats <- lapply(names(prob_list), function(nm) {
     m <- as.matrix(prob_list[[nm]])
     colnames(m) <- paste(nm, colnames(m), sep = "::")
@@ -474,15 +464,15 @@ IL_multiclass <- function(
   as.data.frame(do.call(cbind, mats), check.names = FALSE)
 }
 
-.normalize_multiclass_learner_name <- function(x) {
+normalize_multiclass_learner_name <- function(x) {
   if (length(x) == 0L || is.na(x[1]) || !nzchar(x[1])) {
     return("")
   }
   gsub("[^a-z0-9]", "", tolower(x[1]))
 }
 
-.map_multiclass_learner <- function(base_learner) {
-  key <- .normalize_multiclass_learner_name(base_learner)
+map_multiclass_learner <- function(base_learner) {
+  key <- normalize_multiclass_learner_name(base_learner)
   alias_map <- list(
     glmnet = c(
       "slglmnet", "slglmnet2", "sllasso", "slenet", "multiclassglmnet",
@@ -507,8 +497,8 @@ IL_multiclass <- function(
   "glmnet"
 }
 
-.map_multiclass_meta_learner <- function(meta_learner) {
-  key <- .normalize_multiclass_learner_name(meta_learner)
+map_multiclass_meta_learner <- function(meta_learner) {
+  key <- normalize_multiclass_learner_name(meta_learner)
   if (key %in% c("slnnlsauc", "slnnls")) {
     return("glmnet")
   }
@@ -538,8 +528,8 @@ IL_multiclass <- function(
   "glmnet"
 }
 
-.map_multiclass_screener <- function(base_screener) {
-  key <- .normalize_multiclass_learner_name(base_screener)
+map_multiclass_screener <- function(base_screener) {
+  key <- normalize_multiclass_learner_name(base_screener)
   alias_map <- list(
     all = c("all", "slall", "none", "noscreener", "noscreen", "identity"),
     anova = c("anova", "fstat", "screenanova", "slanova"), glmnet = c(
@@ -562,7 +552,7 @@ IL_multiclass <- function(
   "all"
 }
 
-.extract_multiclass_screen_args <- function(model_args = list()) {
+extract_multiclass_screen_args <- function(model_args = list()) {
   if (length(model_args) == 0L) {
     return(list(model_args = model_args, screener_args = list()))
   }
@@ -581,7 +571,7 @@ IL_multiclass <- function(
   list(model_args = model_args[!is_screen], screener_args = screener_args)
 }
 
-.require_multiclass_pkg <- function(pkg, learner_id) {
+require_multiclass_pkg <- function(pkg, learner_id) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
     stop("Package '", pkg, "' is required for multiclass learner '", learner_id,
       "'. ", "Please install it or choose a different learner.",
@@ -590,7 +580,7 @@ IL_multiclass <- function(
   }
 }
 
-.multiclass_feature_scores_anova <- function(X_df, y_fac) {
+multiclass_feature_scores_anova <- function(X_df, y_fac) {
   X_mat <- as.matrix(X_df)
   p <- ncol(X_mat)
   if (p == 0L) {
@@ -636,7 +626,7 @@ IL_multiclass <- function(
   f_stat
 }
 
-.select_multiclass_screened_features <- function(scores, feature_names, screener_args = list()) {
+select_multiclass_screened_features <- function(scores, feature_names, screener_args = list()) {
   p <- length(feature_names)
   if (p == 0L) {
     return(character(0))
@@ -650,7 +640,7 @@ IL_multiclass <- function(
   }
   score_vec[!is.finite(score_vec)] <- 0
 
-  .scalar_num <- function(x) {
+  scalar_num <- function(x) {
     if (length(x) == 0L) {
       return(NA_real_)
     }
@@ -661,10 +651,10 @@ IL_multiclass <- function(
     as.numeric(parsed[[1]])
   }
 
-  keep_prop <- .scalar_num(screener_args$keep_prop)
-  keep_n <- .scalar_num(screener_args$keep_n)
-  max_features <- .scalar_num(screener_args$max_features)
-  min_features <- .scalar_num(screener_args$min_features)
+  keep_prop <- scalar_num(screener_args$keep_prop)
+  keep_n <- scalar_num(screener_args$keep_n)
+  max_features <- scalar_num(screener_args$max_features)
+  min_features <- scalar_num(screener_args$min_features)
 
   if (!is.finite(min_features) || min_features < 1L) {
     min_features <- 25L
@@ -694,7 +684,7 @@ IL_multiclass <- function(
   feature_names[ord[seq_len(min(keep_n, length(ord)))]]
 }
 
-.fit_multiclass_screener <- function(X, y, screener_id = "all", seed = 1234, screener_args = list()) {
+fit_multiclass_screener <- function(X, y, screener_id = "all", seed = 1234, screener_args = list()) {
   X_df <- as.data.frame(X, check.names = FALSE)
   feature_names <- colnames(X_df)
   if (is.null(feature_names) || length(feature_names) == 0L) {
@@ -720,7 +710,7 @@ IL_multiclass <- function(
     ), feature_names), screener_id = screener_id))
   }
 
-  .scalar_num <- function(x) {
+  scalar_num <- function(x) {
     if (length(x) == 0L) {
       return(NA_real_)
     }
@@ -731,13 +721,13 @@ IL_multiclass <- function(
     as.numeric(parsed[[1]])
   }
 
-  .set_seed_internal(seed)
+  set_seed_internal(seed)
   scores <- tryCatch(
     {
       if (identical(screener_id, "anova")) {
-        .multiclass_feature_scores_anova(X_df, y_fac)
+        multiclass_feature_scores_anova(X_df, y_fac)
       } else if (identical(screener_id, "glmnet")) {
-        .require_multiclass_pkg("glmnet", screener_id)
+        require_multiclass_pkg("glmnet", screener_id)
         nobs <- nrow(X_df)
         inner_folds <- min(5L, max(2L, nobs - 1L))
         fit <- glmnet::cv.glmnet(
@@ -754,8 +744,8 @@ IL_multiclass <- function(
         }
         out
       } else if (identical(screener_id, "randomforest")) {
-        .require_multiclass_pkg("randomForest", screener_id)
-        ntree <- .scalar_num(screener_args$ntree)
+        require_multiclass_pkg("randomForest", screener_id)
+        ntree <- scalar_num(screener_args$ntree)
         if (!is.finite(ntree) || ntree < 10L) {
           ntree <- 300L
         }
@@ -777,8 +767,8 @@ IL_multiclass <- function(
         }
         out
       } else if (identical(screener_id, "ranger")) {
-        .require_multiclass_pkg("ranger", screener_id)
-        num_trees <- .scalar_num(screener_args$num_trees)
+        require_multiclass_pkg("ranger", screener_id)
+        num_trees <- scalar_num(screener_args$num_trees)
         if (!is.finite(num_trees) || num_trees < 10L) {
           num_trees <- 300L
         }
@@ -789,31 +779,31 @@ IL_multiclass <- function(
         )
         fit$variable.importance
       } else if (identical(screener_id, "xgboost")) {
-        .require_multiclass_pkg("xgboost", screener_id)
+        require_multiclass_pkg("xgboost", screener_id)
         X_mat <- as.matrix(X_df)
         safe_names <- make.names(colnames(X_mat), unique = TRUE)
         colnames(X_mat) <- safe_names
         safe_to_orig <- stats::setNames(colnames(X_df), safe_names)
 
-        nrounds <- .scalar_num(screener_args$nrounds)
+        nrounds <- scalar_num(screener_args$nrounds)
         if (!is.finite(nrounds) || nrounds < 1L) {
           nrounds <- 100L
         }
         nrounds <- as.integer(nrounds)
-        eta <- .scalar_num(screener_args$eta)
+        eta <- scalar_num(screener_args$eta)
         if (!is.finite(eta) || eta <= 0) {
           eta <- 0.05
         }
-        max_depth <- .scalar_num(screener_args$max_depth)
+        max_depth <- scalar_num(screener_args$max_depth)
         if (!is.finite(max_depth) || max_depth < 1L) {
           max_depth <- 3L
         }
         max_depth <- as.integer(max_depth)
-        subsample <- .scalar_num(screener_args$subsample)
+        subsample <- scalar_num(screener_args$subsample)
         if (!is.finite(subsample) || subsample <= 0 || subsample > 1) {
           subsample <- 0.8
         }
-        colsample_bytree <- .scalar_num(screener_args$colsample_bytree)
+        colsample_bytree <- scalar_num(screener_args$colsample_bytree)
         if (!is.finite(colsample_bytree) || colsample_bytree <= 0 || colsample_bytree >
           1) {
           colsample_bytree <- 0.8
@@ -852,7 +842,7 @@ IL_multiclass <- function(
   )
 
   names(scores) <- colnames(X_df)
-  selected <- .select_multiclass_screened_features(
+  selected <- select_multiclass_screened_features(
     scores = scores, feature_names = colnames(X_df),
     screener_args = screener_args
   )
@@ -860,7 +850,7 @@ IL_multiclass <- function(
   list(feature_names = selected, scores = scores, screener_id = screener_id)
 }
 
-.reshape_multiclass_probs <- function(pred, n_obs, n_classes, learner_id) {
+reshape_multiclass_probs <- function(pred, n_obs, n_classes, learner_id) {
   if (is.null(dim(pred))) {
     if (length(pred) != n_obs * n_classes) {
       stop("Learner '", learner_id, "' returned ", length(pred), " predictions; expected ",
@@ -884,7 +874,7 @@ IL_multiclass <- function(
   out
 }
 
-.fit_oof_multiclass <- function(
+fit_oof_multiclass <- function(
   X, y, fold_id, learner_id, class_levels, seed = 1234,
   eps = 1e-15, model_args = list(), screener_id = "all", screener_args = list()
 ) {
@@ -893,7 +883,7 @@ IL_multiclass <- function(
   colnames(oof) <- class_levels
   rownames(oof) <- rownames(X)
 
-  prior <- .default_multiclass_prior(y, class_levels = class_levels, eps = eps)
+  prior <- default_multiclass_prior(y, class_levels = class_levels, eps = eps)
 
   for (f in sort(unique(fold_id))) {
     valid_idx <- which(fold_id == f)
@@ -914,12 +904,12 @@ IL_multiclass <- function(
     fit_obj <- tryCatch(
       {
         X_train <- X[train_idx, , drop = FALSE]
-        screen_obj <- .fit_multiclass_screener(
+        screen_obj <- fit_multiclass_screener(
           X = X_train, y = y_train, screener_id = screener_id,
           seed = seed + f, screener_args = screener_args
         )
 
-        .fit_multiclass_model_impl(
+        fit_multiclass_model_impl(
           X = X_train[, screen_obj$feature_names, drop = FALSE],
           y = y_train, learner_id = learner_id, seed = seed + f, model_args = model_args
         )
@@ -938,7 +928,7 @@ IL_multiclass <- function(
       next
     }
 
-    p_valid <- .predict_multiclass_model_impl(fit_obj = fit_obj, newX = X[valid_idx,
+    p_valid <- predict_multiclass_model_impl(fit_obj = fit_obj, newX = X[valid_idx,
       fit_obj$feature_names,
       drop = FALSE
     ], class_levels = class_levels, eps = eps)
@@ -956,11 +946,11 @@ IL_multiclass <- function(
   list(oof_prob = oof)
 }
 
-.fit_multiclass_model_impl <- function(
+fit_multiclass_model_impl <- function(
   X, y, learner_id = "glmnet", seed = 1234,
   model_args = list()
 ) {
-  .set_seed_internal(seed)
+  set_seed_internal(seed)
 
   X_df <- as.data.frame(X)
   y_fac <- if (is.factor(y)) {
@@ -988,11 +978,11 @@ IL_multiclass <- function(
     )
     fit <- do.call(ranger::ranger, utils::modifyList(defaults, model_args))
   } else if (identical(learner_id, "randomforest")) {
-    .require_multiclass_pkg("randomForest", learner_id)
+    require_multiclass_pkg("randomForest", learner_id)
     defaults <- list(x = X_df, y = y_fac, ntree = 500)
     fit <- do.call(randomForest::randomForest, utils::modifyList(defaults, model_args))
   } else if (identical(learner_id, "xgboost")) {
-    .require_multiclass_pkg("xgboost", learner_id)
+    require_multiclass_pkg("xgboost", learner_id)
     y_num <- as.integer(y_fac) - 1L
     dtrain <- xgboost::xgb.DMatrix(data = as.matrix(X_df), label = y_num)
     defaults <- list(data = dtrain, nrounds = 200L, params = list(
@@ -1002,7 +992,7 @@ IL_multiclass <- function(
     ), verbose = 0)
     fit <- do.call(xgboost::xgb.train, utils::modifyList(defaults, model_args))
   } else if (identical(learner_id, "mbart")) {
-    .require_multiclass_pkg("BART", learner_id)
+    require_multiclass_pkg("BART", learner_id)
     y_num <- as.integer(y_fac)
     ntype_pbart <- as.integer(factor("pbart", levels = c("wbart", "pbart", "lbart")))
     defaults <- list(
@@ -1013,7 +1003,7 @@ IL_multiclass <- function(
     )
     fit <- do.call(BART::mbart, utils::modifyList(defaults, model_args))
   } else if (identical(learner_id, "multinom")) {
-    .require_multiclass_pkg("nnet", learner_id)
+    require_multiclass_pkg("nnet", learner_id)
     train_df <- data.frame(.y = y_fac, X_df, check.names = FALSE)
     defaults <- list(formula = .y ~ ., data = train_df, trace = FALSE)
     fit <- do.call(nnet::multinom, utils::modifyList(defaults, model_args))
@@ -1027,7 +1017,7 @@ IL_multiclass <- function(
   )
 }
 
-.align_newdata_to_training_features <- function(X_df, fit_obj) {
+align_newdata_to_training_features <- function(X_df, fit_obj) {
   train_features <- fit_obj$feature_names
   if (is.null(train_features) || length(train_features) == 0L) {
     return(X_df)
@@ -1063,9 +1053,9 @@ IL_multiclass <- function(
   X_df[, train_features, drop = FALSE]
 }
 
-.predict_multiclass_model_impl <- function(fit_obj, newX, class_levels = NULL, eps = 1e-15) {
+predict_multiclass_model_impl <- function(fit_obj, newX, class_levels = NULL, eps = 1e-15) {
   X_df <- as.data.frame(newX)
-  X_df <- .align_newdata_to_training_features(X_df, fit_obj = fit_obj)
+  X_df <- align_newdata_to_training_features(X_df, fit_obj = fit_obj)
 
   if (is.null(class_levels)) {
     class_levels <- fit_obj$class_levels
@@ -1094,7 +1084,7 @@ IL_multiclass <- function(
     } else {
       length(class_levels)
     }
-    prob <- .reshape_multiclass_probs(
+    prob <- reshape_multiclass_probs(
       pred = raw, n_obs = nrow(X_df), n_classes = n_model_classes,
       learner_id = fit_obj$learner_id
     )
@@ -1106,13 +1096,13 @@ IL_multiclass <- function(
     } else {
       length(class_levels)
     }
-    prob <- .reshape_multiclass_probs(
+    prob <- reshape_multiclass_probs(
       pred = raw, n_obs = nrow(X_df), n_classes = n_model_classes,
       learner_id = fit_obj$learner_id
     )
   } else if (identical(fit_obj$learner_id, "multinom")) {
     raw <- stats::predict(fit_obj$model, newdata = X_df, type = "probs")
-    prob <- .reshape_multiclass_probs(
+    prob <- reshape_multiclass_probs(
       pred = raw, n_obs = nrow(X_df), n_classes = length(class_levels),
       learner_id = fit_obj$learner_id
     )
@@ -1138,10 +1128,10 @@ IL_multiclass <- function(
     }
   }
 
-  .sanitize_prob_matrix(prob, class_levels = class_levels, eps = eps)
+  sanitize_prob_matrix(prob, class_levels = class_levels, eps = eps)
 }
 
-.sanitize_prob_matrix <- function(prob_mat, class_levels, eps = 1e-15) {
+sanitize_prob_matrix <- function(prob_mat, class_levels, eps = 1e-15) {
   p <- as.matrix(prob_mat)
 
   if (is.null(dim(p)) || ncol(p) == 0L) {
@@ -1176,7 +1166,7 @@ IL_multiclass <- function(
   out / rs
 }
 
-.compute_multiclass_univariate_importance <- function(
+compute_multiclass_univariate_importance <- function(
   feature_table, sample_metadata,
   feature_metadata, class_levels
 ) {
@@ -1225,7 +1215,7 @@ predict_multiclass.learner <- function(
 ) {
   fit <- object
 
-  .validate_multiclass_prediction_inputs(
+  validate_multiclass_prediction_inputs(
     fit = fit, feature_table_valid = feature_table_valid,
     feature_metadata = feature_metadata
   )
@@ -1238,14 +1228,14 @@ predict_multiclass.learner <- function(
 
   for (lay in names(layer_models)) {
     feat_ids <- layer_models[[lay]]$feature_names
-    if (all(feat_ids %in% rownames(feature_table_valid)) == FALSE) {
+      if (!all(feat_ids %in% rownames(feature_table_valid))) {
       stop("Validation feature_table is missing features required for layer '",
         lay, "'.",
         call. = FALSE
       )
     }
     dat_valid <- as.data.frame(t(feature_table_valid[feat_ids, , drop = FALSE]))
-    pred_layer_probs[[lay]] <- .predict_multiclass_model_impl(
+    pred_layer_probs[[lay]] <- predict_multiclass_model_impl(
       fit_obj = layer_models[[lay]],
       newX = dat_valid, class_levels = class_levels, eps = eps
     )
@@ -1254,8 +1244,8 @@ predict_multiclass.learner <- function(
   out_prob <- pred_layer_probs
 
   if (isTRUE(fit$run_stacked) && !is.null(fit$model_fits$model_stacked)) {
-    combo_valid <- .stack_prob_features(pred_layer_probs)
-    out_prob$stacked <- .predict_multiclass_model_impl(
+    combo_valid <- stack_prob_features(pred_layer_probs)
+    out_prob$stacked <- predict_multiclass_model_impl(
       fit_obj = fit$model_fits$model_stacked,
       newX = combo_valid, class_levels = class_levels, eps = eps
     )
@@ -1264,13 +1254,13 @@ predict_multiclass.learner <- function(
   if (isTRUE(fit$run_concat) && !is.null(fit$model_fits$model_concat)) {
     full_feat <- fit$model_fits$model_concat$feature_names
     fulldat_valid <- as.data.frame(t(feature_table_valid[full_feat, , drop = FALSE]))
-    out_prob$concatenated <- .predict_multiclass_model_impl(
+    out_prob$concatenated <- predict_multiclass_model_impl(
       fit_obj = fit$model_fits$model_concat,
       newX = fulldat_valid, class_levels = class_levels, eps = eps
     )
   }
 
-  out_class <- as.data.frame(lapply(out_prob, .class_from_prob),
+  out_class <- as.data.frame(lapply(out_prob, class_from_prob),
     stringsAsFactors = FALSE,
     check.names = FALSE
   )
@@ -1283,7 +1273,7 @@ predict_multiclass.learner <- function(
     valid_idx <- which(!is.na(Y_test))
     if (length(valid_idx) > 0L) {
       metrics_test <- do.call(rbind, lapply(names(out_prob), function(nm) {
-        met <- .multiclass_metrics(out_prob[[nm]][valid_idx, , drop = FALSE],
+        met <- multiclass_metrics(out_prob[[nm]][valid_idx, , drop = FALSE],
           Y_test[valid_idx],
           eps = eps
         )

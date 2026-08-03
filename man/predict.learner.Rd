@@ -34,8 +34,66 @@ falls back to \code{"Y"}).}
 \item{...}{Additional arguments (currently unused)}
 }
 \value{
-Predicted values
+For gaussian and binomial fits, a list with at least
+\describe{
+\item{\code{yhat.test}}{A data frame or matrix of predictions for each
+single layer and, when requested during training, the \code{stacked} and
+\code{concatenated} fusion predictions.}
+\item{\code{Y_test}}{Observed validation outcomes, returned only when
+\code{sample_metadata_valid} is supplied.}
+\item{\code{AUC.test}, \code{accuracy.test}, \code{balanced_accuracy.test},
+\code{metrics.test}}{Binary-outcome performance summaries, returned only
+when validation outcomes are supplied for binomial fits.}
+\item{\code{R2.test}}{Named vector of validation-set
+R\eqn{^2} values, returned only when validation outcomes are supplied for
+gaussian fits.}
+}
+
+For multiclass fits, returns the output of
+\code{predict_multiclass.learner()}, which contains class
+probabilities, predicted classes, and optional validation metrics.
 }
 \description{
 This function makes predictions using a trained 'IntegratedLearner' model for new samples for which predictions are to be made
+}
+\examples{
+set.seed(1)
+sample_ids <- paste0("S", seq_len(18))
+layer1 <- matrix(rnorm(3 * length(sample_ids)),
+  nrow = 3,
+  dimnames = list(paste0("L1_F", 1:3), sample_ids)
+)
+layer2 <- matrix(rnorm(2 * length(sample_ids)),
+  nrow = 2,
+  dimnames = list(paste0("L2_F", 1:2), sample_ids)
+)
+signal <- colMeans(layer1)
+sample_metadata <- data.frame(
+  Y = as.numeric(signal > stats::median(signal)),
+  subjectID = sample_ids,
+  row.names = sample_ids
+)
+feature_table <- as.data.frame(rbind(layer1, layer2))
+feature_metadata <- data.frame(
+  featureID = rownames(feature_table),
+  featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
+  row.names = rownames(feature_table)
+)
+fit <- IntegratedLearner(
+  PCL_train = list(
+    feature_table = feature_table,
+    sample_metadata = sample_metadata,
+    feature_metadata = feature_metadata
+  ),
+  folds = 2, base_learner = "SL.mean",
+  run_stacked = FALSE, run_concat = FALSE,
+  print_learner = FALSE, family = stats::binomial()
+)
+pred <- predict(
+  fit,
+  feature_table_valid = feature_table,
+  sample_metadata_valid = sample_metadata,
+  feature_metadata = feature_metadata
+)
+names(pred)
 }

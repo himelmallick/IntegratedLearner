@@ -64,7 +64,7 @@ is 5.}
 \item{seed}{Specify the seed for reproducibility. Default is 1234.}
 
 \item{base_learner}{Base learner for late fusion and early fusion. Default:
-\code{SL.BART}.}
+\code{sl_bart}.}
 
 \item{base_screener}{Deprecated for this backend; currently ignored and kept
 only for backward compatibility.}
@@ -90,7 +90,7 @@ prevalence-based filtering before model fitting. Deprecated alias of
 \code{filter_pct} with \code{filter_method = 'prevalence'}.}
 
 \item{meta_learner}{Meta-learner for late fusion (stacked generalization).
-Defaults to \code{SL.nnls.auc}.}
+Defaults to \code{sl_nnls_auc}.}
 
 \item{run_concat}{Should early fusion be run? Default is TRUE.}
 
@@ -109,7 +109,9 @@ IL_survival().}
 \item{...}{Additional arguments (currently unused).}
 }
 \value{
-A fitted multiclass IntegratedLearner object.
+A fitted multiclass IntegratedLearner object containing class
+probabilities, predicted classes, fitted single-layer and fusion models,
+and training/validation multiclass performance summaries when available.
 }
 \description{
 Native multiclass backend used by \code{IntegratedLearner()} when
@@ -118,31 +120,29 @@ This backend preserves the existing API while using multiclass-native
 probability modeling and multiclass stacking.
 }
 \examples{
-is.function(IL_multiclass)
-if (FALSE) {
-  set.seed(1)
-  n <- 24
-  feature_table <- rbind(
-    matrix(rnorm(3 * n), nrow = 3, dimnames = list(paste0("L1_F", 1:3), paste0("S", 1:n))),
-    matrix(rnorm(2 * n), nrow = 2, dimnames = list(paste0("L2_F", 1:2), paste0("S", 1:n)))
-  )
-  y <- rep(c("A", "B", "C"), length.out = n)
-  sample_metadata <- data.frame(
-    subjectID = paste0("ID", 1:n), Y = y,
-    row.names = colnames(feature_table)
-  )
-  feature_metadata <- data.frame(
-    featureID = rownames(feature_table),
-    featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
-    row.names = rownames(feature_table)
-  )
-  fit <- IL_multiclass(
-    feature_table = feature_table,
-    sample_metadata = sample_metadata,
-    feature_metadata = feature_metadata,
-    folds = 3, run_stacked = FALSE, run_concat = FALSE,
-    print_learner = FALSE
-  )
-  fit$family
-}
+set.seed(1)
+n <- 24
+feature_table <- as.data.frame(rbind(
+  matrix(rnorm(3 * n), nrow = 3, dimnames = list(paste0("L1_F", 1:3), paste0("S", 1:n))),
+  matrix(rnorm(2 * n), nrow = 2, dimnames = list(paste0("L2_F", 1:2), paste0("S", 1:n)))
+))
+y <- rep(c("A", "B", "C"), length.out = n)
+sample_metadata <- data.frame(
+  subjectID = paste0("ID", 1:n), Y = y,
+  row.names = colnames(feature_table)
+)
+feature_metadata <- data.frame(
+  featureID = rownames(feature_table),
+  featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
+  row.names = rownames(feature_table)
+)
+fit <- IL_multiclass(
+  feature_table = feature_table,
+  sample_metadata = sample_metadata,
+  feature_metadata = feature_metadata,
+  folds = 3, base_learner = "multinom", meta_learner = "multinom",
+  run_stacked = FALSE, run_concat = FALSE,
+  print_learner = FALSE
+)
+fit$family
 }

@@ -12,7 +12,7 @@ test_that("IntegratedLearner survival mode works with TCGA fixture and validatio
   fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
     PCL_train = tcga$train,
     PCL_valid = tcga$valid, folds = 2, seed = 2026, base_learner = "surv.coxph",
-    weight_method = "COX", verbose = FALSE
+    verbose = FALSE
   ))
 
   expect_identical(fit$family, "survival")
@@ -22,14 +22,18 @@ test_that("IntegratedLearner survival mode works with TCGA fixture and validatio
   expect_true(all(c("single", "early", "late") %in% names(fit$train_out)))
   expect_true(is.list(fit$valid_out))
   expect_true(all(c("single", "early", "late") %in% names(fit$valid_out)))
+  expect_true(all(c("IBS", "COX") %in% names(fit$train_out$late)))
+  expect_true(all(c("IBS", "COX") %in% names(fit$valid_out$late)))
 
   expected_layers <- unique(as.character(tcga$train$feature_metadata$featureType))
   expect_equal(length(expected_layers), 2)
-  expect_true(all(names(fit$train_out$late$weights) %in% expected_layers))
-  expect_equal(sum(fit$train_out$late$weights), 1, tolerance = 1e-06)
-  expect_true(is.finite(fit$valid_out$late$valid_cindex))
-  expect_true(fit$valid_out$late$valid_cindex >= 0 && fit$valid_out$late$valid_cindex <=
-    1)
+  for (late_method in c("IBS", "COX")) {
+    expect_true(all(names(fit$train_out$late[[late_method]]$weights) %in% expected_layers))
+    expect_equal(sum(fit$train_out$late[[late_method]]$weights), 1, tolerance = 1e-06)
+    expect_true(is.finite(fit$valid_out$late[[late_method]]$valid_cindex))
+    expect_true(fit$valid_out$late[[late_method]]$valid_cindex >= 0 &&
+      fit$valid_out$late[[late_method]]$valid_cindex <= 1)
+  }
 
   expect_true(is.list(fit$train_out$single$metrics))
   expect_equal(length(fit$train_out$single$metrics), 2)
@@ -50,15 +54,17 @@ test_that("IntegratedLearner survival IBS branch returns train metrics without v
 
   fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
     PCL_train = tcga$train,
-    folds = 2, seed = 2027, base_learner = "surv.coxph", weight_method = "IBS",
-    verbose = FALSE
+    folds = 2, seed = 2027, base_learner = "surv.coxph", verbose = FALSE
   ))
 
   expect_identical(fit$family, "survival")
   expect_null(fit$valid_out)
-  expect_true(is.finite(fit$train_out$late$train_cindex))
-  expect_true(is.data.frame(fit$train_out$late$train_auc))
-  expect_true(all(c("time", "AUC") %in% colnames(fit$train_out$late$train_auc)))
+  expect_true(all(c("IBS", "COX") %in% names(fit$train_out$late)))
+  for (late_method in c("IBS", "COX")) {
+    expect_true(is.finite(fit$train_out$late[[late_method]]$train_cindex))
+    expect_true(is.data.frame(fit$train_out$late[[late_method]]$train_auc))
+    expect_true(all(c("time", "AUC") %in% colnames(fit$train_out$late[[late_method]]$train_auc)))
+  }
 })
 
 test_that("IntegratedLearner survival fit records fusion-layer screening metadata", {
@@ -74,14 +80,15 @@ test_that("IntegratedLearner survival fit records fusion-layer screening metadat
 
   fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
     PCL_train = tcga$train,
-    folds = 2, seed = 2034, base_learner = "surv.coxph", weight_method = "COX",
+    folds = 2, seed = 2034, base_learner = "surv.coxph",
     drop_poor_performing_layers = TRUE, verbose = FALSE
   ))
 
   expect_true(isTRUE(fit$drop_poor_performing_layers))
   expect_true(is.character(fit$fusion_layers_retained))
   expect_true(length(fit$fusion_layers_retained) >= 1L)
-  expect_true(all(names(fit$train_out$late$weights) %in% fit$fusion_layers_retained))
+  expect_true(all(names(fit$train_out$late$IBS$weights) %in% fit$fusion_layers_retained))
+  expect_true(all(names(fit$train_out$late$COX$weights) %in% fit$fusion_layers_retained))
   expect_identical(names(fit$fusion_layer_scores), names(fit$train_out$single$metrics))
 })
 
@@ -112,7 +119,7 @@ test_that("plot.learner returns survival AUC and KM payloads", {
   fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
     PCL_train = tcga$train,
     PCL_valid = tcga$valid, folds = 2, seed = 2030,
-    base_learner = "surv.coxph", weight_method = "COX", verbose = FALSE
+    base_learner = "surv.coxph", verbose = FALSE
   ))
 
   out <- suppressWarnings(IntegratedLearner:::plot.learner(fit))
@@ -122,4 +129,5 @@ test_that("plot.learner returns survival AUC and KM payloads", {
   expect_true(is.data.frame(out$KM_table_train))
   expect_true(all(c("time", "AUC", "model") %in% colnames(out$AUC_table_train)))
   expect_true(all(c("time", "surv", "strata") %in% colnames(out$KM_table_train)))
+  expect_true(all(c("late_IBS", "late_COX") %in% unique(out$AUC_table_train$model)))
 })

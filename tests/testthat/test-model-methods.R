@@ -55,7 +55,7 @@ test_that("IntegratedLearner gaussian path computes R2 train and validation", {
 })
 
 test_that("fusion-layer screening helper drops poor layers and keeps best fallback", {
-  keep_one <- IntegratedLearner:::.select_fusion_layers(
+  keep_one <- IntegratedLearner:::select_fusion_layers(
     scores = c(layerA = 0.62, layerB = 0.41),
     threshold = 0.5,
     metric_label = "AUC",
@@ -64,7 +64,7 @@ test_that("fusion-layer screening helper drops poor layers and keeps best fallba
   expect_identical(keep_one$retained, "layerA")
   expect_identical(keep_one$removed, "layerB")
 
-  fallback <- IntegratedLearner:::.select_fusion_layers(
+  fallback <- IntegratedLearner:::select_fusion_layers(
     scores = c(layerA = NA_real_, layerB = 0.32),
     threshold = 0.5,
     metric_label = "R2",
@@ -223,6 +223,114 @@ test_that("update.learner handles full and partial layer overlap", {
     ), "Validation set has no layers in common with model fit.",
     fixed = TRUE
   )
+})
+
+test_that("update.learner covers stacked/concat, messages, and validation branches", {
+  skip_if_not_installed("SuperLearner")
+  skip_if_not_installed("nloptr")
+  suppressPackageStartupMessages(library(SuperLearner))
+
+  pcl <- make_toy_pcl(n_samples = 28, n_features = 12, seed = 145, binary = TRUE)
+  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl,
+    folds = 2, seed = 2026, base_learner = "SL.glm", meta_learner = "sl_nnls_auc",
+    run_stacked = TRUE, run_concat = TRUE, print_learner = FALSE, verbose = FALSE,
+    family = stats::binomial()
+  ))
+
+  expect_error(
+    IntegratedLearner:::update.learner(
+      object = structure(list(family = "poisson"), class = "learner"),
+      feature_table_valid = pcl$feature_table,
+      feature_metadata_valid = pcl$feature_metadata
+    ),
+    "fit$family must be 'gaussian' or 'binomial'.",
+    fixed = TRUE
+  )
+
+  expect_error(
+    IntegratedLearner:::update.learner(
+      object = fit,
+      feature_table_valid = NULL,
+      feature_metadata_valid = pcl$feature_metadata
+    ),
+    "feature_table_valid and feature_metadata_valid cannot be NULL.",
+    fixed = TRUE
+  )
+
+  valid_ids <- rownames(pcl$sample_metadata)[1:8]
+  feature_table_valid <- pcl$feature_table[, valid_ids, drop = FALSE]
+  sample_metadata_valid <- pcl$sample_metadata[valid_ids, , drop = FALSE]
+
+  layer_a_features <- rownames(pcl$feature_metadata)[pcl$feature_metadata$featureType == "omicsA"]
+  ft_partial <- feature_table_valid[layer_a_features, , drop = FALSE]
+  fm_partial <- pcl$feature_metadata[layer_a_features, , drop = FALSE]
+
+  expect_message(
+    suppressWarnings(
+      upd_partial <- IntegratedLearner:::update.learner(
+        object = fit,
+        feature_table_valid = ft_partial,
+        sample_metadata_valid = sample_metadata_valid,
+        feature_metadata_valid = fm_partial,
+        verbose = TRUE
+      )
+    ),
+    "Running new stacked model",
+    fixed = TRUE
+  )
+  expect_true(all(c("omicsA", "stacked", "concatenated") %in% colnames(upd_partial$yhat.test)))
+  expect_identical(names(upd_partial$weights), "omicsA")
+
+  fit_msg <- fit
+  fit_msg$fusion_layers_retained <- "omicsB"
+  expect_message(
+    suppressWarnings(IntegratedLearner:::update.learner(
+      object = fit_msg,
+      feature_table_valid = ft_partial,
+      sample_metadata_valid = NULL,
+      feature_metadata_valid = fm_partial,
+      verbose = FALSE
+    )),
+    "No retained fusion layers are available in the validation subset; returning single-layer predictions only.",
+    fixed = TRUE
+  )
+
+  bad_fm_partial <- fm_partial
+  bad_fm_partial$featureID <- rev(bad_fm_partial$featureID)
+  expect_error(
+    IntegratedLearner:::update.learner(
+      object = fit,
+      feature_table_valid = ft_partial,
+      sample_metadata_valid = sample_metadata_valid,
+      feature_metadata_valid = bad_fm_partial,
+      verbose = FALSE
+    ),
+    "Validation set feature names for layer 'omicsA' do not match training data",
+    fixed = TRUE
+  )
+
+  pcl_g <- make_toy_pcl(n_samples = 24, n_features = 10, seed = 245, binary = FALSE)
+  fit_g <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl_g,
+    folds = 2, seed = 2026, base_learner = "SL.glm", run_stacked = TRUE,
+    run_concat = TRUE, print_learner = FALSE, verbose = FALSE, family = stats::gaussian()
+  ))
+  valid_ids_g <- rownames(pcl_g$sample_metadata)[1:6]
+  ft_valid_g <- pcl_g$feature_table[, valid_ids_g, drop = FALSE]
+  sm_valid_g <- pcl_g$sample_metadata[valid_ids_g, , drop = FALSE]
+  layer_g <- rownames(pcl_g$feature_metadata)[pcl_g$feature_metadata$featureType == "omicsA"]
+  upd_g <- suppressWarnings(capture.output(
+    out_g <- IntegratedLearner:::update.learner(
+      object = fit_g,
+      feature_table_valid = ft_valid_g[layer_g, , drop = FALSE],
+      sample_metadata_valid = sm_valid_g,
+      feature_metadata_valid = pcl_g$feature_metadata[layer_g, , drop = FALSE],
+      verbose = FALSE
+    )
+  ))
+  expect_true(is.numeric(out_g$R2.train))
+  expect_true(is.numeric(out_g$R2.test))
 })
 
 test_that("plot.learner returns plotting payloads for binomial and gaussian fits", {

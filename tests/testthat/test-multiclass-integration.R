@@ -130,35 +130,35 @@ test_that("update.learner is blocked with explicit message for multiclass fits",
 })
 
 test_that("multiclass learner aliases map to native backends", {
-  expect_identical(IntegratedLearner:::.map_multiclass_learner("SL.glmnet"), "glmnet")
-  expect_identical(IntegratedLearner:::.map_multiclass_learner("SL.ranger"), "ranger")
+  expect_identical(IntegratedLearner:::map_multiclass_learner("SL.glmnet"), "glmnet")
+  expect_identical(IntegratedLearner:::map_multiclass_learner("SL.ranger"), "ranger")
   expect_identical(
-    IntegratedLearner:::.map_multiclass_learner("SL.randomForest"),
+    IntegratedLearner:::map_multiclass_learner("SL.randomForest"),
     "randomforest"
   )
   expect_identical(
-    IntegratedLearner:::.map_multiclass_learner("randomforest"),
+    IntegratedLearner:::map_multiclass_learner("randomforest"),
     "randomforest"
   )
-  expect_identical(IntegratedLearner:::.map_multiclass_learner("xgboost"), "xgboost")
-  expect_identical(IntegratedLearner:::.map_multiclass_learner("mbart"), "mbart")
-  expect_identical(IntegratedLearner:::.map_multiclass_learner("multinom"), "multinom")
+  expect_identical(IntegratedLearner:::map_multiclass_learner("xgboost"), "xgboost")
+  expect_identical(IntegratedLearner:::map_multiclass_learner("mbart"), "mbart")
+  expect_identical(IntegratedLearner:::map_multiclass_learner("multinom"), "multinom")
 
   expect_identical(
-    IntegratedLearner:::.map_multiclass_meta_learner("SL.nnls.auc"),
+    IntegratedLearner:::map_multiclass_meta_learner("SL.nnls.auc"),
     "glmnet"
   )
   expect_identical(
-    IntegratedLearner:::.map_multiclass_meta_learner("randomforest"),
+    IntegratedLearner:::map_multiclass_meta_learner("randomforest"),
     "randomforest"
   )
   expect_identical(
-    IntegratedLearner:::.map_multiclass_meta_learner("xgboost"),
+    IntegratedLearner:::map_multiclass_meta_learner("xgboost"),
     "xgboost"
   )
-  expect_identical(IntegratedLearner:::.map_multiclass_meta_learner("mbart"), "mbart")
+  expect_identical(IntegratedLearner:::map_multiclass_meta_learner("mbart"), "mbart")
   expect_identical(
-    IntegratedLearner:::.map_multiclass_meta_learner("multinom"),
+    IntegratedLearner:::map_multiclass_meta_learner("multinom"),
     "multinom"
   )
 })
@@ -225,7 +225,7 @@ test_that("mbart prediction aligns columns to training features", {
     "C"
   ))
 
-  fit_obj <- suppressWarnings(IntegratedLearner:::.fit_multiclass_model_impl(
+  fit_obj <- suppressWarnings(IntegratedLearner:::fit_multiclass_model_impl(
     X = X,
     y = y, learner_id = "mbart", seed = 2040, model_args = list(
       ntree = 10L,
@@ -236,7 +236,7 @@ test_that("mbart prediction aligns columns to training features", {
   X_new <- X[, c("f3", "f1", "f2", "f4", "f5", "f6"), drop = FALSE]
   X_new$extra_col <- rnorm(nrow(X_new))
 
-  prob <- suppressWarnings(IntegratedLearner:::.predict_multiclass_model_impl(
+  prob <- suppressWarnings(IntegratedLearner:::predict_multiclass_model_impl(
     fit_obj = fit_obj,
     newX = X_new, class_levels = levels(y)
   ))
@@ -259,7 +259,7 @@ test_that("mbart handles constant columns without predict-time dimension mismatc
     "B", "C"
   ))
 
-  fit_obj <- suppressWarnings(IntegratedLearner:::.fit_multiclass_model_impl(
+  fit_obj <- suppressWarnings(IntegratedLearner:::fit_multiclass_model_impl(
     X = X,
     y = y, learner_id = "mbart", seed = 2041, model_args = list(
       ntree = 10L,
@@ -267,7 +267,7 @@ test_that("mbart handles constant columns without predict-time dimension mismatc
     )
   ))
 
-  prob <- suppressWarnings(IntegratedLearner:::.predict_multiclass_model_impl(
+  prob <- suppressWarnings(IntegratedLearner:::predict_multiclass_model_impl(
     fit_obj = fit_obj,
     newX = X, class_levels = levels(y)
   ))

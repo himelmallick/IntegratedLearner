@@ -1,4 +1,4 @@
-.validate_IL_inputs <- function(
+validate_IL_inputs <- function(
   feature_table, sample_metadata, feature_metadata,
   feature_table_valid = NULL, sample_metadata_valid = NULL, family_name = NULL,
   is_survival = FALSE
@@ -132,11 +132,11 @@
   invisible(TRUE)
 }
 
-.is_null_or_empty <- function(x) {
+is_null_or_empty <- function(x) {
   is.null(x) || length(x) == 0L
 }
 
-.validate_multiclass_training_inputs <- function(sample_metadata, folds) {
+validate_multiclass_training_inputs <- function(sample_metadata, folds) {
   if (!("Y" %in% colnames(sample_metadata))) {
     stop("sample_metadata must contain column 'Y' for multiclass classification.",
       call. = FALSE
@@ -177,7 +177,7 @@
   )
 }
 
-.validate_multiclass_prediction_inputs <- function(fit, feature_table_valid, feature_metadata) {
+validate_multiclass_prediction_inputs <- function(fit, feature_table_valid, feature_metadata) {
   if (is.null(feature_table_valid)) {
     stop("Feature table for validation set cannot be empty", call. = FALSE)
   }
@@ -205,7 +205,7 @@
   invisible(TRUE)
 }
 
-.validate_survival_core_inputs <- function(
+validate_survival_core_inputs <- function(
   feature_table, sample_metadata, feature_metadata,
   base_learner, supported_learners, model_args = list()
 ) {
@@ -222,8 +222,8 @@
     stop("'model_args' must be a named list (or NULL).", call. = FALSE)
   }
 
-  if (.is_null_or_empty(feature_table) || .is_null_or_empty(sample_metadata) ||
-    .is_null_or_empty(feature_metadata)) {
+  if (is_null_or_empty(feature_table) || is_null_or_empty(sample_metadata) ||
+    is_null_or_empty(feature_metadata)) {
     stop("feature_table, sample_metadata, and feature_metadata are required.",
       call. = FALSE
     )

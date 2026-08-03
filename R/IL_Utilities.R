@@ -9,16 +9,17 @@ utils::globalVariables(c(
 ))
 NULL
 
-# Build an evaluation environment for SuperLearner where: - built-in
-# SuperLearner learners/screeners are available (parent namespace) -
-# IntegratedLearner custom wrappers (e.g., SL.BART, SL.nnls.auc) are available
-.make_sl_env <- function() {
+make_sl_env <- function() {
   sl_ns <- asNamespace("SuperLearner")
   il_ns <- asNamespace("IntegratedLearner")
   env <- new.env(parent = sl_ns)
 
   il_objects <- ls(il_ns, all.names = TRUE)
-  keep <- il_objects[grepl("^(SL\\.|screen\\.|method\\.)", il_objects)]
+  keep <- il_objects[
+    startsWith(il_objects, "sl_") |
+      startsWith(il_objects, "screen.") |
+      startsWith(il_objects, "method.")
+  ]
   if ("All" %in% il_objects) {
     keep <- c(keep, "All")
   }
@@ -31,17 +32,43 @@ NULL
   env
 }
 
-# Internal helper used to avoid direct base RNG seed calls in package code
-# paths.  Keeps reproducibility behavior when a numeric seed is supplied.
-.set_seed_internal <- function(seed) {
+normalize_il_learner_id <- function(x, role = c("base_learner", "meta_learner")) {
+  role <- match.arg(role)
+
+  if (!is.character(x) || length(x) != 1L || is.na(x)) {
+    return(x)
+  }
+
+  alias_map <- c(
+    "SL.BART" = "sl_bart",
+    "SL.LASSO" = "sl_lasso",
+    "SL.enet" = "sl_enet",
+    "SL.glmnet2" = "sl_glmnet2",
+    "SL.horseshoe" = "sl_horseshoe",
+    "SL.nnls.auc" = "sl_nnls_auc"
+  )
+
+  normalized <- unname(alias_map[x])
+  if (length(normalized) == 0L || is.na(normalized)) {
+    return(x)
+  }
+
+  warning(
+    "'", role, " = \"", x, "\"' is deprecated; use '", normalized, "' instead.",
+    call. = FALSE
+  )
+  normalized
+}
+
+set_seed_internal <- function(seed) {
   if (length(seed) == 0L || is.null(seed) || !is.finite(seed[1])) {
     return(invisible(NULL))
   }
-  do.call(get("set.seed", envir = baseenv()), list(as.integer(seed[1])))
+  withr::local_seed(as.integer(seed[1]), .local_envir = parent.frame())
   invisible(NULL)
 }
 
-.coerce_binary_truth <- function(y) {
+coerce_binary_truth <- function(y) {
   if (is.factor(y)) {
     y <- as.character(y)
   }
@@ -63,13 +90,13 @@ NULL
   as.integer(yy == lev[2])
 }
 
-.binary_model_metrics <- function(pred_mat, y_true, threshold = 0.5) {
+binary_model_metrics <- function(pred_mat, y_true, threshold = 0.5) {
   pred_mat <- as.matrix(pred_mat)
   if (is.null(colnames(pred_mat))) {
     colnames(pred_mat) <- paste0("model", seq_len(ncol(pred_mat)))
   }
 
-  y_bin <- .coerce_binary_truth(y_true)
+  y_bin <- coerce_binary_truth(y_true)
 
   auc <- stats::setNames(rep(NA_real_, ncol(pred_mat)), colnames(pred_mat))
   accuracy <- auc
@@ -88,8 +115,9 @@ NULL
     )
     if (!is.null(pred_obj)) {
       auc_obj <- tryCatch(ROCR::performance(pred_obj, "auc"), error = function(e) NULL)
-      if (!is.null(auc_obj) && length(auc_obj@y.values) > 0L) {
-        auc_val <- as.numeric(auc_obj@y.values[[1]])
+      auc_vals <- attributes(auc_obj)[["y.values"]]
+      if (!is.null(auc_vals) && length(auc_vals) > 0L) {
+        auc_val <- as.numeric(auc_vals[[1]])
         if (is.finite(auc_val)) {
           auc[i] <- round(auc_val, 3)
         }
@@ -132,13 +160,13 @@ NULL
   )
 }
 
-.binary_auc_values_raw <- function(pred_mat, y_true) {
+binary_auc_values_raw <- function(pred_mat, y_true) {
   pred_mat <- as.matrix(pred_mat)
   if (is.null(colnames(pred_mat))) {
     colnames(pred_mat) <- paste0("model", seq_len(ncol(pred_mat)))
   }
 
-  y_bin <- .coerce_binary_truth(y_true)
+  y_bin <- coerce_binary_truth(y_true)
   auc <- stats::setNames(rep(NA_real_, ncol(pred_mat)), colnames(pred_mat))
 
   for (i in seq_len(ncol(pred_mat))) {
@@ -159,8 +187,9 @@ NULL
     auc_obj <- tryCatch(ROCR::performance(pred_obj, "auc"),
       error = function(e) NULL
     )
-    if (!is.null(auc_obj) && length(auc_obj@y.values) > 0L) {
-      auc_val <- as.numeric(auc_obj@y.values[[1]])
+    auc_vals <- attributes(auc_obj)[["y.values"]]
+    if (!is.null(auc_vals) && length(auc_vals) > 0L) {
+      auc_val <- as.numeric(auc_vals[[1]])
       if (is.finite(auc_val)) {
         auc[i] <- auc_val
       }
@@ -170,13 +199,13 @@ NULL
   auc
 }
 
-.single_layer_fusion_scores <- function(pred_mat, y_true, family_name) {
-  family_name <- .safe_family_name(family_name)
+single_layer_fusion_scores <- function(pred_mat, y_true, family_name) {
+  family_name <- safe_family_name(family_name)
   if (identical(family_name, "binomial")) {
     return(list(
       metric = "AUC",
       threshold = 0.5,
-      scores = .binary_auc_values_raw(pred_mat, y_true)
+      scores = binary_auc_values_raw(pred_mat, y_true)
     ))
   }
 
@@ -200,7 +229,7 @@ NULL
   stop("Unsupported family for fusion-layer screening: ", family_name, call. = FALSE)
 }
 
-.select_fusion_layers <- function(
+select_fusion_layers <- function(
   scores, threshold, metric_label,
   drop_layers = FALSE, context = "early/late fusion"
 ) {
@@ -261,15 +290,263 @@ NULL
   )
 }
 
-.feature_ids_for_layers <- function(feature_metadata, layers) {
+feature_ids_for_layers <- function(feature_metadata, layers) {
   if (length(layers) == 0L) {
     return(character(0))
   }
   rownames(feature_metadata)[as.character(feature_metadata$featureType) %in% layers]
 }
 
+extract_layer_names <- function(feature_metadata) {
+  feature_metadata$featureType <- as.factor(feature_metadata$featureType)
+  levels(droplevels(feature_metadata$featureType))
+}
 
-############################### Print learner summary ####
+slice_feature_table <- function(feature_table, feature_ids, check.names = FALSE) {
+  as.data.frame(
+    t(feature_table[feature_ids, , drop = FALSE]),
+    check.names = check.names
+  )
+}
+
+predict_layer_validation_set <- function(
+  feature_table_valid,
+  feature_metadata,
+  layer_names,
+  sl_fit_layers,
+  train_feature_lookup = NULL,
+  attach_payload = FALSE
+) {
+  x_test_layers <- vector("list", length(layer_names))
+  names(x_test_layers) <- layer_names
+
+  layer_predictions <- vector("list", length(layer_names))
+  names(layer_predictions) <- layer_names
+
+  for (i in seq_along(layer_names)) {
+    layer_i <- layer_names[i]
+    include_list <- feature_metadata[feature_metadata$featureType == layer_i, , drop = FALSE]
+    valid_feat <- include_list$featureID
+
+    if (!is.null(train_feature_lookup)) {
+      train_feat <- train_feature_lookup[[layer_i]]
+      if (!identical(valid_feat, train_feat)) {
+        stop(
+          "Validation set feature names for layer '", layer_i,
+          "' do not match training data (must be identical and in same order).",
+          call. = FALSE
+        )
+      }
+    }
+
+    dat_slice_valid <- slice_feature_table(feature_table_valid, valid_feat)
+    x_test_layers[[i]] <- dat_slice_valid
+
+    layer_pred <- predict_superlearner_matrix(
+      sl_fit_layers[[layer_i]],
+      dat_slice_valid
+    )
+    layer_predictions[[i]] <- layer_pred
+
+    if (isTRUE(attach_payload)) {
+      sl_fit_layers[[layer_i]] <- attach_sl_validation_payload(
+        sl_fit_layers[[layer_i]],
+        validX = dat_slice_valid,
+        validPrediction = layer_pred
+      )
+    }
+  }
+
+  combo_valid <- as.data.frame(do.call(cbind, layer_predictions))
+  names(combo_valid) <- layer_names
+
+  list(
+    X_test_layers = x_test_layers,
+    layer_predictions = layer_predictions,
+    combo_valid = combo_valid,
+    SL_fit_layers = sl_fit_layers
+  )
+}
+
+build_subject_cv_partition <- function(sample_metadata, folds, seed, subject_ids = NULL, fill_unassigned = FALSE) {
+  set_seed_internal(seed)
+  if (is.null(subject_ids)) {
+    subject_ids <- unique(sample_metadata$subjectID)
+  }
+
+  subject_cv_folds_in <- caret::createFolds(seq_along(subject_ids), k = folds, returnTrain = TRUE)
+  obs_index_in <- vector("list", folds)
+  for (k in seq_along(obs_index_in)) {
+    obs_index_in[[k]] <- which(!sample_metadata$subjectID %in% subject_ids[subject_cv_folds_in[[k]]])
+  }
+  names(obs_index_in) <- paste0("fold", seq_len(folds))
+
+  fold_id <- integer(nrow(sample_metadata))
+  for (k in seq_along(obs_index_in)) {
+    fold_id[obs_index_in[[k]]] <- k
+  }
+  if (isTRUE(fill_unassigned) && any(fold_id == 0L)) {
+    fold_id[fold_id == 0L] <- sample.int(folds, sum(fold_id == 0L), replace = TRUE)
+  }
+
+  list(
+    obs_index_in = obs_index_in,
+    fold_id = fold_id,
+    cv_control = list(V = folds, shuffle = FALSE, validRows = obs_index_in)
+  )
+}
+
+assemble_conbin_outputs <- function(
+  combo, combo_valid = NULL, run_concat, run_stacked, refit_stack,
+  X_train_layers, Y_train, X_test_layers = NULL,
+  SL_fit_layers, SL_fit_stacked = NULL, SL_fit_concat = NULL,
+  model_layers, model_stacked = NULL, model_concat = NULL,
+  stacked_prediction_train = NULL
+) {
+  model_fits <- list(model_layers = model_layers)
+  SL_fits <- list(SL_fit_layers = SL_fit_layers)
+  yhat_train <- combo
+
+  if (isTRUE(run_stacked)) {
+    model_fits$model_stacked <- model_stacked
+    SL_fits$SL_fit_stacked <- SL_fit_stacked
+    stacked_train <- if (isTRUE(refit_stack)) {
+      stacked_prediction_train
+    } else {
+      SL_fit_stacked$Z
+    }
+    yhat_train <- cbind(yhat_train, stacked_train)
+    colnames(yhat_train)[ncol(yhat_train)] <- "stacked"
+  }
+
+  if (isTRUE(run_concat)) {
+    model_fits$model_concat <- model_concat
+    SL_fits$SL_fit_concat <- SL_fit_concat
+    yhat_train <- cbind(yhat_train, SL_fit_concat$Z)
+    colnames(yhat_train)[ncol(yhat_train)] <- "concatenated"
+  }
+
+  res <- list(
+    model_fits = model_fits,
+    SL_fits = SL_fits,
+    X_train_layers = X_train_layers,
+    Y_train = Y_train,
+    yhat.train = yhat_train
+  )
+
+  if (!is.null(combo_valid)) {
+    yhat_test <- combo_valid
+    if (isTRUE(run_stacked)) {
+      yhat_test <- cbind(yhat_test, SL_fit_stacked$validPrediction)
+      colnames(yhat_test)[ncol(yhat_test)] <- "stacked"
+    }
+    if (isTRUE(run_concat)) {
+      yhat_test <- cbind(yhat_test, SL_fit_concat$validPrediction)
+      colnames(yhat_test)[ncol(yhat_test)] <- "concatenated"
+    }
+    res$X_test_layers <- X_test_layers
+    res$yhat.test <- yhat_test
+  }
+
+  res
+}
+
+append_fusion_predictions <- function(
+  base_predictions,
+  stacked_prediction = NULL,
+  concat_prediction = NULL
+) {
+  out <- as.data.frame(base_predictions, check.names = FALSE)
+
+  if (!is.null(stacked_prediction)) {
+    out <- cbind(out, stacked_prediction)
+    colnames(out)[ncol(out)] <- "stacked"
+  }
+
+  if (!is.null(concat_prediction)) {
+    out <- cbind(out, concat_prediction)
+    colnames(out)[ncol(out)] <- "concatenated"
+  }
+
+  out
+}
+
+add_family_metrics <- function(result, family_name, y_train = NULL, y_test = NULL) {
+  family_name <- safe_family_name(family_name)
+
+  if (identical(family_name, "binomial")) {
+    train_metrics <- binary_model_metrics(result$yhat.train, y_train)
+    result$AUC.train <- train_metrics$auc
+    result$accuracy.train <- train_metrics$accuracy
+    result$balanced_accuracy.train <- train_metrics$balanced_accuracy
+    result$metrics.train <- train_metrics$metrics
+
+    if (!is.null(y_test) && !is.null(result$yhat.test)) {
+      test_metrics <- binary_model_metrics(result$yhat.test, y_test)
+      result$AUC.test <- test_metrics$auc
+      result$accuracy.test <- test_metrics$accuracy
+      result$balanced_accuracy.test <- test_metrics$balanced_accuracy
+      result$metrics.test <- test_metrics$metrics
+    }
+  }
+
+  if (identical(family_name, "gaussian")) {
+    result$R2.train <- compute_named_r2(result$yhat.train, y_train)
+
+    if (!is.null(y_test) && !is.null(result$yhat.test)) {
+      result$R2.test <- compute_named_r2(result$yhat.test, y_test)
+    }
+  }
+
+  result
+}
+
+add_prediction_metrics <- function(result, family_name, y_test = NULL) {
+  family_name <- safe_family_name(family_name)
+
+  if (is.null(y_test) || is.null(result$yhat.test)) {
+    return(result)
+  }
+
+  if (identical(family_name, "binomial")) {
+    test_metrics <- binary_model_metrics(result$yhat.test, y_test)
+    result$AUC.test <- test_metrics$auc
+    result$accuracy.test <- test_metrics$accuracy
+    result$balanced_accuracy.test <- test_metrics$balanced_accuracy
+    result$metrics.test <- test_metrics$metrics
+  }
+
+  if (identical(family_name, "gaussian")) {
+    result$R2.test <- compute_named_r2(result$yhat.test, y_test)
+  }
+
+  result
+}
+
+predict_superlearner_matrix <- function(sl_fit, newdata) {
+  pred <- SuperLearner::predict.SuperLearner(sl_fit, newdata = newdata)$pred
+  pred <- matrix(pred, ncol = 1)
+  rownames(pred) <- rownames(newdata)
+  pred
+}
+
+attach_sl_validation_payload <- function(sl_fit, validX, validPrediction, validY = NULL) {
+  if (!is.null(validY)) {
+    sl_fit$validY <- validY
+  }
+  sl_fit$validX <- validX
+  sl_fit$validPrediction <- validPrediction
+  colnames(sl_fit$validPrediction) <- "validPrediction"
+  sl_fit
+}
+
+compute_named_r2 <- function(pred_mat, y_true) {
+  pred_mat <- as.data.frame(pred_mat)
+  r2 <- vapply(names(pred_mat), function(nm) {
+    as.vector(stats::cor(pred_mat[[nm]], y_true)^2)
+  }, numeric(1))
+  stats::setNames(r2, names(pred_mat))
+}
 
 #' @export
 #' @export
@@ -292,10 +569,10 @@ print.learner <- function(x, ...) {
   if (res$family == "binomial") {
     cat("========================================\n")
     cat("Model fit for individual layers:", res$base_learner, "\n")
-    if (res$run_stacked == TRUE) {
+    if (isTRUE(res$run_stacked)) {
       cat("Model fit for stacked layer:", res$meta_learner, "\n")
     }
-    if (res$run_concat == TRUE) {
+    if (isTRUE(res$run_concat)) {
       cat("Model fit for concatenated layer:", res$base_learner, "\n")
     }
 
@@ -305,30 +582,29 @@ print.learner <- function(x, ...) {
     print(res$AUC.train[seq_len(num_layers)])
     cat("======================\n")
 
-    if (res$run_stacked == TRUE) {
+    if (isTRUE(res$run_stacked)) {
       cat("Stacked model:")
       cat(as.numeric(res$AUC.train["stacked"]), "\n")
       cat("======================\n")
     }
-    if (res$run_concat == TRUE) {
+    if (isTRUE(res$run_concat)) {
       cat("Concatenated model:")
       cat(as.numeric(res$AUC.train["concatenated"]), "\n")
       cat("======================\n")
     }
     cat("========================================\n")
-    if (res$test == TRUE) {
-      # cat('======================\n')
+    if (isTRUE(res$test)) {
       cat("AUC metric for test data: \n")
       cat("Individual layers: \n")
       print(res$AUC.test[seq_len(num_layers)])
       cat("======================\n")
 
-      if (res$run_stacked == TRUE) {
+      if (isTRUE(res$run_stacked)) {
         cat("Stacked model:")
         cat(as.numeric(res$AUC.test["stacked"]), "\n")
         cat("======================\n")
       }
-      if (res$run_concat == TRUE) {
+      if (isTRUE(res$run_concat)) {
         cat("Concatenated model:")
         cat(as.numeric(res$AUC.test["concatenated"]), "\n")
         cat("======================\n")
@@ -338,10 +614,10 @@ print.learner <- function(x, ...) {
   } else if (res$family == "gaussian") {
     cat("========================================\n")
     cat("Model fit for individual layers:", res$base_learner, "\n")
-    if (res$run_stacked == TRUE) {
+    if (isTRUE(res$run_stacked)) {
       cat("Model fit for stacked layer:", res$meta_learner, "\n")
     }
-    if (res$run_concat == TRUE) {
+    if (isTRUE(res$run_concat)) {
       cat("Model fit for concatenated layer:", res$base_learner, "\n")
     }
 
@@ -350,29 +626,28 @@ print.learner <- function(x, ...) {
     cat("Individual layers: \n")
     print(res$R2.train[seq_len(num_layers)])
     cat("======================\n")
-    if (res$run_stacked == TRUE) {
+    if (isTRUE(res$run_stacked)) {
       cat("Stacked model:")
       cat(as.numeric(res$R2.train["stacked"]), "\n")
       cat("======================\n")
     }
-    if (res$run_concat == TRUE) {
+    if (isTRUE(res$run_concat)) {
       cat("Concatenated model:")
       cat(as.numeric(res$R2.train["concatenated"]), "\n")
       cat("======================\n")
     }
     cat("========================================\n")
-    if (res$test == TRUE) {
-      # cat('======================\n')
+    if (isTRUE(res$test)) {
       cat("R^2 for test data: \n")
       cat("Individual layers: \n")
       print(res$R2.test[seq_len(num_layers)])
       cat("======================\n")
-      if (res$run_stacked == TRUE) {
+      if (isTRUE(res$run_stacked)) {
         cat("Stacked model:")
         cat(as.numeric(res$R2.test["stacked"]), "\n")
         cat("======================\n")
       }
-      if (res$run_concat == TRUE) {
+      if (isTRUE(res$run_concat)) {
         cat("Concatenated model:")
         cat(as.numeric(res$R2.test["concatenated"]), "\n")
         cat("======================\n")
@@ -383,10 +658,10 @@ print.learner <- function(x, ...) {
     cat("========================================\n")
     cat("Multiclass model fit with", length(res$class_levels), "classes\n")
     cat("Base learner:", res$base_learner, "\n")
-    if (res$run_stacked == TRUE) {
+    if (isTRUE(res$run_stacked)) {
       cat("Stacked learner:", res$meta_learner, "\n")
     }
-    if (res$run_concat == TRUE) {
+    if (isTRUE(res$run_concat)) {
       cat("Concatenated learner:", res$base_learner, "\n")
     }
     cat("========================================\n")
@@ -394,7 +669,7 @@ print.learner <- function(x, ...) {
     print(res$metrics.train)
     cat("========================================\n")
 
-    if (res$test == TRUE && !is.null(res$metrics.test)) {
+    if (isTRUE(res$test) && !is.null(res$metrics.test)) {
       cat("Multiclass metrics for test data:\n")
       print(res$metrics.test)
       cat("========================================\n")
@@ -402,7 +677,7 @@ print.learner <- function(x, ...) {
   }
 
   if (
-    res$meta_learner == "SL.nnls.auc" &&
+    res$meta_learner == "sl_nnls_auc" &&
       res$run_stacked &&
       !is.null(res$weights)
   ) {
@@ -410,14 +685,13 @@ print.learner <- function(x, ...) {
     print(round(res$weights, digits = 3))
     cat("========================================\n")
   }
+
+  invisible(x)
 }
 
 expit <- function(x) {
-  return(1 / (1 + exp(-x)))
+  1 / (1 + exp(-x))
 }
-
-##################################################################### Rename
-##################################################################### after
 ##################################################################### adding
 ##################################################################### serialize
 ##################################################################### = TRUE in
@@ -469,12 +743,15 @@ expit <- function(x) {
 #'   \code{fit} (the fitted model object).
 #'
 #' @examples
-#' is.function(SL.BART)
-#' if (FALSE) {
+#' if (
+#'   requireNamespace("bartMachine", quietly = TRUE) &&
+#'   nzchar(Sys.which("java")) &&
+#'   any(grepl("jdk.incubator.vector", getOption("java.parameters", character()), fixed = TRUE))
+#' ) {
 #'   set.seed(1)
 #'   X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
 #'   Y <- rnorm(20)
-#'   fit <- SL.BART(
+#'   fit <- sl_bart(
 #'     Y = Y, X = X, newX = X[1:3, ],
 #'     family = stats::gaussian(),
 #'     obsWeights = rep(1, nrow(X)), id = seq_len(nrow(X)),
@@ -485,19 +762,16 @@ expit <- function(x) {
 #'
 #' @encoding utf-8
 #' @export
-SL.BART <- function(
+sl_bart <- function(
   Y, X, newX, family, obsWeights, id, num_trees = 50, num_burn_in = 250,
   verbose = FALSE, alpha = 0.95, beta = 2, k = 2, q = 0.9, nu = 3, num_iterations_after_burn_in = 1000,
   serialize = TRUE, seed = 5678, ...
 ) {
-  .require_package("bartMachine")
-  .warn_if_java_bart_machine_mismatch()
+  require_package("bartMachine")
+  warn_if_java_bart_machine_mismatch()
 
-  ################ CK changes:
   if (family$family == "binomial") {
-    # Need to convert Y to a factor, otherwise bartMachine does regression.
-    # And importantly, bartMachine expects the first level to be the
-    # positive class, so we have to specify levels.
+    # bartMachine expects the positive class first for classification.
     Y <- factor(Y, levels = c("1", "0"))
   }
   model <- tryCatch(bartMachine::bartMachine(X, Y,
@@ -510,7 +784,7 @@ SL.BART <- function(
       msg,
       fixed = TRUE
     )) {
-      stop("SL.BART failed because Java module 'jdk.incubator.vector' is not enabled ",
+      stop("sl_bart failed because Java module 'jdk.incubator.vector' is not enabled ",
         "in the current R session JVM.\n", "Restart R and set, before loading Java-dependent packages:\n",
         "  options(java.parameters = c(\"-Xmx6G\", \"--add-modules=jdk.incubator.vector\"))\n",
         "If this still fails, ensure a full JDK (not JRE) is being used.",
@@ -519,142 +793,47 @@ SL.BART <- function(
     }
     stop(msg, call. = FALSE)
   })
-  # pred returns predicted responses (on the scale of the outcome) pred <-
-  # bartMachine:::predict.bartMachine(model, newX)
   pred <- stats::predict(model, newX)
 
   fit <- list(object = model)
-  class(fit) <- c("SL.BART")
+  class(fit) <- c("sl_bart")
 
   out <- list(pred = pred, fit = fit)
   return(out)
 }
 
-#' Predict function for SL.BART
+#' Predict function for sl_bart
 #'
-#' @param object Fitted SL.BART model object
+#' @param object Fitted sl_bart model object
 #' @param newdata Data frame for prediction
 #' @param family Family object passed through (unused)
 #' @param X Training design matrix (unused)
 #' @param Y Training outcome (unused)
 #' @param ... Additional arguments (unused)
 #'
-#' @return Prediction from the SL.BART
-#' @export
-predict.SL.BART <- function(object, newdata, family, X = NULL, Y = NULL, ...) {
-  .require_package("bartMachine")
-  pred <- stats::predict(object$object, newdata)
-  return(pred)
-}
-
-
-#' mxBART SuperLearner wrapper
-#'
-#' SuperLearner wrapper for mixed-effects BART using the \pkg{mxBART} package.
-#' This learner is optional and requires \pkg{mxBART} to be installed.
-#'
-#' @param Y Outcome variable.
-#' @param X Covariate data frame (training).
-#' @param newX Covariate data frame (prediction).
-#' @param family A \code{\link[stats]{family}} object; typically \code{gaussian()} or \code{binomial()}.
-#' @param obsWeights Optional observation weights (currently unused).
-#' @param id Optional grouping id for mixed-effects BART.
-#' @param sparse Logical; passed to \code{mxBART::mxbart}.
-#' @param ntree Number of trees.
-#' @param ndpost Number of posterior draws.
-#' @param nskip Number of burn-in draws.
-#' @param keepevery Thinning interval.
-#' @param mxps Prior specification list passed to \code{mxBART::mxbart}.
-#' @param ... Additional arguments passed to \code{mxBART::mxbart}.
-#'
-#' @return A list with elements \code{pred} and \code{fit} (SuperLearner convention).
+#' @return Prediction from the sl_bart model
 #'
 #' @examples
-#' is.function(SL.mxBART)
-#' if (FALSE) {
+#' if (
+#'   requireNamespace("bartMachine", quietly = TRUE) &&
+#'   nzchar(Sys.which("java")) &&
+#'   any(grepl("jdk.incubator.vector", getOption("java.parameters", character()), fixed = TRUE))
+#' ) {
 #'   set.seed(1)
 #'   X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
 #'   Y <- rnorm(20)
-#'   fit <- SL.mxBART(
-#'     Y = Y, X = X, newX = X[1:3, ], family = stats::gaussian(),
-#'     obsWeights = rep(1, nrow(X)), id = rep(1:5, each = 4),
-#'     ntree = 10, ndpost = 20, nskip = 10, keepevery = 2
+#'   fit <- sl_bart(
+#'     Y = Y, X = X, newX = X[1:3, ],
+#'     family = stats::gaussian(),
+#'     obsWeights = rep(1, nrow(X)), id = seq_len(nrow(X)),
+#'     num_trees = 5, num_burn_in = 5, num_iterations_after_burn_in = 20
 #'   )
-#'   fit$pred
+#'   head(predict(fit$fit, newdata = X[1:3, ], family = stats::gaussian()))
 #' }
 #' @export
-SL.mxBART <- function(
-  Y, X, newX, family, obsWeights, id, sparse = FALSE, ntree = 50,
-  ndpost = 1000, nskip = 100, keepevery = 10, mxps = list(list(
-    prior = 1, df = 3,
-    scale = 1
-  )), ...
-) {
-  mxpkg <- try(getNamespace("mxBART"), silent = TRUE)
-  if (inherits(mxpkg, "try-error")) {
-    stop("Package 'mxBART' is required for SL.mxBART.", call. = FALSE)
-  }
-  mxbart_fn <- get("mxbart", envir = mxpkg)
-
-  if (family$family == "gaussian") {
-    type <- "wbart"
-  } else if (family$family == "binomial") {
-    type <- "pbart"
-  } else {
-    stop("Unsupported family for SL.mxBART: ", family$family, call. = FALSE)
-  }
-
-  model <- mxbart_fn(
-    y.train = Y, x.train = X, x.test = newX, id.train = list(id),
-    sparse = sparse, ntree = ntree, type = type, ndpost = ndpost, nskip = nskip,
-    keepevery = keepevery, mxps = mxps, ...
-  )
-
-  pred <- if (family$family == "gaussian") {
-    model$fhat.test.mean
-  } else {
-    model$prob.test.mean
-  }
-
-  fit <- list(object = model)
-  class(fit) <- "SL.mxBART"
-
-  list(pred = pred, fit = fit)
-}
-#' @export
-predict.SL.mxBART <- function(
-  object, newdata, family = family, X = X, Y = Y, obsWeights,
-  id, sparse = FALSE, ntree = 50, ndpost = 1000, nskip = 100, keepevery = 10, mxps = list(list(
-    prior = 1,
-    df = 3, scale = 1
-  )), ...
-) {
-  mxpkg <- try(getNamespace("mxBART"), silent = TRUE)
-  if (inherits(mxpkg, "try-error")) {
-    stop("Package 'mxBART' is required for predict.SL.mxBART.", call. = FALSE)
-  }
-  mxbart_fn <- get("mxbart", envir = mxpkg)
-
-  if (family$family == "gaussian") {
-    type <- "wbart"
-  } else if (family$family == "binomial") {
-    type <- "pbart"
-  } else {
-    stop("Unsupported family for SL.mxBART: ", family$family, call. = FALSE)
-  }
-
-  model <- mxbart_fn(
-    y.train = Y, x.train = X, x.test = newdata, id.train = list(id),
-    sparse = sparse, ntree = ntree, type = type, ndpost = ndpost, nskip = nskip,
-    keepevery = keepevery, mxps = mxps
-  )
-
-  if (family$family == "gaussian") {
-    pred <- model$fhat.test.mean
-  } else {
-    pred <- model$prob.test.mean
-  }
-
+predict.sl_bart <- function(object, newdata, family, X = NULL, Y = NULL, ...) {
+  require_package("bartMachine")
+  pred <- stats::predict(object$object, newdata)
   return(pred)
 }
 
@@ -700,7 +879,7 @@ predict.SL.mxBART <- function(
 #' set.seed(1)
 #' X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
 #' Y <- rnorm(20)
-#' fit <- SL.glmnet2(
+#' fit <- sl_glmnet2(
 #'   Y = Y, X = X, newX = X[1:3, ], family = stats::gaussian(),
 #'   obsWeights = rep(1, nrow(X)), id = seq_len(nrow(X)),
 #'   nfolds = 3, nlambda = 10
@@ -727,20 +906,16 @@ predict.SL.mxBART <- function(
 #'   \code{\link[glmnet]{glmnet}}
 #'
 #' @export
-SL.glmnet2 <- function(
+sl_glmnet2 <- function(
   Y, X, newX, family, obsWeights, id, alpha = 0.5, nfolds = 10,
   nlambda = 100, useMin = TRUE, loss = "deviance", ...
 ) {
-  # .SL.require('glmnet')
-
-  # X must be a matrix, should we use model.matrix or as.matrix TODO: support
-  # sparse matrices.
+  # glmnet expects a numeric matrix design.
   if (!is.matrix(X)) {
     X <- stats::model.matrix(~ -1 + ., X)
     newX <- stats::model.matrix(~ -1 + ., newX)
   }
 
-  # Use CV to find optimal lambda.
   fitCV <- glmnet::cv.glmnet(
     x = X, y = Y, weights = obsWeights, lambda = NULL,
     type.measure = loss, nfolds = nfolds, family = family$family, alpha = alpha,
@@ -801,7 +976,7 @@ SL.glmnet2 <- function(
 #' X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
 #' linpred <- 0.5 * X$x1 - 0.25 * X$x2
 #' Y <- stats::rbinom(nrow(X), 1, stats::plogis(linpred))
-#' fit <- SL.LASSO(
+#' fit <- sl_lasso(
 #'   Y = Y, X = X, newX = X[1:3, ], family = stats::binomial(),
 #'   obsWeights = rep(1, nrow(X)), id = seq_len(nrow(X)),
 #'   nfolds = 3, nlambda = 10
@@ -828,20 +1003,16 @@ SL.glmnet2 <- function(
 #'   \code{\link[glmnet]{glmnet}}
 #'
 #' @export
-SL.LASSO <- function(
+sl_lasso <- function(
   Y, X, newX, family, obsWeights, id, alpha = 1, nfolds = 10,
   nlambda = 100, useMin = TRUE, loss = "deviance", ...
 ) {
-  # .SL.require('glmnet')
-
-  # X must be a matrix, should we use model.matrix or as.matrix TODO: support
-  # sparse matrices.
+  # glmnet expects a numeric matrix design.
   if (!is.matrix(X)) {
     X <- stats::model.matrix(~ -1 + ., X)
     newX <- stats::model.matrix(~ -1 + ., newX)
   }
 
-  # Use CV to find optimal lambda.
   fitCV <- glmnet::cv.glmnet(
     x = X, y = Y, weights = obsWeights, lambda = NULL,
     type.measure = loss, nfolds = nfolds, family = family$family, alpha = alpha,
@@ -905,7 +1076,7 @@ SL.LASSO <- function(
 #' set.seed(1)
 #' X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
 #' Y <- rnorm(20)
-#' fit <- SL.enet(
+#' fit <- sl_enet(
 #'   Y = Y, X = X, newX = X[1:3, ], family = stats::gaussian(),
 #'   obsWeights = rep(1, nrow(X)), id = seq_len(nrow(X)),
 #'   alpha = c(0, 0.5, 1), nfolds = 3, nlambda = 10
@@ -932,34 +1103,28 @@ SL.LASSO <- function(
 #'   \code{\link[glmnet]{glmnet}}
 #'
 #' @export
-SL.enet <- function(
+sl_enet <- function(
   Y, X, newX, family, obsWeights, id, alpha = seq(0, 1, 0.1), nfolds = 10,
   nlambda = 100, useMin = TRUE, loss = "deviance", ...
 ) {
-  # .SL.require('glmnet')
-
-  # X must be a matrix, should we use model.matrix or as.matrix TODO: support
-  # sparse matrices.
+  # glmnet expects a numeric matrix design.
   if (!is.matrix(X)) {
     X <- stats::model.matrix(~ -1 + ., X)
     newX <- stats::model.matrix(~ -1 + ., newX)
   }
 
-  # Use CV to find optimal alpha.
   fit0 <- glmnetUtils::cva.glmnet(
     x = X, y = Y, weights = obsWeights, lambda = NULL,
     type.measure = loss, nfolds = nfolds, family = family$family, alpha = alpha,
     nlambda = nlambda, intercept = FALSE, ...
   )
 
-  # Extract best alpha
   enet_performance <- data.frame(alpha = fit0$alpha)
   models <- fit0$modlist
   enet_performance$cvm <- vapply(models, get_cvm, numeric(1))
   minix <- which.min(enet_performance$cvm)
   best_alpha <- fit0$alpha[minix]
 
-  # Use CV to find optimal lambda.
   fitCV <- glmnet::cv.glmnet(
     x = X, y = Y, weights = obsWeights, lambda = NULL,
     type.measure = loss, nfolds = nfolds, family = family$family, alpha = best_alpha,
@@ -1002,15 +1167,18 @@ get_cvm <- function(model) {
 #' @param thinning Desired level of thinning.
 #' @param ... other parameters passed to bayesreg function
 #'
-#' @return SL object
+#' @return A list with elements \code{pred} (predictions for \code{newX}) and
+#'   \code{fit} (the fitted Bayesian regression object).
 #'
 #' @examples
-#' is.function(SL.horseshoe)
-#' if (FALSE) {
+#' if (
+#'   requireNamespace("bayesreg", quietly = TRUE) &&
+#'   identical(Sys.getenv("INTEGRATEDLEARNER_RUN_BAYESREG_EXAMPLES"), "true")
+#' ) {
 #'   set.seed(1)
 #'   X <- data.frame(x1 = rnorm(20), x2 = rnorm(20))
 #'   Y <- rnorm(20)
-#'   fit <- SL.horseshoe(
+#'   fit <- sl_horseshoe(
 #'     Y = Y, X = X, newX = X[1:3, ],
 #'     family = stats::gaussian()
 #'   )
@@ -1018,21 +1186,18 @@ get_cvm <- function(model) {
 #' }
 #' @export
 #' @export
-SL.horseshoe <- function(
+sl_horseshoe <- function(
   Y, X, newX, family, prior = "horseshoe", N = 20000L, burnin = 1000L,
   thinning = 1L, ...
 ) {
   if (!requireNamespace("bayesreg", quietly = TRUE)) {
-    stop("Package 'bayesreg' is required for SL.horseshoe.", call. = FALSE)
+    stop("Package 'bayesreg' is required for sl_horseshoe.", call. = FALSE)
   }
   if (family$family == "binomial") {
-    # Need to convert Y to a factor, otherwise bartMachine does regression.
-    # And importantly, bayesreg expects the second level to be the positive
-    # class, so we have to specify levels.
+    # bayesreg expects the positive class as the second factor level.
     Y <- factor(Y, levels = c("0", "1"))
   }
 
-  # .SL.require('bayesreg')
   df <- data.frame(X, Y)
   model.HS <- bayesreg::bayesreg(Y ~ ., df,
     model = family$family, prior = prior,
@@ -1046,17 +1211,14 @@ SL.horseshoe <- function(
   pred <- apply(ynew.samp, 1, stats::median)
 
   fit <- list(object = model.HS)
-  class(fit) <- c("SL.horseshoe")
+  class(fit) <- c("sl_horseshoe")
 
   out <- list(pred = pred, fit = fit)
   return(out)
-
-  # }
 }
 
 #' @export
-predict.SL.horseshoe <- function(object, newdata, family, X = NULL, Y = NULL, ...) {
-  # .SL.require('bayesreg')
+predict.sl_horseshoe <- function(object, newdata, family, X = NULL, Y = NULL, ...) {
   model.HS <- object$object
   newdata <- as.matrix(newdata)
   ynew.samp <- rep(1, nrow(newdata)) %*% model.HS$beta0 + newdata %*% model.HS$beta
@@ -1084,13 +1246,13 @@ predict.SL.horseshoe <- function(object, newdata, family, X = NULL, Y = NULL, ..
 #' @examples
 #' X <- data.frame(m1 = c(0.1, 0.4, 0.8, 0.9), m2 = c(0.2, 0.3, 0.7, 0.95))
 #' Y <- c(0, 0, 1, 1)
-#' auc.obj(b = c(0.5, 0.5), X = X, Y = Y)
+#' auc_obj(b = c(0.5, 0.5), X = X, Y = Y)
 #' @export
-auc.obj <- function(b, X, Y) {
+auc_obj <- function(b, X, Y) {
   # Doesn't use observation weights in this part right now
   wavg <- as.matrix(X) %*% b
   pred <- ROCR::prediction(wavg, Y)
-  AUC <- ROCR::performance(pred, "auc")@y.values[[1]]
+  AUC <- attributes(ROCR::performance(pred, "auc"))[["y.values"]][[1]]
   return((1 - AUC))
 }
 
@@ -1116,9 +1278,7 @@ NNLS <- function(x, y, wt) {
   d <- t(t(wY) %*% wX)
   A <- rbind(rep(1, ncol(wX)), diag(ncol(wX)))
   b <- c(1, rep(0, ncol(wX)))
-  # This will give an error if cov(Z) is singular, meaning at least two
-  # columns are linearly dependent.  TODO: This will also error if any
-  # learner failed. Fix this.
+  # solve.QP requires a full-rank Gram matrix.
   fit <- quadprog::solve.QP(Dmat = D, dvec = d, Amat = t(A), bvec = b, meq = 1)
   return(fit)
 }
@@ -1139,13 +1299,13 @@ NNLS <- function(x, y, wt) {
 #' set.seed(1)
 #' X <- data.frame(m1 = runif(20), m2 = runif(20))
 #' Y <- rnorm(20)
-#' fit <- SL.nnls.auc(
+#' fit <- sl_nnls_auc(
 #'   Y = Y, X = X, newX = X[1:4, ],
 #'   family = stats::gaussian(), obsWeights = rep(1, nrow(X))
 #' )
 #' head(fit$pred)
 #' @export
-SL.nnls.auc <- function(Y, X, newX, family, obsWeights, bounds = c(0, Inf), ...) {
+sl_nnls_auc <- function(Y, X, newX, family, obsWeights, bounds = c(0, Inf), ...) {
   if (family$family == "gaussian") {
     fit.nnls <- NNLS(x = as.matrix(X), y = Y, wt = obsWeights)
     initCoef <- fit.nnls$solution
@@ -1158,13 +1318,13 @@ SL.nnls.auc <- function(Y, X, newX, family, obsWeights, bounds = c(0, Inf), ...)
     }
     pred <- crossprod(t(as.matrix(newX)), coef)
     fit <- list(object = fit.nnls)
-    class(fit) <- "SL.nnls.auc"
+    class(fit) <- "sl_nnls_auc"
     out <- list(pred = pred, fit = fit)
   } else if (family$family == "binomial") {
     nmethods <- ncol(X)
     coef_init <- stats::runif(nmethods)
     coef_init <- coef_init / sum(coef_init)
-    fit.rankloss <- nloptr::nloptr(x0 = coef_init, eval_f = auc.obj, lb = rep(
+    fit.rankloss <- nloptr::nloptr(x0 = coef_init, eval_f = auc_obj, lb = rep(
       bounds[1],
       nmethods
     ), ub = rep(bounds[2], nmethods), opts = list(
@@ -1190,21 +1350,31 @@ SL.nnls.auc <- function(Y, X, newX, family, obsWeights, bounds = c(0, Inf), ...)
 
     pred <- crossprod(t(as.matrix(newX)), coef)
     fit <- list(object = fit.rankloss)
-    class(fit) <- "SL.nnls.auc"
+    class(fit) <- "sl_nnls_auc"
     out <- list(pred = pred, fit = fit)
   }
   return(out)
 }
 
-#' Predict function for SL.nnls.auc
+#' Predict function for sl_nnls_auc
 #'
-#' @param object Fitted SL.nnls.auc model
+#' @param object Fitted sl_nnls_auc model
 #' @param newdata Validation layer-level predictions
 #' @param ... Additional arguments (unused)
 #'
 #' @return Prediction from the meta-learner
+#'
+#' @examples
+#' set.seed(1)
+#' X <- data.frame(m1 = runif(20), m2 = runif(20))
+#' Y <- rnorm(20)
+#' fit <- sl_nnls_auc(
+#'   Y = Y, X = X, newX = X[1:4, ],
+#'   family = stats::gaussian(), obsWeights = rep(1, nrow(X))
+#' )
+#' head(predict(fit$fit, newdata = X[1:4, ]))
 #' @export
-predict.SL.nnls.auc <- function(object, newdata, ...) {
+predict.sl_nnls_auc <- function(object, newdata, ...) {
   initCoef <- object$object$solution
   initCoef[is.na(initCoef)] <- 0
   if (sum(initCoef) > 0) {
@@ -1217,332 +1387,8 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
   return(pred)
 }
 
-
-# predict.learner <- function(fit, feature_table_valid = NULL, # Feature table
-# from validation set. Must have the exact same structure as feature_table. If
-# missing, uses feature_table for feature_table_valid.  sample_metadata_valid =
-# NULL, # Optional: Sample-specific metadata table from independent validation
-# set. Must have the exact same structure as sample_metadata.
-# feature_metadata=NULL){
-# if(all(fit$feature.names==rownames(feature_metadata))==FALSE){ stop('Both
-# training feature_table and feature_metadata should have the same rownames.')
-# } if(is.null(feature_table_valid)){ stop('Feature table for validation set
-# cannot be empty') } # if(is.null(sample_metadata_valid)){ # stop('Sample
-# metadata for validation set cannot be empty') # } if
-# (!is.null(feature_table_valid)){
-# if(all(fit$feature.names==rownames(feature_table_valid))==FALSE) stop('Both
-# feature_table and feature_table_valid should have the same rownames.') } if
-# (!is.null(sample_metadata_valid)){
-# if(all(colnames(feature_table_valid)==rownames(sample_metadata_valid))==FALSE)
-# stop('Row names of sample_metadata_valid must match the column names of
-# feature_table_valid') } if (!'featureID' %in% colnames(feature_metadata)){
-# stop('feature_metadata must have a column named 'featureID' describing
-# per-feature unique identifiers.') } if (!'featureType' %in%
-# colnames(feature_metadata)){ stop('feature_metadata must have a column named
-# 'featureType' describing the corresponding source layers.') } if
-# (!is.null(sample_metadata_valid)){ if (!'subjectID' %in%
-# colnames(sample_metadata_valid)){ stop('sample_metadata_valid must have a
-# column named 'subjectID' describing per-subject unique identifiers.') } if
-# (!'Y' %in% colnames(sample_metadata_valid)){ stop('sample_metadata_valid must
-# have a column named 'Y' describing the outcome of interest.') } }
-# #############################################################################################
-# # Extract validation Y right away (will not be used anywhere during the
-# validation process) #
-# #############################################################################################
-# if (!is.null(sample_metadata_valid)){validY<-sample_metadata_valid['Y']}
-# ##################################################################### #
-# Stacked generalization input data preparation for validation data #
-# #####################################################################
-# feature_metadata$featureType<-as.factor(feature_metadata$featureType)
-# name_layers<-with(droplevels(feature_metadata), list(levels =
-# levels(featureType)), nlevels = nlevels(featureType))$levels X_test_layers <-
-# vector('list', length(name_layers)) names(X_test_layers) <- name_layers
-# layer_wise_prediction_valid<-vector('list', length(name_layers))
-# names(layer_wise_prediction_valid)<-name_layers for(i in
-# seq_along(name_layers)){
-# ############################################################ # Prepare
-# single-omic validation data and save predictions #
-# ############################################################
-# include_list<-feature_metadata %>% filter(featureType == name_layers[i])
-# t_dat_slice_valid<-feature_table_valid[rownames(feature_table_valid) %in%
-# include_list$featureID, ]
-# dat_slice_valid<-as.data.frame(t(t_dat_slice_valid)) X_test_layers[[i]] <-
-# dat_slice_valid
-# layer_wise_prediction_valid[[i]]<-predict.SuperLearner(fit$SL_fits$SL_fit_layers[[i]],
-# newdata = dat_slice_valid)$pred
-# rownames(layer_wise_prediction_valid[[i]])<-rownames(dat_slice_valid)
-# rm(dat_slice_valid); rm(include_list) } combo_valid <-
-# as.data.frame(do.call(cbind, layer_wise_prediction_valid))
-# names(combo_valid)<-name_layers if(fit$run_stacked==TRUE){
-# stacked_prediction_valid<-predict.SuperLearner(fit$SL_fits$SL_fit_stacked,
-# newdata = combo_valid)$pred
-# rownames(stacked_prediction_valid)<-rownames(combo_valid) }
-# if(fit$run_concat==TRUE){
-# fulldat_valid<-as.data.frame(t(feature_table_valid))
-# concat_prediction_valid<-predict.SuperLearner(fit$SL_fits$SL_fit_concat,
-# newdata = fulldat_valid)$pred
-# rownames(concat_prediction_valid)<-rownames(fulldat_valid) } res=list() if
-# (!is.null(sample_metadata_valid)){ Y_test=validY$Y res$Y_test =Y_test }
-# if(fit$run_concat & fit$run_stacked){ yhat.test <- cbind(combo_valid,
-# stacked_prediction_valid , concat_prediction_valid) colnames(yhat.test) <-
-# c(colnames(combo_valid),'stacked','concatenated') }else if(fit$run_concat &
-# !fit$run_stacked){ yhat.test <- cbind(combo_valid, concat_prediction_valid)
-# colnames(yhat.test) <- c(colnames(combo_valid),'concatenated') }else
-# if(!fit$run_concat & fit$run_stacked){ yhat.test <- cbind(combo_valid,
-# stacked_prediction_valid ) colnames(yhat.test) <-
-# c(colnames(combo_valid),'stacked') }else{ yhat.test <- combo_valid }
-# res$yhat.test <- yhat.test if (!is.null(sample_metadata_valid)){
-# if(fit$family=='binomial'){ # Calculate AUC for each layer, stacked and
-# concatenated pred=apply(res$yhat.test, 2, ROCR::prediction,
-# labels=res$Y_test) AUC=vector(length = length(pred)) names(AUC)=names(pred)
-# for(i in seq_along(pred)){ AUC[i] = round(ROCR::performance(pred[[i]],
-# 'auc')@y.values[[1]], 3) } res$AUC.test <- AUC } if(fit$family=='gaussian'){
-# # Calculate R^2 for each layer, stacked and concatenated R2=vector(length =
-# ncol(res$yhat.test)) names(R2)=names(res$yhat.test) for(i in seq_along(R2)){
-# R2[i] = as.vector(cor(res$yhat.test[ ,i], res$Y_test)^2) } res$R2.test <- R2
-# } } return(res) } update.learner <- function(fit, feature_table_valid, #
-# Feature table from validation set. Must have the exact same structure as
-# feature_table. If missing, uses feature_table for feature_table_valid.
-# sample_metadata_valid=NULL, # OPTIONAL (can provide feature_table_valid and
-# not this): Sample-specific metadata table from independent validation set.
-# Must have the exact same structure as sample_metadata.
-# feature_metadata_valid, seed = 1234, # Specify the arbitrary seed value for
-# reproducibility. Default is 1234.  verbose=FALSE ){ # Check that feature
-# table and feature meta data valid is not empty here
-# if(is.null(feature_table_valid | is.null(feature_metadata_valid))){
-# stop('feature table/ feature metadata cannot be NULL for validation set in
-# update learner') } if(fit$family=='gaussian'){ family=gaussian() }else
-# if(fit$family=='binomial'){ family=binomial() } if
-# (!is.null(sample_metadata_valid)){ validY<-sample_metadata_valid['Y'] }
-# feature_metadata_valid$featureType<-as.factor(feature_metadata_valid$featureType)
-# name_layers_valid<-with(droplevels(feature_metadata_valid), list(levels =
-# levels(featureType)), nlevels = nlevels(featureType))$levels name_layers <-
-# names(fit$model_fits$model_layers) # If layers in validation match layers in
-# train # Just run predict function and return its object
-# if(length(intersect(name_layers_valid,name_layers))==length(name_layers)){ #
-# Check if feature names are same for the train and test
-# return(predict.learner(fit, feature_table_valid = feature_table_valid,
-# sample_metadata_valid = sample_metadata_valid, feature_metadata =
-# feature_metadata_valid)) }else
-# if(length(intersect(name_layers_valid,name_layers))==0){ stop('Validation set
-# has no layers in common with model fit') }else{ name_layers_common <-
-# intersect(name_layers_valid,name_layers) # Extract only common name layers
-# part of the fit object fit$model_fits$model_layers <-
-# fit$model_fits$model_layers[name_layers_common] fit$SL_fits$SL_fit_layers <-
-# fit$SL_fits$SL_fit_layers[name_layers_common] fit$X_train_layers <-
-# fit$X_train_layers[name_layers_common] # Use common layers to get layer wise
-# predictions for validation set X_test_layers <- vector('list',
-# length(name_layers_common)) names(X_test_layers) <- name_layers_common if
-# (!is.null(feature_table_valid)){ layer_wise_prediction_valid<-vector('list',
-# length(name_layers_common))
-# names(layer_wise_prediction_valid)<-name_layers_common } for(i in
-# seq_along(name_layers_common)){ include_list<-feature_metadata_valid %>%
-# filter(featureType == name_layers_common[i]) # check if feature names in
-# common layers match for train and test set
-# if(!all(include_list$featureID==colnames(fit$X_train_layers[name_layers_common[i]]))){
-# stop(paste0('Validation set feature names for layer ',
-# name_layers_common[i],' do not match with training data' )) } if
-# (!is.null(feature_table_valid)){
-# t_dat_slice_valid<-feature_table_valid[rownames(feature_table_valid) %in%
-# include_list$featureID, ]
-# dat_slice_valid<-as.data.frame(t(t_dat_slice_valid)) X_test_layers[[i]] <-
-# dat_slice_valid
-# layer_wise_prediction_valid[[i]]<-predict.SuperLearner(fit$SL_fits$SL_fit_layers[[i]],
-# newdata = dat_slice_valid)$pred
-# rownames(layer_wise_prediction_valid[[i]])<-rownames(dat_slice_valid)
-# fit$SL_fits$SL_fit_layers[[i]]$validX<-dat_slice_valid
-# fit$SL_fits$SL_fit_layers[[i]]$validPrediction<-layer_wise_prediction_valid[[i]]
-# colnames(fit$SL_fits$SL_fit_layers[[i]]$validPrediction)<-'validPrediction'
-# rm(dat_slice_valid); rm(include_list) } } combo <- fit$yhat.train[
-# ,name_layers_common] if (!is.null(feature_table_valid)){ combo_valid <-
-# as.data.frame(do.call(cbind, layer_wise_prediction_valid))
-# names(combo_valid)<-name_layers_valid } if(fit$run_stacked){ cat('Running new
-# stacked model...\n') #} ################################### # Run
-# user-specified meta learner # ###################################
-# SL_fit_stacked<-SuperLearner::SuperLearner(Y = fit$Y_train, X = combo,
-# cvControl = fit$cvControl, verbose = verbose, SL.library = fit$meta_learner,
-# family=family, id=fit$id) # Extract the fit object from superlearner
-# model_stacked <- SL_fit_stacked$fitLibrary[[1]]$object
-# ################################################### # Append the
-# corresponding y and X to the results #
-# ###################################################
-# SL_fit_stacked$Y<-fit$Y_train SL_fit_stacked$X<-combo if
-# (!is.null(sample_metadata_valid)) SL_fit_stacked$validY<-validY
-# ################################################################# # Prepate
-# stacked input data for validation and save prediction #
-# ################################################################# if
-# (!is.null(feature_table_valid)){
-# stacked_prediction_valid<-predict.SuperLearner(SL_fit_stacked, newdata =
-# combo_valid)$pred rownames(stacked_prediction_valid)<-rownames(combo_valid)
-# SL_fit_stacked$validX<-combo_valid
-# SL_fit_stacked$validPrediction<-stacked_prediction_valid
-# colnames(SL_fit_stacked$validPrediction)<-'validPrediction' }
-# fit$model_fits$model_stacked <- model_stacked fit$SL_fits$SL_fit_stacked <-
-# SL_fit_stacked fit$yhat.train$stacked <- SL_fit_stacked$Z }
-# if(fit$run_concat){ #if (verbose) { cat('Running new concatenated
-# model...\n') #} ################################### # Prepate concatenated
-# input data # ################################### feature_table <-
-# Reduce(cbind.data.frame,fit$X_train_layers) feature_table <- feature_table[
-# ,feature_metadata_valid$featureID] fulldat<-as.data.frame(feature_table)
-# ################################### # Run user-specified base learner #
-# ###################################
-# SL_fit_concat<-SuperLearner::SuperLearner(Y = fit$Y_train, X = fulldat,
-# cvControl = fit$cvControl, verbose = verbose, SL.library = fit$base_learner,
-# family=family, id=fit$id) # Extract the fit object from superlearner
-# model_concat <- SL_fit_concat$fitLibrary[[1]]$object
-# ################################################### # Append the
-# corresponding y and X to the results #
-# ###################################################
-# SL_fit_concat$Y<-fit$Y_train SL_fit_concat$X<-fulldat if
-# (!is.null(sample_metadata_valid)) SL_fit_concat$validY<-validY
-# ######################################################################### #
-# Prepate concatenated input data for validaton set and save prediction #
-# ######################################################################### if
-# (!is.null(feature_table_valid)){
-# fulldat_valid<-as.data.frame(t(feature_table_valid))
-# concat_prediction_valid<-predict.SuperLearner(SL_fit_concat, newdata =
-# fulldat_valid)$pred SL_fit_concat$validX<-fulldat_valid
-# rownames(concat_prediction_valid)<-rownames(fulldat_valid)
-# SL_fit_concat$validPrediction<-concat_prediction_valid
-# colnames(SL_fit_concat$validPrediction)<-'validPrediction' }
-# fit$model_fits$model_concat <- model_concat fit$SL_fits$SL_fit_concat <-
-# SL_fit_concat fit$yhat.train$concatenated <- SL_fit_concat$Z }
-# if(fit$run_concat & fit$run_stacked){ fit$yhat.train <- fit$yhat.train[
-# ,c(name_layers_common,'stacked','concatenated')] }else if(fit$run_concat &
-# !fit$run_stacked){ fit$yhat.train <- fit$yhat.train[
-# ,c(name_layers_common,'concatenated')] }else if(!fit$run_concat &
-# fit$run_stacked){ fit$yhat.train <- fit$yhat.train[
-# ,c(name_layers_common,'stacked')] }else if(!fit$run_concat &
-# !fit$run_stacked){ fit$yhat.train <- fit$yhat.train[ ,name_layers_common] }
-# if(!is.null(feature_table_valid)){ if(fit$run_concat & fit$run_stacked){
-# yhat.test <- cbind(combo_valid,
-# SL_fit_stacked$validPrediction,SL_fit_concat$validPrediction)
-# colnames(yhat.test) <- c(colnames(combo_valid),'stacked','concatenated')
-# }else if(fit$run_concat & !fit$run_stacked){ yhat.test <- cbind(combo_valid,
-# SL_fit_concat$validPrediction) colnames(yhat.test) <-
-# c(colnames(combo_valid),'concatenated') }else if(!fit$run_concat &
-# fit$run_stacked){ yhat.test <- cbind(combo_valid,
-# SL_fit_stacked$validPrediction) colnames(yhat.test) <-
-# c(colnames(combo_valid),'stacked') }else if(!fit$run_concat &
-# !fit$run_stacked){ yhat.test <- cbind(combo_valid) colnames(yhat.test) <-
-# c(colnames(combo_valid)) } fit$yhat.test <- yhat.test fit$X_test_layers <-
-# X_test_layers } if(is.null(sample_metadata_valid)){ fit$test=FALSE }else{
-# fit$test=TRUE } if(fit$meta_learner=='SL.nnls.auc' & fit$run_stacked){
-# fit$weights <- fit$model_fits$model_stacked$solution names(fit$weights) <-
-# colnames(combo) } if(!is.null(sample_metadata_valid)){fit$Y_test=validY$Y}
-# if(fit$family=='binomial'){ # Calculate AUC for each layer, stacked and
-# concatenated pred=apply(fit$yhat.train, 2, ROCR::prediction,
-# labels=fit$Y_train) AUC=vector(length = length(pred)) names(AUC)=names(pred)
-# for(i in seq_along(pred)){ AUC[i] = round(ROCR::performance(pred[[i]],
-# 'auc')@y.values[[1]], 3) } fit$AUC.train <- AUC if(fit$test==TRUE){ #
-# Calculate AUC for each layer, stacked and concatenated
-# pred=apply(fit$yhat.test, 2, ROCR::prediction, labels=fit$Y_test)
-# AUC=vector(length = length(pred)) names(AUC)=names(pred) for(i in
-# seq_along(pred)){ AUC[i] = round(ROCR::performance(pred[[i]],
-# 'auc')@y.values[[1]], 3) } fit$AUC.test <- AUC } }
-# if(fit$family=='gaussian'){ # Calculate R^2 for each layer, stacked and
-# concatenated R2=vector(length = ncol(fit$yhat.train))
-# names(R2)=names(fit$yhat.train) for(i in seq_along(R2)){ R2[i] =
-# as.vector(cor(fit$yhat.train[ ,i], fit$Y_train)^2) } fit$R2.train <- R2
-# if(fit$test==TRUE){ # Calculate R^2 for each layer, stacked and concatenated
-# R2=vector(length = ncol(fit$yhat.test)) names(R2)=names(fit$yhat.test) for(i
-# in seq_along(R2)){ R2[i] = as.vector(cor(fit$yhat.test[ ,i], fit$Y_test)^2) }
-# fit$R2.test <- R2 } } fit$feature.names <- rownames(feature_table_valid)
-# print.learner(fit) return(fit) } } plot.learner <- function(fit,label_size=8,
-# label_x=0.3,vjust=0.1,rowwise=TRUE){ clean_base_learner <-
-# str_remove_all(fit$base_learner, 'SL.') clean_meta_learner <-
-# str_remove_all(fit$meta_learner, 'SL.') method <-
-# paste(clean_base_learner,clean_meta_learner,sep=' + ')
-# if(fit$family=='binomial'){ # Extract ROC plot data list.ROC<-vector('list',
-# length = ncol(fit$yhat.train)) names(list.ROC)<-colnames(fit$yhat.train) y <-
-# fit$Y_train # Loop over layers for(k in 1:length(list.ROC)){
-# preds<-fit$yhat.train[ ,k] pred = ROCR::prediction(preds, y) AUC =
-# round(ROCR::performance(pred, 'auc')@y.values[[1]], 2) perf =
-# ROCR::performance(pred, 'sens', 'spec') list.ROC[[k]] <-
-# data.frame(sensitivity = methods::slot(perf, 'y.values')[[1]], specificity =
-# 1 - methods::slot(perf, 'x.values')[[1]], AUC = AUC, layer =
-# names(list.ROC)[k], method = method) } # Combine ROC_table<-do.call('rbind',
-# list.ROC) # Prepare data for plotting plot_data<-ROC_table
-# plot_data$displayItem<-paste(plot_data$layer, ' AUC = ', plot_data$AUC,
-# sep='') plot_data$displayItem<-factor(plot_data$displayItem, levels =
-# unique(plot_data$displayItem)) # ROC curves p1<-ggplot(plot_data,
-# aes(x=specificity, y=sensitivity, group=displayItem)) +
-# geom_line(aes(x=specificity,y=sensitivity,color=displayItem)) +
-# #ggtitle(paste('Training data: ', method, sep=''))+
-# theme(legend.position='bottom', legend.background=element_blank(),
-# legend.box.background=element_rect(colour='black')) + theme_bw() +
-# xlab('False Positive Rate') + ylab('True Positive Rate') +
-# theme(legend.position = 'right', legend.direction = 'vertical') +
-# labs(color='') if(fit$test==TRUE){ # Extract ROC plot data
-# list.ROC.valid<-vector('list', length = ncol(fit$yhat.test))
-# names(list.ROC.valid)<-colnames(fit$yhat.test) y <- fit$Y_test # Loop over
-# layers for(k in 1:length(list.ROC.valid)){ preds<-fit$yhat.test[ ,k] pred =
-# ROCR::prediction(preds, y) AUC = round(ROCR::performance(pred,
-# 'auc')@y.values[[1]], 2) perf = ROCR::performance(pred, 'sens', 'spec')
-# list.ROC.valid[[k]] <- data.frame(sensitivity = methods::slot(perf,
-# 'y.values')[[1]], specificity = 1 - methods::slot(perf, 'x.values')[[1]], AUC
-# = AUC, layer = names(list.ROC.valid)[k], method = method) } # Combine
-# ROC_table_valid<-do.call('rbind', list.ROC.valid) # Prepare data for plotting
-# plot_data<-ROC_table_valid plot_data$displayItem<-paste(plot_data$layer, '
-# AUC = ', plot_data$AUC, sep='')
-# plot_data$displayItem<-factor(plot_data$displayItem, levels =
-# unique(plot_data$displayItem)) # ROC curves p2<-ggplot(plot_data,
-# aes(x=specificity, y=sensitivity, group=displayItem)) +
-# geom_line(aes(x=specificity,y=sensitivity,color=displayItem)) +
-# #ggtitle(paste('Test data: ', method, sep=''))+
-# theme(legend.position='bottom', legend.background=element_blank(),
-# legend.box.background=element_rect(colour='black')) + theme_bw() +
-# xlab('False Positive Rate') + ylab('True Positive Rate') +
-# theme(legend.position = 'right', legend.direction = 'vertical') +
-# labs(color='') p<-plot_grid(p1, p2, ifelse(rowwise,nrow = 2,ncol=2), labels =
-# c(paste('A. ', fit$folds,'-fold CV',sep = ''), 'B. Independent Validation'),
-# label_size = label_size, label_x = label_x,vjust = vjust)+ theme(plot.margin
-# = unit(c(1,1,1,1), 'cm')) print(p)
-# return(list('plot'=p,'ROC_table'=ROC_table,'ROC_table_valid'=ROC_table_valid))
-# } p <- plot_grid(p1, nrow = 1, labels = c(paste('A. ', fit$folds,'-fold
-# CV',sep = '')), label_size = label_size, label_x = label_x,vjust = vjust)+
-# theme(plot.margin = unit(c(1,1,1,1), 'cm')) print(p)
-# return(list('plot'=p,'ROC_table'=ROC_table)) } else
-# if(fit$family=='gaussian'){ # Extract R2 plot data list.R2<-vector('list',
-# length = ncol(fit$yhat.train)) names(list.R2)<-colnames(fit$yhat.train) y <-
-# fit$Y_train # Loop over layers for(k in 1:length(list.R2)){
-# preds<-fit$yhat.train[ ,k] R2<- as.vector(cor(preds, y)^2) list.R2[[k]] <-
-# data.frame(R2 = R2, layer = names(list.R2)[k], method = method) } # Combine
-# R2_table<-do.call('rbind', list.R2) # Plot p1<-ggplot(R2_table, aes(x =
-# method, y = R2)) + geom_bar(position='dodge', stat='identity',
-# aes(fill=layer)) + xlab('') + ylab(expression(paste('Prediction accuracy (',
-# R^2, ')'))) + scale_fill_discrete(name='') + theme(legend.position='bottom',
-# legend.background=element_blank(),
-# legend.box.background=element_rect(colour='black')) + theme_bw() +
-# guides(fill=guide_legend(title='')) + theme(legend.position = 'right',
-# legend.direction = 'vertical', strip.background = element_blank()) +
-# labs(fill='') if(fit$test==TRUE){ # Extract R2 plot data
-# list.R2.valid<-vector('list', length = ncol(fit$yhat.test))
-# names(list.R2.valid)<-colnames(fit$yhat.test) y <- fit$Y_test # Loop over
-# layers for(k in 1:length(list.R2.valid)){ preds<-fit$yhat.test[ ,k] R2<-
-# as.vector(cor(preds, y)^2) list.R2.valid[[k]] <- data.frame(R2 = R2, layer =
-# names(list.R2.valid)[k], method = method) } # Combine
-# R2_table_valid<-do.call('rbind', list.R2.valid) # Plot
-# p2<-ggplot(R2_table_valid, aes(x = method, y = R2)) +
-# geom_bar(position='dodge', stat='identity', aes(fill=layer)) + xlab('') +
-# ylab(expression(paste('Prediction accuracy (', R^2, ')'))) +
-# scale_fill_discrete(name='') + theme(legend.position='bottom',
-# legend.background=element_blank(),
-# legend.box.background=element_rect(colour='black')) + theme_bw() +
-# guides(fill=guide_legend(title='')) + theme(legend.position = 'right',
-# legend.direction = 'vertical', strip.background = element_blank()) +
-# labs(fill='') p<-plot_grid(p1, p2, ifelse(rowwise,nrow = 2,ncol=2), labels =
-# c(paste('A. ', fit$folds,'-fold CV',sep = ''), 'B. Independent Validation'),
-# label_size = label_size, label_x = label_x,vjust = vjust)+ theme(plot.margin
-# = unit(c(1,1,1,1), 'cm')) print(p)
-# return(list('plot'=p,'R2_table'=R2_table,'R2_table_valid'=R2_table_valid)) }
-# p <- plot_grid(p1, ncol = 1, labels = c(paste('A. ', fit$folds,'-fold CV',sep
-# = '')), label_size = label_size, label_x = label_x,vjust = vjust)+
-# theme(plot.margin = unit(c(1,1,1,1), 'cm')) print(p)
-# return(list('plot'=p,'R2_table'=R2_table)) } }
-
 # Borrowed from mia package
-.require_package <- function(pkg) {
+require_package <- function(pkg) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
     stop("'", pkg, "' package not found. Please install the '", pkg, "' package to use this function.",
       call. = FALSE
@@ -1551,7 +1397,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
   return(NULL)
 }
 
-.java_major_version <- function() {
+java_major_version <- function() {
   out <- tryCatch(system2("java", "-version", stdout = TRUE, stderr = TRUE), error = function(e) character())
   if (!length(out) || is.na(out[1])) {
     return(NA_integer_)
@@ -1563,11 +1409,11 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
   as.integer(m[2])
 }
 
-.warn_if_java_bart_machine_mismatch <- function() {
+warn_if_java_bart_machine_mismatch <- function() {
   if (isTRUE(getOption("IntegratedLearner.java_warned", FALSE))) {
     return(invisible(NULL))
   }
-  jv <- .java_major_version()
+  jv <- java_major_version()
   if (!is.na(jv) && jv < 21L) {
     options(IntegratedLearner.java_warned = TRUE)
   }
@@ -1577,17 +1423,17 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
 
 ######################## MAE Helper Utilities #
 
-.is_integer <- function(x) {
+is_integer <- function(x) {
   is.numeric(x) && all(!is.na(x)) && all(abs(x - round(x)) < .Machine$double.eps^0.5)
 }
 
-.is_a_string <- function(x) {
+is_a_string <- function(x) {
   is.character(x) && length(x) == 1L && !is.na(x)
 }
 
 # If exactly one assay exists -> use it.  If multiple assays exist -> user MUST
 # specify assay.type explicitly.
-.pick_default_assay <- function(se) {
+pick_default_assay <- function(se) {
   an <- SummarizedExperiment::assayNames(se)
 
   if (length(an) == 1L) {
@@ -1601,12 +1447,12 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
 }
 
 # Infer defaults for experiment and assay.type
-.infer_mae_defaults <- function(
+infer_mae_defaults <- function(
   mae_train, mae_test = NULL, experiment = NULL, assay.type = NULL,
   verbose = FALSE
 ) {
-  .require_package("MultiAssayExperiment")
-  .require_package("SummarizedExperiment")
+  require_package("MultiAssayExperiment")
+  require_package("SummarizedExperiment")
 
   expts_train <- MultiAssayExperiment::experiments(mae_train)
 
@@ -1619,7 +1465,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
       ))
     }
   } else {
-    if (.is_integer(experiment)) {
+    if (is_integer(experiment)) {
       if (any(experiment < 1L | experiment > length(expts_train))) {
         stop("'experiment' indices are out of range for mae_train.", call. = FALSE)
       }
@@ -1637,7 +1483,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
 
   ## 2. Default assay.type ONLY when each experiment has a single assay
   if (is.null(assay.type)) {
-    assay.type <- vapply(expts_train[experiment], .pick_default_assay, character(1))
+    assay.type <- vapply(expts_train[experiment], pick_default_assay, character(1))
     if (verbose) {
       msg <- paste(sprintf("%s -> %s", experiment, assay.type), collapse = ", ")
       message("IntegratedLearner: default assay.type per experiment: ", msg)
@@ -1654,7 +1500,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
 }
 
 # Normalize caller-provided metadata column names to canonical internals.
-.normalize_sample_metadata_columns <- function(
+normalize_sample_metadata_columns <- function(
   sample_metadata,
   outcome_col = "Y",
   subject_id_col = "subjectID",
@@ -1669,10 +1515,10 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
     stop("'", context, "' must be a data.frame.", call. = FALSE)
   }
 
-  if (!.is_a_string(subject_id_col)) {
+  if (!is_a_string(subject_id_col)) {
     stop("'subject_id_col' must be a single character value.", call. = FALSE)
   }
-  if (!.is_a_string(outcome_col)) {
+  if (!is_a_string(outcome_col)) {
     stop("'outcome_col' must be a single character value.", call. = FALSE)
   }
 
@@ -1703,7 +1549,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
   sample_metadata
 }
 
-.coerce_outcome_by_family <- function(
+coerce_outcome_by_family <- function(
   sample_metadata,
   family_name = NULL,
   context = "sample_metadata",
@@ -1781,16 +1627,16 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
 }
 
 # Extract long-form data from a MAE for the chosen experiments/assays
-.get_data_from_MAE <- function(
+get_data_from_MAE <- function(
   mae,
   experiment,
   assay.type,
   outcome.col = "Y",
   subject_id_col = "subjectID"
 ) {
-  .require_package("MultiAssayExperiment")
-  .require_package("SummarizedExperiment")
-  .require_package("tidyr")
+  require_package("MultiAssayExperiment")
+  require_package("SummarizedExperiment")
+  require_package("tidyr")
 
   expts <- MultiAssayExperiment::experiments(mae)
 
@@ -1870,16 +1716,16 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
 
 # Turn long-form data into: - feature_table (features x samples) -
 # sample_metadata (Y in column 'Y') - feature_metadata (view in column 'view')
-.wrangle_data <- function(
+wrangle_data <- function(
   long_data,
   outcome.col = "Y",
   subject_id_col = "subjectID",
   na.rm = FALSE
 ) {
-  .require_package("tidyr")
+  require_package("tidyr")
 
   if (nrow(long_data) == 0) {
-    stop(".wrangle_data(): long_data is empty - nothing to reshape.")
+    stop("wrangle_data(): long_data is empty - nothing to reshape.")
   }
 
   # sample metadata
@@ -1933,15 +1779,15 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
 }
 
 
-.prepare_from_MAE <- function(
+prepare_from_MAE <- function(
   mae_train, mae_valid = NULL, experiment = NULL, assay.type = NULL,
   na.rm = FALSE, verbose = FALSE, outcome_col = "Y", subject_id_col = "subjectID"
 ) {
-  .require_package("MultiAssayExperiment")
-  .require_package("SummarizedExperiment")
-  .require_package("tidyr")
+  require_package("MultiAssayExperiment")
+  require_package("SummarizedExperiment")
+  require_package("tidyr")
 
-  defaults <- .infer_mae_defaults(
+  defaults <- infer_mae_defaults(
     mae_train = mae_train, mae_test = mae_valid,
     experiment = experiment, assay.type = assay.type, verbose = verbose
   )
@@ -1952,12 +1798,12 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
 
   mae_train_sub <- mae_train[, , experiment, drop = FALSE]
 
-  long_train <- .get_data_from_MAE(
+  long_train <- get_data_from_MAE(
     mae = mae_train_sub, experiment = experiment,
     assay.type = assay.type, outcome.col = outcome.col, subject_id_col = subject_id_col
   )
 
-  wr_train <- .wrangle_data(
+  wr_train <- wrangle_data(
     long_data = long_train, outcome.col = outcome.col, subject_id_col = subject_id_col,
     na.rm = na.rm
   )
@@ -2012,12 +1858,12 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
       }
     }
 
-    long_valid <- .get_data_from_MAE(
+    long_valid <- get_data_from_MAE(
       mae = mae_valid_sub, experiment = experiment,
       assay.type = assay.type, outcome.col = outcome.col, subject_id_col = subject_id_col
     )
 
-    wr_valid <- .wrangle_data(
+    wr_valid <- wrangle_data(
       long_data = long_valid, outcome.col = outcome.col, subject_id_col = subject_id_col,
       na.rm = na.rm
     )
@@ -2042,7 +1888,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
 }
 
 
-.prepare_from_PCL <- function(
+prepare_from_PCL <- function(
   PCL_train,
   PCL_valid = NULL,
   na.rm = FALSE,
@@ -2075,7 +1921,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
     stop("Column names of PCL_train$feature_table must equal row names of PCL_train$sample_metadata.")
   }
 
-  sample_metadata <- .normalize_sample_metadata_columns(
+  sample_metadata <- normalize_sample_metadata_columns(
     sample_metadata = sample_metadata,
     outcome_col = outcome_col,
     subject_id_col = subject_id_col,
@@ -2121,7 +1967,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
       stop("In PCL_valid, rownames(sample_metadata_valid) must match colnames(feature_table_valid).")
     }
 
-    sample_metadata_valid <- .normalize_sample_metadata_columns(
+    sample_metadata_valid <- normalize_sample_metadata_columns(
       sample_metadata = sample_metadata_valid,
       outcome_col = outcome_col,
       subject_id_col = subject_id_col,
@@ -2137,7 +1983,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
   )
 }
 
-.safe_family_name <- function(fam) {
+safe_family_name <- function(fam) {
   if (inherits(fam, "family")) {
     return(tolower(fam$family))
   }
@@ -2147,7 +1993,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
   NA_character_
 }
 
-.resolve_screening_args <- function(
+resolve_screening_args <- function(
   run_screening = FALSE, screen_pct = NULL, base_screener = NULL,
   context = "IntegratedLearner"
 ) {
@@ -2201,7 +2047,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
   list(enabled = TRUE, screen_pct = p, via_base_screener = via_base)
 }
 
-.make_glmnet_screen_screener <- function(keep_pct = 20, seed = 1234) {
+make_glmnet_screen_screener <- function(keep_pct = 20, seed = 1234) {
   keep_pct <- as.numeric(keep_pct[1])
   seed <- as.integer(seed[1])
 
@@ -2216,7 +2062,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
     storage.mode(X_mat) <- "double"
     X_mat[!is.finite(X_mat)] <- 0
 
-    fam_name <- .safe_family_name(family)
+    fam_name <- safe_family_name(family)
     if (is.na(fam_name)) {
       fam_name <- "gaussian"
     }
@@ -2237,7 +2083,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
         vars[!is.finite(vars)] <- 0
         score <- vars
       } else {
-        .set_seed_internal(seed)
+        set_seed_internal(seed)
         fit <- tryCatch(
           {
             nobs <- nrow(X_mat)
@@ -2269,7 +2115,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
         y[!is.finite(y)] <- 0
       }
 
-      .set_seed_internal(seed)
+      set_seed_internal(seed)
       fit <- tryCatch(
         {
           nobs <- nrow(X_mat)
@@ -2308,7 +2154,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
   }
 }
 
-.resolve_feature_filter_args <- function(
+resolve_feature_filter_args <- function(
   filter_method = NULL, filter_pct = NULL,
   prevalence_pct = NULL
 ) {
@@ -2381,11 +2227,11 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
   })
 }
 
-.filter_features_by_method <- function(
+filter_features_by_method <- function(
   feature_table, feature_metadata, feature_table_valid = NULL,
   filter_method = NULL, filter_pct = NULL, prevalence_pct = NULL, verbose = FALSE
 ) {
-  resolved <- .resolve_feature_filter_args(
+  resolved <- resolve_feature_filter_args(
     filter_method = filter_method, filter_pct = filter_pct,
     prevalence_pct = prevalence_pct
   )
@@ -2414,7 +2260,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
   layer_fac <- factor(layer_vec, levels = unique(layer_vec))
   layer_groups <- split(feature_ids, layer_fac)
 
-  .rank_layer_keep <- function(ids) {
+  rank_layer_keep <- function(ids) {
     x_sub <- x[ids, , drop = FALSE]
     n_total_sub <- nrow(x_sub)
     n_keep_sub <- max(1L, as.integer(ceiling((resolved$filter_pct / 100) * n_total_sub)))
@@ -2463,7 +2309,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
     rownames(x_sub)[keep_idx]
   }
 
-  kept_ids <- unlist(lapply(layer_groups, .rank_layer_keep), use.names = FALSE)
+  kept_ids <- unlist(lapply(layer_groups, rank_layer_keep), use.names = FALSE)
   kept_ids <- unique(kept_ids)
   ft <- feature_table[kept_ids, , drop = FALSE]
   fm <- feature_metadata[kept_ids, , drop = FALSE]
@@ -2504,18 +2350,18 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
   )
 }
 
-.filter_features_by_prevalence <- function(
+filter_features_by_prevalence <- function(
   feature_table, feature_metadata, feature_table_valid = NULL,
   prevalence_pct = NULL, verbose = FALSE
 ) {
-  .filter_features_by_method(
+  filter_features_by_method(
     feature_table = feature_table, feature_metadata = feature_metadata,
     feature_table_valid = feature_table_valid, filter_method = "prevalence",
     filter_pct = prevalence_pct, verbose = verbose
   )
 }
 
-.is_survival_outcome <- function(fam_name, sample_metadata) {
+is_survival_outcome <- function(fam_name, sample_metadata) {
   fam_flag <- fam_name %in% c("cox", "coxph", "survival")
   meta_flag <- !is.null(sample_metadata) && (all(c("time", "event") %in% colnames(sample_metadata)) ||
     inherits(sample_metadata$Y, "Surv") || (is.matrix(sample_metadata$Y) && ncol(sample_metadata$Y) >=
@@ -2523,7 +2369,7 @@ predict.SL.nnls.auc <- function(object, newdata, ...) {
   isTRUE(fam_flag || meta_flag)
 }
 
-.ensure_survival_metadata <- function(df, context = "training") {
+ensure_survival_metadata <- function(df, context = "training") {
   if (is.null(df)) {
     return(NULL)
   }
@@ -2594,7 +2440,7 @@ compute_signed_univariate_importance <- function(
   list(all = beta_vec[order(-abs(beta_vec))], by_layer = layer_list)
 }
 
-.infer_input_mode <- function(MAE_train, PCL_train) {
+infer_input_mode <- function(MAE_train, PCL_train) {
   has_MAE <- !is.null(MAE_train)
   has_PCL <- !is.null(PCL_train)
 

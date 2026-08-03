@@ -4,8 +4,9 @@
 #' time-to-event outcome based on two or more omics layers (views).
 #' The \code{IntegratedLearner} function takes a training
 #' \code{MultiAssayExperiment} and, optionally, a validation
-#' \code{MultiAssayExperiment}, extracts multi-layer feature tables, and returns
-#' predicted values based on the validation set.
+#' \code{MultiAssayExperiment}, inspects standard Bioconductor containers and
+#' accessors, extracts multi-layer feature tables, and returns predicted values
+#' based on the validation set.
 #' It also performs V-fold nested cross-validation to estimate the prediction
 #' accuracy of various fusion algorithms.
 #' Two integration paradigms are supported: early and late.
@@ -14,10 +15,17 @@
 #' exploration capabilities and visualization modules in a unified estimation
 #' framework.
 #'
-#' Internally, \code{IntegratedLearner()} converts the MultiAssayExperiment
-#' into tabular multi-view matrices and then calls \code{IL_conbin} for
-#' continuous/binary outcomes or \code{IL_survival} for time-to-event outcomes,
-#' depending on the specified \code{family}.
+#' In a typical Bioconductor workflow, users construct assay-level data in
+#' \code{SummarizedExperiment}, combine those assays in
+#' \code{MultiAssayExperiment}, inspect the object with \code{experiments()},
+#' \code{assay()}, \code{colData()}, and \code{sampleMap()}, and then pass the
+#' MAE into \code{IntegratedLearner()} for supervised multi-omics prediction.
+#' Internally, \code{IntegratedLearner()} converts the
+#' \code{MultiAssayExperiment} into tabular multi-view matrices and then calls
+#' \code{IL_conbin} for continuous/binary outcomes or \code{IL_survival} for
+#' time-to-event outcomes, depending on the specified \code{family}. Legacy
+#' PCL-style inputs remain available for backward compatibility, but the
+#' primary user-facing workflow is MAE-based.
 #'
 #' @param MAE_train A \code{MultiAssayExperiment} containing the training data.
 #'   Each experiment corresponds to one view (omics layer), usually stored as a
@@ -53,7 +61,7 @@
 #' @param base_learner Base learner for late fusion and early fusion.
 #'   Check out the
 #'   \href{https://CRAN.R-project.org/package=SuperLearner}{SuperLearner package page}
-#'   for all available options. Default is \code{`SL.BART`}.
+#'   for all available options. Default is \code{`sl_bart`}.
 #' @param base_screener Deprecated for \code{IL_conbin} and \code{IL_multiclass};
 #'   kept for backward compatibility and currently ignored in those backends.
 #' @param run_screening Logical; if \code{TRUE}, run supervised screening on
@@ -70,7 +78,7 @@
 #'   prevalence-based feature filtering before model fitting. Deprecated alias
 #'   of \code{filter_pct} with \code{filter_method = 'prevalence'}.
 #' @param meta_learner Meta-learner for late fusion (stacked generalization).
-#'   Defaults to \code{`SL.nnls.auc`}.
+#'   Defaults to \code{`sl_nnls_auc`}.
 #'   Check out the
 #'   \href{https://CRAN.R-project.org/package=SuperLearner}{SuperLearner package page}
 #'   for all available options.
@@ -101,35 +109,22 @@
 #' validation data.
 #'
 #' @examples
-#' is.function(IntegratedLearner)
-#' if (FALSE) {
-#'   set.seed(1)
-#'   n <- 20
-#'   feature_table <- rbind(
-#'     matrix(rnorm(3 * n), nrow = 3, dimnames = list(paste0("L1_F", 1:3), paste0("S", 1:n))),
-#'     matrix(rnorm(2 * n), nrow = 2, dimnames = list(paste0("L2_F", 1:2), paste0("S", 1:n)))
-#'   )
-#'   sample_metadata <- data.frame(
-#'     subjectID = paste0("ID", 1:n), Y = rnorm(n),
-#'     row.names = colnames(feature_table)
-#'   )
-#'   feature_metadata <- data.frame(
-#'     featureID = rownames(feature_table),
-#'     featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
-#'     row.names = rownames(feature_table)
-#'   )
-#'   pcl <- list(
-#'     feature_table = feature_table,
-#'     sample_metadata = sample_metadata,
-#'     feature_metadata = feature_metadata
-#'   )
-#'   fit <- IntegratedLearner(
-#'     PCL_train = pcl, folds = 3, base_learner = "SL.mean",
-#'     run_stacked = FALSE, run_concat = FALSE, print_learner = FALSE,
-#'     family = stats::gaussian()
-#'   )
-#'   names(fit)
-#' }
+#' data("PRISM_MAE", package = "IntegratedLearner")
+#' mae <- PRISM_MAE
+#' names(MultiAssayExperiment::experiments(mae))
+#' head(as.data.frame(S4Vectors::DataFrame(MultiAssayExperiment::colData(mae)))[, 1:4])
+#' head(MultiAssayExperiment::sampleMap(mae))
+#' se <- MultiAssayExperiment::experiments(mae)[[1]]
+#' SummarizedExperiment::assayNames(se)
+#' fit <- IntegratedLearner(
+#'   MAE_train = mae,
+#'   experiment = names(MultiAssayExperiment::experiments(mae))[1:2],
+#'   assay.type = rep("abundance", 2),
+#'   folds = 2, base_learner = "SL.mean",
+#'   run_stacked = FALSE, run_concat = FALSE, print_learner = FALSE,
+#'   family = stats::binomial()
+#' )
+#' names(fit)
 #'
 #' @author Himel Mallick, \email{him4004@@med.cornell.edu}
 #'
@@ -142,23 +137,26 @@ IntegratedLearner <- function(
   MAE_train = NULL, MAE_valid = NULL, PCL_train = NULL,
   PCL_valid = NULL, experiment = NULL, assay.type = NULL, outcome_col = "Y",
   subject_id_col = "subjectID", na.rm = FALSE, folds = 5,
-  seed = 1234, base_learner = "SL.BART", base_screener = "All", run_screening = FALSE,
+  seed = 1234, base_learner = "sl_bart", base_screener = "All", run_screening = FALSE,
   screen_pct = NULL, filter_method = NULL, filter_pct = NULL, prevalence_pct = NULL,
-  meta_learner = "SL.nnls.auc", run_concat = TRUE, run_stacked = TRUE,
+  meta_learner = "sl_nnls_auc", run_concat = TRUE, run_stacked = TRUE,
   drop_poor_performing_layers = FALSE, verbose = FALSE, print_learner = TRUE,
   refit.stack = FALSE, family = stats::gaussian(), ...
 ) {
-  if (!.is_a_string(outcome_col)) {
+  if (!is_a_string(outcome_col)) {
     stop("'outcome_col' must be a single character value.", call. = FALSE)
   }
-  if (!.is_a_string(subject_id_col)) {
+  if (!is_a_string(subject_id_col)) {
     stop("'subject_id_col' must be a single character value.", call. = FALSE)
   }
+
+  base_learner <- normalize_il_learner_id(base_learner, role = "base_learner")
+  meta_learner <- normalize_il_learner_id(meta_learner, role = "meta_learner")
 
   ## ------------------------------------------------------------ 1. Detect
   ## input mode (MAE vs PCL)
   ## ------------------------------------------------------------
-  mode <- .infer_input_mode(MAE_train, PCL_train)
+  mode <- infer_input_mode(MAE_train, PCL_train)
 
   ## ------------------------------------------------------------ 2. Prepare
   ## inputs according to mode
@@ -166,14 +164,14 @@ IntegratedLearner <- function(
   ## checks 1) print a message talking about the number of assays (add the
   ## name of the assay type)
   if (mode == "MAE") {
-    prepared <- .prepare_from_MAE(
+    prepared <- prepare_from_MAE(
       mae_train = MAE_train, mae_valid = MAE_valid,
       experiment = experiment, assay.type = assay.type, na.rm = na.rm, verbose = verbose,
       outcome_col = outcome_col, subject_id_col = subject_id_col
     )
   } else {
     # mode == 'PCL'
-    prepared <- .prepare_from_PCL(
+    prepared <- prepare_from_PCL(
       PCL_train = PCL_train, PCL_valid = PCL_valid,
       na.rm = na.rm, outcome_col = outcome_col, subject_id_col = subject_id_col
     )
@@ -186,12 +184,12 @@ IntegratedLearner <- function(
   feature_table_valid <- prepared$feature_table_valid
   sample_metadata_valid <- prepared$sample_metadata_valid
 
-  fam_name <- .safe_family_name(family)
-  is_survival <- .is_survival_outcome(fam_name, sample_metadata)
+  fam_name <- safe_family_name(family)
+  is_survival <- is_survival_outcome(fam_name, sample_metadata)
 
   binary_levels <- NULL
   if (!is_survival) {
-    coerced_train <- .coerce_outcome_by_family(
+    coerced_train <- coerce_outcome_by_family(
       sample_metadata = sample_metadata,
       family_name = fam_name,
       context = "training sample_metadata"
@@ -199,7 +197,7 @@ IntegratedLearner <- function(
     sample_metadata <- coerced_train$sample_metadata
     binary_levels <- coerced_train$binary_levels
     if (!is.null(sample_metadata_valid)) {
-      coerced_valid <- .coerce_outcome_by_family(
+      coerced_valid <- coerce_outcome_by_family(
         sample_metadata = sample_metadata_valid,
         family_name = fam_name,
         context = "validation sample_metadata",
@@ -227,13 +225,13 @@ IntegratedLearner <- function(
   }
 
   if (is_survival) {
-    sample_metadata <- .ensure_survival_metadata(sample_metadata, context = "training")
-    sample_metadata_valid <- .ensure_survival_metadata(sample_metadata_valid,
+    sample_metadata <- ensure_survival_metadata(sample_metadata, context = "training")
+    sample_metadata_valid <- ensure_survival_metadata(sample_metadata_valid,
       context = "validation"
     )
   }
 
-  .validate_IL_inputs(
+  validate_IL_inputs(
     feature_table = feature_table, sample_metadata = sample_metadata,
     feature_metadata = feature_metadata, feature_table_valid = feature_table_valid,
     sample_metadata_valid = sample_metadata_valid, family_name = fam_name, is_survival = is_survival
@@ -242,7 +240,7 @@ IntegratedLearner <- function(
   ## to IL_conbin() or IL_survival()
   ## ------------------------------------------------------------
   if (is_survival) {
-    filtered_surv <- .filter_features_by_method(
+    filtered_surv <- filter_features_by_method(
       feature_table = feature_table,
       feature_metadata = feature_metadata, feature_table_valid = feature_table_valid,
       filter_method = filter_method, filter_pct = filter_pct, prevalence_pct = prevalence_pct,

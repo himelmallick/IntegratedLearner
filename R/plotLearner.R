@@ -1,4 +1,4 @@
-.clean_plot_method_label <- function(fit) {
+clean_plot_method_label <- function(fit) {
   base_lab <- fit$base_learner
   if (is.null(base_lab) || length(base_lab) == 0L || is.na(base_lab)) {
     base_lab <- fit$base_learner_used
@@ -8,8 +8,8 @@
     meta_lab <- fit$meta_learner_used
   }
 
-  base_lab <- if (is.null(base_lab)) "unknown" else stringr::str_remove_all(as.character(base_lab), "SL\\.")
-  meta_lab <- if (is.null(meta_lab)) NA_character_ else stringr::str_remove_all(as.character(meta_lab), "SL\\.")
+  base_lab <- if (is.null(base_lab)) "unknown" else gsub("SL\\.", "", as.character(base_lab))
+  meta_lab <- if (is.null(meta_lab)) NA_character_ else gsub("SL\\.", "", as.character(meta_lab))
 
   if (is.na(meta_lab) || !nzchar(meta_lab)) {
     base_lab
@@ -18,7 +18,7 @@
   }
 }
 
-.empty_roc_table <- function() {
+empty_roc_table <- function() {
   data.frame(
     sensitivity = numeric(0), specificity = numeric(0), AUC = numeric(0),
     layer = character(0), class = character(0), method = character(0),
@@ -26,7 +26,7 @@
   )
 }
 
-.binary_roc_table <- function(pred_mat, y_true, method_label, dataset) {
+binary_roc_table <- function(pred_mat, y_true, method_label, dataset) {
   pred_mat <- as.matrix(pred_mat)
   if (is.null(colnames(pred_mat))) {
     colnames(pred_mat) <- paste0("model", seq_len(ncol(pred_mat)))
@@ -53,10 +53,10 @@
       return(NULL)
     }
 
-    auc_val <- round(as.numeric(auc_obj@y.values[[1]]), 2)
+    auc_val <- round(as.numeric(attributes(auc_obj)[["y.values"]][[1]]), 2)
     data.frame(
-      sensitivity = methods::slot(perf, "y.values")[[1]],
-      specificity = 1 - methods::slot(perf, "x.values")[[1]],
+      sensitivity = attributes(perf)[["y.values"]][[1]],
+      specificity = 1 - attributes(perf)[["x.values"]][[1]],
       AUC = auc_val,
       layer = colnames(pred_mat)[k],
       class = "positive",
@@ -68,14 +68,14 @@
 
   out <- out[!vapply(out, is.null, logical(1))]
   if (length(out) == 0L) {
-    return(.empty_roc_table())
+    return(empty_roc_table())
   }
-  do.call(rbind, out)
+  dplyr::bind_rows(out)
 }
 
-.multiclass_roc_table <- function(prob_list, y_true, class_levels, method_label, dataset) {
+multiclass_roc_table <- function(prob_list, y_true, class_levels, method_label, dataset) {
   if (length(prob_list) == 0L) {
-    return(.empty_roc_table())
+    return(empty_roc_table())
   }
 
   y_char <- as.character(y_true)
@@ -111,9 +111,9 @@
       }
 
       out[[idx]] <- data.frame(
-        sensitivity = methods::slot(perf, "y.values")[[1]],
-        specificity = 1 - methods::slot(perf, "x.values")[[1]],
-        AUC = round(as.numeric(auc_obj@y.values[[1]]), 2),
+        sensitivity = attributes(perf)[["y.values"]][[1]],
+        specificity = 1 - attributes(perf)[["x.values"]][[1]],
+        AUC = round(as.numeric(attributes(auc_obj)[["y.values"]][[1]]), 2),
         layer = model_name,
         class = cls,
         method = method_label,
@@ -125,12 +125,12 @@
   }
 
   if (length(out) == 0L) {
-    return(.empty_roc_table())
+    return(empty_roc_table())
   }
-  do.call(rbind, out)
+  dplyr::bind_rows(out)
 }
 
-.plot_roc_panel <- function(tbl, title, multiclass = FALSE) {
+plot_roc_panel <- function(tbl, title, multiclass = FALSE) {
   if (nrow(tbl) == 0L) {
     return(
       ggplot2::ggplot() +
@@ -166,7 +166,7 @@
   }
 }
 
-.survival_auc_table <- function(fit, dataset = c("train", "valid")) {
+survival_auc_table <- function(fit, dataset = c("train", "valid")) {
   dataset <- match.arg(dataset)
   if (dataset == "train") {
     src <- fit$train_out
@@ -219,19 +219,41 @@
     }
   }
 
-  for (stage in c("early", "late")) {
-    obj <- src[[stage]]
-    if (!is.null(obj) && !is.null(obj[[auc_name]])) {
-      tab <- obj[[auc_name]]
-      if (nrow(tab) > 0L) {
-        out[[idx]] <- data.frame(
-          tab,
-          model = stage,
-          stage = stage,
-          dataset = dataset,
-          stringsAsFactors = FALSE
-        )
-        idx <- idx + 1L
+  if (!is.null(src$early) && !is.null(src$early[[auc_name]])) {
+    tab <- src$early[[auc_name]]
+    if (nrow(tab) > 0L) {
+      out[[idx]] <- data.frame(
+        tab,
+        model = "early",
+        stage = "early",
+        dataset = dataset,
+        stringsAsFactors = FALSE
+      )
+      idx <- idx + 1L
+    }
+  }
+
+  late_obj <- src$late
+  if (!is.null(late_obj)) {
+    late_names <- names(late_obj)
+    if (is.null(late_names) || !all(c("IBS", "COX") %in% late_names)) {
+      late_obj <- list(late = late_obj)
+      late_names <- names(late_obj)
+    }
+    for (nm in late_names) {
+      obj <- late_obj[[nm]]
+      if (!is.null(obj) && !is.null(obj[[auc_name]])) {
+        tab <- obj[[auc_name]]
+        if (nrow(tab) > 0L) {
+          out[[idx]] <- data.frame(
+            tab,
+            model = paste0("late_", nm),
+            stage = "late",
+            dataset = dataset,
+            stringsAsFactors = FALSE
+          )
+          idx <- idx + 1L
+        }
       }
     }
   }
@@ -243,10 +265,10 @@
     ))
   }
 
-  do.call(rbind, out)
+  dplyr::bind_rows(out)
 }
 
-.survival_risk_map <- function(fit, dataset = c("train", "valid")) {
+survival_risk_map <- function(fit, dataset = c("train", "valid")) {
   dataset <- match.arg(dataset)
   if (dataset == "train") {
     src <- fit$train_out
@@ -275,21 +297,35 @@
     }
   }
 
-  for (stage in c("early", "late")) {
-    obj <- src[[stage]]
-    if (!is.null(obj) && !is.null(obj[[risk_name]])) {
-      risks[[stage]] <- as.numeric(obj[[risk_name]])
-      cindex[stage] <- obj[[cindex_name]]
+  if (!is.null(src$early) && !is.null(src$early[[risk_name]])) {
+    risks[["early"]] <- as.numeric(src$early[[risk_name]])
+    cindex[["early"]] <- src$early[[cindex_name]]
+  }
+
+  late_obj <- src$late
+  if (!is.null(late_obj)) {
+    late_names <- names(late_obj)
+    if (is.null(late_names) || !all(c("IBS", "COX") %in% late_names)) {
+      late_obj <- list(late = late_obj)
+      late_names <- names(late_obj)
+    }
+    for (nm in late_names) {
+      obj <- late_obj[[nm]]
+      if (!is.null(obj) && !is.null(obj[[risk_name]])) {
+        model_name <- paste0("late_", nm)
+        risks[[model_name]] <- as.numeric(obj[[risk_name]])
+        cindex[[model_name]] <- obj[[cindex_name]]
+      }
     }
   }
 
   list(risks = risks, cindex = cindex)
 }
 
-.best_survival_model_name <- function(fit, dataset = c("train", "valid")) {
+best_survival_model_name <- function(fit, dataset = c("train", "valid")) {
   dataset <- match.arg(dataset)
-  risk_map <- .survival_risk_map(fit, dataset = dataset)
-  candidate_names <- names(risk_map$cindex)[names(risk_map$cindex) %in% c("early", "late")]
+  risk_map <- survival_risk_map(fit, dataset = dataset)
+  candidate_names <- names(risk_map$cindex)[grepl("^early$|^late_", names(risk_map$cindex))]
   if (length(candidate_names) == 0L) {
     candidate_names <- names(risk_map$cindex)
   }
@@ -304,7 +340,7 @@
   names(candidate_vals)[which.max(candidate_vals)]
 }
 
-.risk_group_labels <- function(n_groups) {
+risk_group_labels <- function(n_groups) {
   if (n_groups == 3L) {
     c("Low risk", "Medium risk", "High risk")
   } else {
@@ -312,7 +348,7 @@
   }
 }
 
-.risk_groups_from_scores <- function(risk, n_groups = 3L) {
+risk_groups_from_scores <- function(risk, n_groups = 3L) {
   risk <- as.numeric(risk)
   ok <- is.finite(risk)
   grp <- rep(NA_integer_, length(risk))
@@ -324,12 +360,12 @@
   grp[idx_ok[ord]] <- rep(seq_len(n_groups), length.out = length(ord))
   factor(grp,
     levels = seq_len(n_groups),
-    labels = .risk_group_labels(n_groups)
+    labels = risk_group_labels(n_groups)
   )
 }
 
-.km_curve_table <- function(times, events, risk, model_name, dataset, n_groups = 3L) {
-  groups <- .risk_groups_from_scores(risk, n_groups = n_groups)
+km_curve_table <- function(times, events, risk, model_name, dataset, n_groups = 3L) {
+  groups <- risk_groups_from_scores(risk, n_groups = n_groups)
   ok <- is.finite(times) & is.finite(events) & !is.na(groups)
   if (sum(ok) < 2L) {
     return(data.frame(
@@ -376,7 +412,7 @@
   rbind(base_rows, out)
 }
 
-.survival_auc_plot <- function(tbl, title) {
+survival_auc_plot <- function(tbl, title) {
   if (nrow(tbl) == 0L) {
     return(
       ggplot2::ggplot() +
@@ -393,7 +429,7 @@
     ggplot2::labs(title = title, color = "Model")
 }
 
-.survival_km_plot <- function(tbl, title) {
+survival_km_plot <- function(tbl, title) {
   if (nrow(tbl) == 0L) {
     return(
       ggplot2::ggplot() +
@@ -435,17 +471,31 @@
 #' @return A list whose \code{$plot} entry is a \pkg{ggplot2}/\pkg{cowplot}
 #'   composite object, along with the underlying tabular data used to generate
 #'   the plot.
+#'
+#' @examples
+#' data("PRISM_MAE", package = "IntegratedLearner")
+#' mae <- PRISM_MAE
+#' se <- MultiAssayExperiment::experiments(mae)[[1]]
+#' head(SummarizedExperiment::assay(se, SummarizedExperiment::assayNames(se)[1]))
+#' fit <- IntegratedLearner(
+#'   MAE_train = mae,
+#'   experiment = names(MultiAssayExperiment::experiments(mae))[1:2],
+#'   assay.type = rep("abundance", 2),
+#'   folds = 2, base_learner = "SL.mean",
+#'   run_stacked = FALSE, run_concat = FALSE,
+#'   print_learner = FALSE, family = stats::binomial()
+#' )
+#' plt <- plot(fit)
+#' names(plt)
 #' @export
 plot.learner <- function(
   x, y = NULL, label_size = 8, label_x = 0.3, vjust = 0.1,
   rowwise_plot = TRUE, ...
 ) {
-  .require_package("ggplot2")
-  .require_package("cowplot")
-  .require_package("stringr")
-
+  require_package("ggplot2")
+  require_package("cowplot")
   fit <- x
-  method <- .clean_plot_method_label(fit)
+  method <- clean_plot_method_label(fit)
 
   if (isTRUE(rowwise_plot)) {
     nrow_plot <- 2
@@ -456,24 +506,24 @@ plot.learner <- function(
   }
 
   if (fit$family == "binomial") {
-    y_train <- .coerce_binary_truth(fit$Y_train)
-    ROC_table <- .binary_roc_table(
+    y_train <- coerce_binary_truth(fit$Y_train)
+    ROC_table <- binary_roc_table(
       pred_mat = fit$yhat.train,
       y_true = y_train,
       method_label = method,
       dataset = "train"
     )
-    p1 <- .plot_roc_panel(ROC_table, title = paste0(fit$folds, "-fold CV"))
+    p1 <- plot_roc_panel(ROC_table, title = paste0(fit$folds, "-fold CV"))
 
     if (isTRUE(fit$test)) {
-      y_test <- .coerce_binary_truth(fit$Y_test)
-      ROC_table_valid <- .binary_roc_table(
+      y_test <- coerce_binary_truth(fit$Y_test)
+      ROC_table_valid <- binary_roc_table(
         pred_mat = fit$yhat.test,
         y_true = y_test,
         method_label = method,
         dataset = "test"
       )
-      p2 <- .plot_roc_panel(ROC_table_valid, title = "Independent Validation")
+      p2 <- plot_roc_panel(ROC_table_valid, title = "Independent Validation")
 
       p <- cowplot::plot_grid(
         p1, p2,
@@ -579,26 +629,26 @@ plot.learner <- function(
       stop("No multiclass probability outputs found in fit object.", call. = FALSE)
     }
 
-    ROC_table <- .multiclass_roc_table(
+    ROC_table <- multiclass_roc_table(
       prob_list = fit$prob.train,
       y_true = fit$Y_train,
       class_levels = fit$class_levels,
       method_label = method,
       dataset = "train"
     )
-    p1 <- .plot_roc_panel(ROC_table, title = paste0(fit$folds, "-fold CV"), multiclass = TRUE)
+    p1 <- plot_roc_panel(ROC_table, title = paste0(fit$folds, "-fold CV"), multiclass = TRUE)
 
     out <- list(plot = p1, ROC_table = ROC_table, metrics_train = fit$metrics.train)
 
     if (isTRUE(fit$test) && !is.null(fit$prob.test) && !is.null(fit$Y_test)) {
-      ROC_table_valid <- .multiclass_roc_table(
+      ROC_table_valid <- multiclass_roc_table(
         prob_list = fit$prob.test,
         y_true = fit$Y_test,
         class_levels = fit$class_levels,
         method_label = method,
         dataset = "test"
       )
-      p2 <- .plot_roc_panel(ROC_table_valid, title = "Independent Validation", multiclass = TRUE)
+      p2 <- plot_roc_panel(ROC_table_valid, title = "Independent Validation", multiclass = TRUE)
       p <- cowplot::plot_grid(
         p1, p2,
         nrow = 2, labels = c("A", "B"), label_size = label_size,
@@ -613,16 +663,16 @@ plot.learner <- function(
   }
 
   if (fit$family == "survival") {
-    .require_package("survival")
+    require_package("survival")
 
-    auc_train_tbl <- .survival_auc_table(fit, dataset = "train")
-    p_auc_train <- .survival_auc_plot(auc_train_tbl, title = paste0(fit$folds, "-fold CV AUC"))
+    auc_train_tbl <- survival_auc_table(fit, dataset = "train")
+    p_auc_train <- survival_auc_plot(auc_train_tbl, title = paste0(fit$folds, "-fold CV AUC"))
 
-    km_model_train <- .best_survival_model_name(fit, dataset = "train")
+    km_model_train <- best_survival_model_name(fit, dataset = "train")
     km_train_tbl <- data.frame()
     if (!is.null(km_model_train) && !is.null(fit$surv_plot_data$train)) {
-      risk_map_train <- .survival_risk_map(fit, dataset = "train")
-      km_train_tbl <- .km_curve_table(
+      risk_map_train <- survival_risk_map(fit, dataset = "train")
+      km_train_tbl <- km_curve_table(
         times = fit$surv_plot_data$train$time,
         events = fit$surv_plot_data$train$event,
         risk = risk_map_train$risks[[km_model_train]],
@@ -630,7 +680,7 @@ plot.learner <- function(
         dataset = "train"
       )
     }
-    p_km_train <- .survival_km_plot(
+    p_km_train <- survival_km_plot(
       km_train_tbl,
       title = if (!is.null(km_model_train)) {
         paste0("Train KM (", km_model_train, ")")
@@ -646,14 +696,14 @@ plot.learner <- function(
     )
 
     if (!is.null(fit$valid_out) && !is.null(fit$surv_plot_data$valid)) {
-      auc_valid_tbl <- .survival_auc_table(fit, dataset = "valid")
-      p_auc_valid <- .survival_auc_plot(auc_valid_tbl, title = "Validation AUC")
+      auc_valid_tbl <- survival_auc_table(fit, dataset = "valid")
+      p_auc_valid <- survival_auc_plot(auc_valid_tbl, title = "Validation AUC")
 
-      km_model_valid <- .best_survival_model_name(fit, dataset = "valid")
+      km_model_valid <- best_survival_model_name(fit, dataset = "valid")
       km_valid_tbl <- data.frame()
       if (!is.null(km_model_valid)) {
-        risk_map_valid <- .survival_risk_map(fit, dataset = "valid")
-        km_valid_tbl <- .km_curve_table(
+        risk_map_valid <- survival_risk_map(fit, dataset = "valid")
+        km_valid_tbl <- km_curve_table(
           times = fit$surv_plot_data$valid$time,
           events = fit$surv_plot_data$valid$event,
           risk = risk_map_valid$risks[[km_model_valid]],
@@ -661,7 +711,7 @@ plot.learner <- function(
           dataset = "valid"
         )
       }
-      p_km_valid <- .survival_km_plot(
+      p_km_valid <- survival_km_plot(
         km_valid_tbl,
         title = if (!is.null(km_model_valid)) {
           paste0("Validation KM (", km_model_valid, ")")

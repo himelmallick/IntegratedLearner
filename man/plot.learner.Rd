@@ -47,3 +47,19 @@ training set and, if available, the validation set produced by an
 include ROC curves, R-squared bar plots, multiclass one-vs-rest ROC
 curves, or survival AUC / Kaplan-Meier panels.
 }
+\examples{
+data("PRISM_MAE", package = "IntegratedLearner")
+mae <- PRISM_MAE
+se <- MultiAssayExperiment::experiments(mae)[[1]]
+head(SummarizedExperiment::assay(se, SummarizedExperiment::assayNames(se)[1]))
+fit <- IntegratedLearner(
+  MAE_train = mae,
+  experiment = names(MultiAssayExperiment::experiments(mae))[1:2],
+  assay.type = rep("abundance", 2),
+  folds = 2, base_learner = "SL.mean",
+  run_stacked = FALSE, run_concat = FALSE,
+  print_learner = FALSE, family = stats::binomial()
+)
+plt <- plot(fit)
+names(plt)
+}

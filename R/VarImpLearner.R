@@ -2,16 +2,15 @@
 # scores based on BART posterior samples.  Depends on the library bartMachine.
 VarImp.learner <- function(fit, num.var = 20, layer.names = NULL) {
   # required optional packages
-  .require_package("bartMachine")
-  .require_package("ggplot2")
-  .require_package("dplyr")
-  .require_package("tibble")
-  .require_package("stringr")
+  require_package("bartMachine")
+  require_package("ggplot2")
+  require_package("dplyr")
+  require_package("tibble")
 
   ################################################ Extract required elements
   ################################################ from the IL object #
 
-  if (fit$meta_learner == "SL.nnls.auc") {
+  if (fit$meta_learner == "sl_nnls_auc") {
     VIMP_stack <- cbind.data.frame(fit$weights)
     colnames(VIMP_stack) <- c("mean")
     VIMP_stack$sd <- NA
@@ -20,7 +19,7 @@ VarImp.learner <- function(fit, num.var = 20, layer.names = NULL) {
     VIMP_stack <- NULL
   }
 
-  if (fit$base_learner == "SL.BART") {
+  if (fit$base_learner == "sl_bart") {
     if (is.null(layer.names)) {
       layer.names <- names(fit$model_fits$model_layers)
     }
@@ -53,7 +52,7 @@ VarImp.learner <- function(fit, num.var = 20, layer.names = NULL) {
       VIMP_list[[i]] <- VIMP_layer[seq_len(n_keep), , drop = FALSE]
     }
 
-    VIMP <- do.call(rbind, VIMP_list)
+    VIMP <- dplyr::bind_rows(VIMP_list)
   } else {
     stop("This functionality is currently available only for BART base learner")
   }
@@ -69,7 +68,7 @@ VarImp.learner <- function(fit, num.var = 20, layer.names = NULL) {
   VIMP <- VIMP |>
     dplyr::filter(type %in% layer.names) |>
     dplyr::arrange(mean) |>
-    dplyr::mutate(ID = stringr::str_replace_all(ID, stringr::fixed("_"), " ")) |>
+    dplyr::mutate(ID = gsub("_", " ", ID, fixed = TRUE)) |>
     dplyr::mutate(type = factor(type, levels = layer.names, labels = layer.names))
 
   p <- ggplot2::ggplot(VIMP, ggplot2::aes(stats::reorder(ID, -mean), mean, fill = type)) +

@@ -12,7 +12,7 @@ library(devtools)
 ```
 
 Optional dependency for BART workflows:
-- `SL.BART` and BART uncertainty utilities rely on `bartMachine` and a working Java setup.
+- `sl_bart` and BART uncertainty utilities rely on `bartMachine` and a working Java setup.
 - If Java/BART are unavailable, use non-Java learners such as `SL.randomForest` (continuous/binary) or native multiclass learners.
 
 ## Installation
@@ -20,12 +20,20 @@ Optional dependency for BART workflows:
 Once the dependencies are installed, `IntegratedLearner` can be loaded using the following command:
 
 ```r
-devtools::install_github("himelmallick/IntegratedLearner")
-library(IntegratedLearner)
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+BiocManager::install("IntegratedLearner")
+```
+
+For the development version, use:
+
+```r
+BiocManager::install("himelmallick/IntegratedLearner")
 ```
 
 ## Features
-* Supports both `PCL` and `MAE` input modes
+* Uses `MultiAssayExperiment` (`MAE`) as the primary Bioconductor-facing input mode, while retaining `PCL` as a legacy compatibility mode
 * Supports binary, multiclass, continuous, and survival outcomes
 * Supports custom outcome/subject column names via `outcome_col` and `subject_id_col`
 * Supports early and late fusion in one interface
@@ -41,19 +49,21 @@ library(IntegratedLearner)
 
 ## Quickstart Guide
 
-The package vignette demonstrates binary, multiclass, continuous, survival, `PCL`, and `MAE` workflows. This vignette can be viewed online [here](http://htmlpreview.github.io/?https://github.com/himelmallick/IntegratedLearner/blob/master/vignettes/IntegratedLearner.html).
+The package vignette demonstrates binary, multiclass, continuous, and survival workflows using `MultiAssayExperiment` as the primary interface, with `PCL` retained for backward compatibility.
 
 ## Background
 
 **`IntegratedLearner`** provides an integrated machine learning framework to 1) consolidate predictions by borrowing information across several longitudinal and cross-sectional omics data layers, 2) decipher the mechanistic role of individual omics features that can potentially lead to new sets of testable hypotheses, and 3) quantify uncertainty of the integration process. Two integration paradigms are supported: early and late.
 
-For binary/continuous outcomes, late fusion proceeds by 1) fitting a machine learning algorithm (`base_learner`) per layer and 2) combining layer-wise cross-validated predictions using a meta model (`meta_learner`). A common default is [BART](https://arxiv.org/abs/0806.3286) as base learner (`base_learner = "SL.BART"`) with `SL.nnls.auc` as the meta-learner.
+Within a Bioconductor workflow, the intended pattern is: assemble aligned assays in `MultiAssayExperiment`, inspect the object with `experiments()`, `assay()`, `colData()`, and `sampleMap()`, fit `IntegratedLearner()`, and then pass predictions, layer weights, and feature summaries into downstream interpretation or visualization steps. IntegratedLearner focuses on supervised multi-omics prediction/integration rather than general container management or unsupervised integration.
+
+For binary/continuous outcomes, late fusion proceeds by 1) fitting a machine learning algorithm (`base_learner`) per layer and 2) combining layer-wise cross-validated predictions using a meta model (`meta_learner`). A common default is [BART](https://arxiv.org/abs/0806.3286) as base learner (`base_learner = "sl_bart"`) with `sl_nnls_auc` as the meta-learner.
 
 For multiclass outcomes (`family = binomial()` with more than two outcome classes), `IntegratedLearner` dispatches to a native multiclass backend that performs multiclass probability modeling at layer, stacked, and concatenated levels. Optional filtering and screening are supported via `filter_method`/`filter_pct` and `run_screening`/`screen_pct`.
 
 For survival outcomes, `IntegratedLearner` dispatches to the native survival engine (`ILsurv`) with configurable late-fusion weighting (`COX`/`IBS`). Supported survival learners include Cox, penalized Cox, tree ensembles, boosting, and XGBoost-based survival variants (see full list below).
 
-For binary/continuous non-survival tasks, learners should use the `SL.` prefix (for example, `SL.randomForest`, `SL.BART`, `SL.glmnet`). For multiclass, use multiclass learner IDs such as `randomforest`, `ranger`, `xgboost`, `glmnet`, `mbart`, or `multinom`.
+For binary/continuous non-survival tasks, standard `SuperLearner` learners still use the `SL.*` naming convention (for example, `SL.randomForest`, `SL.glmnet`). IntegratedLearner's package-specific wrappers now use snake_case names such as `sl_bart`, `sl_lasso`, and `sl_nnls_auc`. For multiclass, use multiclass learner IDs such as `randomforest`, `ranger`, `xgboost`, `glmnet`, `mbart`, or `multinom`.
 
 Feature workflow (when enabled):
 1. Filtering happens first (`filter_method`, `filter_pct`) on the training feature table.
@@ -61,16 +71,34 @@ Feature workflow (when enabled):
 
 ## Basic Usage
 
+Recommended MAE-first Bioconductor workflow:
+
 ```r
-# PCL mode (binary/continuous)
+data("PRISM_MAE", package = "IntegratedLearner")
+
+mae_train <- PRISM_MAE
+
+names(MultiAssayExperiment::experiments(mae_train))
+head(as.data.frame(S4Vectors::DataFrame(MultiAssayExperiment::colData(mae_train)))[, 1:4])
+head(MultiAssayExperiment::sampleMap(mae_train))
+
+se <- MultiAssayExperiment::experiments(mae_train)[[1]]
+SummarizedExperiment::assayNames(se)
+```
+
+Then fit the model directly from the MAE:
+
+```r
+# MAE mode (binary/continuous)
 IntegratedLearner(
-  PCL_train = pcl_train,
-  PCL_valid = pcl_valid,        # optional
-  outcome_col = "disease_status",
-  subject_id_col = "participant_id",
+  MAE_train = mae_train,
+  experiment = c("metabolome", "species"),
+  assay.type = c("abundance", "abundance"),
+  outcome_col = "Y",
+  subject_id_col = "subjectID",
   folds = 5,
   base_learner = "SL.randomForest",
-  meta_learner = "SL.nnls.auc",
+  meta_learner = "sl_nnls_auc",
   filter_method = "prevalence",
   filter_pct = 40,
   run_screening = TRUE,
@@ -81,7 +109,6 @@ IntegratedLearner(
 # MAE mode (multiclass)
 IntegratedLearner(
   MAE_train = mae_train,
-  MAE_valid = mae_valid,        # optional
   experiment = c("metabolome", "species"),
   assay.type = c("abundance", "abundance"),
   outcome_col = "diseaseCat",   # column in colData(MAE_train)
@@ -94,20 +121,6 @@ IntegratedLearner(
   run_screening = TRUE,
   screen_pct = 25,
   family = binomial()
-)
-
-# MAE mode (custom metadata column names)
-IntegratedLearner(
-  MAE_train = mae_train,
-  MAE_valid = mae_valid,        # optional
-  experiment = c("metabolome", "species"),
-  assay.type = c("abundance", "abundance"),
-  outcome_col = "clinical_outcome",
-  subject_id_col = "participant_id",
-  folds = 5,
-  base_learner = "SL.randomForest",
-  meta_learner = "SL.nnls.auc",
-  family = gaussian()
 )
 
 # MAE mode (survival)
@@ -123,8 +136,7 @@ IntegratedLearner(
   filter_method = "variance",
   filter_pct = 40,
   run_screening = TRUE,
-  screen_pct = 25,
-  weight_method = "COX"
+  screen_pct = 25
 )
 
 # MAE mode (survival with custom metadata column names)
@@ -136,16 +148,31 @@ IntegratedLearner(
   outcome_col = "time_to_event_obj",
   subject_id_col = "participant_id",
   folds = 5,
-  base_learner = "surv.coxph",
-  weight_method = "COX"
+  base_learner = "surv.coxph"
+)
+
+# Legacy PCL mode remains supported for backward compatibility
+IntegratedLearner(
+  PCL_train = pcl_train,
+  PCL_valid = pcl_valid,        # optional
+  outcome_col = "disease_status",
+  subject_id_col = "participant_id",
+  folds = 5,
+  base_learner = "SL.randomForest",
+  meta_learner = "sl_nnls_auc",
+  filter_method = "prevalence",
+  filter_pct = 40,
+  run_screening = TRUE,
+  screen_pct = 30,
+  family = binomial()
 )
 ```
 
 Custom metadata names are optional. If omitted, defaults remain `outcome_col = "Y"` and `subject_id_col = "subjectID"` (backward compatible).
 ### Arguments
 
-* `MAE_train` / `MAE_valid`: `MultiAssayExperiment` inputs for training and optional validation.
-* `PCL_train` / `PCL_valid`: List inputs (`feature_table`, `sample_metadata`, `feature_metadata`) for training and optional validation.
+* `MAE_train` / `MAE_valid`: primary `MultiAssayExperiment` inputs for training and optional validation.
+* `PCL_train` / `PCL_valid`: legacy list inputs (`feature_table`, `sample_metadata`, `feature_metadata`) retained for backward compatibility.
 * `experiment`: Selected MAE experiment names/indices (optional; defaults to all in `MAE_train`).
 * `assay.type`: Assay name per selected MAE experiment.
 * `outcome_col`: Outcome column name in `sample_metadata` / `colData`. Default is `"Y"`.
@@ -160,13 +187,13 @@ Custom metadata names are optional. If omitted, defaults remain `outcome_col = "
 * `run_screening`: Logical flag to enable supervised screening (`FALSE` by default).
 * `screen_pct`: Retention percentage in `(0,100]` for screening.
 * `prevalence_pct`: Deprecated alias of `filter_pct` when `filter_method = "prevalence"`.
-* `meta_learner`: Meta learner for non-survival late fusion. Defaults to `"SL.nnls.auc"` in binary/continuous; multiclass supports native learners (for example `glmnet`, `randomforest`, `xgboost`).
+* `meta_learner`: Meta learner for non-survival late fusion. Defaults to `"sl_nnls_auc"` in binary/continuous; multiclass supports native learners (for example `glmnet`, `randomforest`, `xgboost`).
 * `run_concat`: Logical; include early-fusion (concatenated) model for non-survival.
 * `run_stacked`: Logical; include late-fusion stacked model for non-survival.
 * `drop_poor_performing_layers`: If `TRUE`, layers with poor single-layer performance are removed from early and late fusion only (`AUC < 0.5` for binary, `R2 < 0.5` for continuous, `C-index < 0.5` for survival). Single-layer outputs are still retained.
 * `family`: `gaussian()` (continuous), `binomial()` (binary or multiclass), or survival family/metadata.
 * `verbose`: Logical progress flag.
-* `...`: Additional backend parameters. For survival, includes options such as `weight_method`, `do_early_fusion`, and learner-specific hyperparameters (or `model_args`).
+* `...`: Additional backend parameters. For survival, includes options such as `do_early_fusion` and learner-specific hyperparameters (or `model_args`).
 
 Automatic outcome coercion:
 * `gaussian()`: outcome is coerced to numeric (errors if conversion fails).
@@ -183,7 +210,7 @@ Supported fusion modules:
 
 * Continuous/Binary: single-layer + early (`run_concat`) + late (`run_stacked`).
 * Multiclass: single-layer + early (`run_concat`) + late (`run_stacked`).
-* Survival: single-layer + early (`do_early_fusion`) + late weighted fusion (`COX`/`IBS`).
+* Survival: single-layer + early (`do_early_fusion`) + late weighted fusion with both `COX` and `IBS` outputs returned.
 
 #### The IntegratedLearner workflow
 
@@ -197,7 +224,7 @@ For continuous/binary fits (`IL_conbin` path):
 * `model_fits`: Extracted learner objects.
 * `X_train_layers`, `Y_train`, `yhat.train`: training inputs and predictions.
 * `X_test_layers`, `Y_test`, `yhat.test`: validation inputs and predictions (if validation provided).
-* `weights`: Layer weights in stacked model (`meta_learner = "SL.nnls.auc"` and `run_stacked = TRUE`).
+* `weights`: Layer weights in stacked model (`meta_learner = "sl_nnls_auc"` and `run_stacked = TRUE`).
 * `AUC.train`/`AUC.test` (binomial) or `R2.train`/`R2.test` (gaussian).
 * `feature_importance_signed`: Global signed feature importance.
 * `feature_importance_signed_by_layer`: Per-layer signed feature importance.
@@ -215,7 +242,7 @@ For survival fits (`ILsurv` path):
 
 * `train_out$single`: Single-layer metrics.
 * `train_out$early`: Early-fusion metrics (if enabled).
-* `train_out$late`: Late-fusion metrics and learned layer weights (`train_out$late$weights`).
+* `train_out$late$IBS` and `train_out$late$COX`: Late-fusion metrics and learned layer weights for both survival fusion strategies.
 * `valid_out$...`: Validation analogs of single/early/late outputs (if validation provided).
 * `train_out$late$combined_importance` and (if available) `train_out$early$combined_importance`: survival feature-importance outputs.
 

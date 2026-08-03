@@ -12,14 +12,14 @@ IL_conbin(
   sample_metadata_valid = NULL,
   folds = 5,
   seed = 1234,
-  base_learner = "SL.BART",
+  base_learner = "sl_bart",
   base_screener = "All",
   run_screening = FALSE,
   screen_pct = NULL,
   filter_method = NULL,
   filter_pct = NULL,
   prevalence_pct = NULL,
-  meta_learner = "SL.nnls.auc",
+  meta_learner = "sl_nnls_auc",
   run_concat = TRUE,
   run_stacked = TRUE,
   drop_poor_performing_layers = FALSE,
@@ -65,7 +65,7 @@ is 5.}
 \item{seed}{Specify the seed for reproducibility. Default is 1234.}
 
 \item{base_learner}{Base learner for late fusion and early fusion. Default:
-\code{SL.BART}.}
+\code{sl_bart}.}
 
 \item{base_screener}{Deprecated for this backend; currently ignored and kept
 only for backward compatibility.}
@@ -91,7 +91,7 @@ prevalence-based filtering before model fitting. Deprecated alias of
 \code{filter_pct} with \code{filter_method = 'prevalence'}.}
 
 \item{meta_learner}{Meta-learner for late fusion (stacked generalization).
-Defaults to \code{SL.nnls.auc}.}
+Defaults to \code{sl_nnls_auc}.}
 
 \item{run_concat}{Should early fusion be run? Default is TRUE.}
 
@@ -145,32 +145,29 @@ Although \code{IL_conbin()} is typically called internally by
 and metadata in matrix/data.frame form.
 }
 \examples{
-is.function(IL_conbin)
-if (FALSE) {
-  set.seed(1)
-  n <- 20
-  feature_table <- rbind(
-    matrix(rnorm(3 * n), nrow = 3, dimnames = list(paste0("L1_F", 1:3), paste0("S", 1:n))),
-    matrix(rnorm(2 * n), nrow = 2, dimnames = list(paste0("L2_F", 1:2), paste0("S", 1:n)))
-  )
-  sample_metadata <- data.frame(
-    subjectID = paste0("ID", 1:n), Y = rnorm(n),
-    row.names = colnames(feature_table)
-  )
-  feature_metadata <- data.frame(
-    featureID = rownames(feature_table),
-    featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
-    row.names = rownames(feature_table)
-  )
-  fit <- IL_conbin(
-    feature_table = feature_table,
-    sample_metadata = sample_metadata,
-    feature_metadata = feature_metadata,
-    folds = 3, base_learner = "SL.mean", run_stacked = FALSE,
-    run_concat = FALSE, print_learner = FALSE, family = stats::gaussian()
-  )
-  names(fit)
-}
+set.seed(1)
+n <- 20
+feature_table <- as.data.frame(rbind(
+  matrix(rnorm(3 * n), nrow = 3, dimnames = list(paste0("L1_F", 1:3), paste0("S", 1:n))),
+  matrix(rnorm(2 * n), nrow = 2, dimnames = list(paste0("L2_F", 1:2), paste0("S", 1:n)))
+))
+sample_metadata <- data.frame(
+  subjectID = paste0("ID", 1:n), Y = rnorm(n),
+  row.names = colnames(feature_table)
+)
+feature_metadata <- data.frame(
+  featureID = rownames(feature_table),
+  featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
+  row.names = rownames(feature_table)
+)
+fit <- IL_conbin(
+  feature_table = feature_table,
+  sample_metadata = sample_metadata,
+  feature_metadata = feature_metadata,
+  folds = 3, base_learner = "SL.mean", run_stacked = FALSE,
+  run_concat = FALSE, print_learner = FALSE, family = stats::gaussian()
+)
+names(fit)
 
 }
 \seealso{

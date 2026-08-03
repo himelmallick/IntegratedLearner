@@ -16,12 +16,12 @@ credint.learner <- function(fit,
                             model = NULL,
                             class = NULL,
                             ...) {
-  .require_package("bayesplot")
-  .require_package("ggplot2")
+  require_package("bayesplot")
+  require_package("ggplot2")
 
   # Multiclass BART path (native mbart backend)
   if (identical(fit$family, "multinomial")) {
-    .require_package("BART")
+    require_package("BART")
 
     if (isTRUE(test)) {
       if (!isTRUE(fit$test)) {
@@ -87,7 +87,7 @@ credint.learner <- function(fit,
       if (!all(layer_names %in% names(prob_src))) {
         stop("Cannot reconstruct stacked input probabilities for uncertainty plotting.", call. = FALSE)
       }
-      newX <- .stack_prob_features(prob_src[layer_names])
+      newX <- stack_prob_features(prob_src[layer_names])
     } else { # concatenated
       fit_obj <- fit$model_fits$model_concat
       full_dat <- NULL
@@ -238,7 +238,7 @@ credint.learner <- function(fit,
     return(p)
   }
 
-  if (!(fit$base_learner == "SL.BART" && fit$meta_learner == "SL.nnls.auc")) {
+  if (!(fit$base_learner == "sl_bart" && fit$meta_learner == "sl_nnls_auc")) {
     stop(
       "Credible Interval feature is currently only available for ",
       "BART as base learner and NNLS/AUC as the meta learner",
@@ -246,7 +246,7 @@ credint.learner <- function(fit,
     )
   }
 
-  .require_package("bartMachine")
+  require_package("bartMachine")
 
   weights <- fit$weights
 

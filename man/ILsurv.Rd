@@ -19,7 +19,6 @@ ILsurv(
   drop_poor_performing_layers = FALSE,
   verbose = FALSE,
   do_early_fusion = TRUE,
-  weight_method = c("IBS", "COX"),
   t_vec = NULL,
   t_vec_probs = c(0.05, 0.25, 0.5, 0.75, 0.95),
   layer_score = c("sum", "mean", "l2"),
@@ -47,7 +46,6 @@ IL_survival(
   drop_poor_performing_layers = FALSE,
   verbose = FALSE,
   do_early_fusion = TRUE,
-  weight_method = c("IBS", "COX"),
   t_vec = NULL,
   t_vec_probs = c(0.05, 0.25, 0.5, 0.75, 0.95),
   layer_score = c("sum", "mean", "l2"),
@@ -111,9 +109,6 @@ retained and reported.}
 
 \item{do_early_fusion}{Logical; run early fusion model.}
 
-\item{weight_method}{Late-fusion weighting method. Supported:
-\code{'IBS'}, \code{'COX'}.}
-
 \item{t_vec}{Optional explicit time points for COX-based late-fusion feature
 construction.}
 
@@ -144,8 +139,9 @@ uniform.}
 named list where each entry is keyed by learner ID.}
 }
 \value{
-List with \code{train_out} and \code{valid_out} in the same nested
-format as previous survival implementations.
+List with \code{train_out} and \code{valid_out}. Late-fusion results
+are returned under \code{train_out$late$IBS}, \code{train_out$late$COX},
+and the analogous validation entries.
 }
 \description{
 BioC-friendly survival backend used by \code{IntegratedLearner()} for
@@ -154,32 +150,29 @@ interface while using model fitting and fusion routines that do not depend on
 \pkg{mlr3proba}/\pkg{mlr3extralearners}.
 }
 \examples{
-identical(IL_survival, ILsurv)
-if (FALSE) {
-  set.seed(1)
-  n <- 20
-  feature_table <- rbind(
-    matrix(rnorm(3 * n), nrow = 3, dimnames = list(paste0("L1_F", 1:3), paste0("S", 1:n))),
-    matrix(rnorm(2 * n), nrow = 2, dimnames = list(paste0("L2_F", 1:2), paste0("S", 1:n)))
-  )
-  sample_metadata <- data.frame(
-    subjectID = paste0("ID", 1:n),
-    time = rexp(n, rate = 0.1),
-    event = rbinom(n, 1, 0.6),
-    row.names = colnames(feature_table)
-  )
-  sample_metadata$Y <- survival::Surv(sample_metadata$time, sample_metadata$event)
-  feature_metadata <- data.frame(
-    featureID = rownames(feature_table),
-    featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
-    row.names = rownames(feature_table)
-  )
-  fit <- ILsurv(
-    feature_table = feature_table,
-    sample_metadata = sample_metadata,
-    feature_metadata = feature_metadata,
-    folds = 3
-  )
-  names(fit)
-}
+set.seed(1)
+n <- 20
+feature_table <- as.data.frame(rbind(
+  matrix(rnorm(3 * n), nrow = 3, dimnames = list(paste0("L1_F", 1:3), paste0("S", 1:n))),
+  matrix(rnorm(2 * n), nrow = 2, dimnames = list(paste0("L2_F", 1:2), paste0("S", 1:n)))
+))
+sample_metadata <- data.frame(
+  subjectID = paste0("ID", 1:n),
+  time = rexp(n, rate = 0.1),
+  event = rbinom(n, 1, 0.6),
+  row.names = colnames(feature_table)
+)
+sample_metadata$Y <- survival::Surv(sample_metadata$time, sample_metadata$event)
+feature_metadata <- data.frame(
+  featureID = rownames(feature_table),
+  featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
+  row.names = rownames(feature_table)
+)
+fit <- ILsurv(
+  feature_table = feature_table,
+  sample_metadata = sample_metadata,
+  feature_metadata = feature_metadata,
+  folds = 3
+)
+names(fit)
 }

@@ -1,10 +1,10 @@
-IntegratedLearner uses optional Java-backed functionality for `SL.BART`
+IntegratedLearner uses optional Java-backed functionality for `sl_bart`
 and BART uncertainty / variable-importance workflows via `bartMachine`.
 
 Most package functionality (including non-BART learners and multiclass/survival
 modules) does not require Java.
 
-If you plan to use `SL.BART`:
+If you plan to use `sl_bart`:
 
 1. Install a Java runtime (Java 21 is recommended for recent `bartMachine`
    builds).

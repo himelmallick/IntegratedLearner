@@ -48,7 +48,7 @@
 #'   is 5.
 #' @param seed Specify the seed for reproducibility. Default is 1234.
 #' @param base_learner Base learner for late fusion and early fusion. Default:
-#'   \code{SL.BART}.
+#'   \code{sl_bart}.
 #' @param base_screener Deprecated for this backend; currently ignored and kept
 #'   only for backward compatibility.
 #' @param run_screening Logical; if \code{TRUE}, run supervised screening
@@ -67,7 +67,7 @@
 #'   prevalence-based filtering before model fitting. Deprecated alias of
 #'   \code{filter_pct} with \code{filter_method = 'prevalence'}.
 #' @param meta_learner Meta-learner for late fusion (stacked generalization).
-#'   Defaults to \code{SL.nnls.auc}.
+#'   Defaults to \code{sl_nnls_auc}.
 #' @param run_concat Should early fusion be run? Default is TRUE.
 #' @param run_stacked Should stacked model (late fusion) be run? Default is TRUE.
 #' @param drop_poor_performing_layers Logical; if \code{TRUE}, layers with
@@ -89,32 +89,29 @@
 #'   and predictions for training and validation sets.
 #'
 #' @examples
-#' is.function(IL_conbin)
-#' if (FALSE) {
-#'   set.seed(1)
-#'   n <- 20
-#'   feature_table <- rbind(
-#'     matrix(rnorm(3 * n), nrow = 3, dimnames = list(paste0("L1_F", 1:3), paste0("S", 1:n))),
-#'     matrix(rnorm(2 * n), nrow = 2, dimnames = list(paste0("L2_F", 1:2), paste0("S", 1:n)))
-#'   )
-#'   sample_metadata <- data.frame(
-#'     subjectID = paste0("ID", 1:n), Y = rnorm(n),
-#'     row.names = colnames(feature_table)
-#'   )
-#'   feature_metadata <- data.frame(
-#'     featureID = rownames(feature_table),
-#'     featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
-#'     row.names = rownames(feature_table)
-#'   )
-#'   fit <- IL_conbin(
-#'     feature_table = feature_table,
-#'     sample_metadata = sample_metadata,
-#'     feature_metadata = feature_metadata,
-#'     folds = 3, base_learner = "SL.mean", run_stacked = FALSE,
-#'     run_concat = FALSE, print_learner = FALSE, family = stats::gaussian()
-#'   )
-#'   names(fit)
-#' }
+#' set.seed(1)
+#' n <- 20
+#' feature_table <- as.data.frame(rbind(
+#'   matrix(rnorm(3 * n), nrow = 3, dimnames = list(paste0("L1_F", 1:3), paste0("S", 1:n))),
+#'   matrix(rnorm(2 * n), nrow = 2, dimnames = list(paste0("L2_F", 1:2), paste0("S", 1:n)))
+#' ))
+#' sample_metadata <- data.frame(
+#'   subjectID = paste0("ID", 1:n), Y = rnorm(n),
+#'   row.names = colnames(feature_table)
+#' )
+#' feature_metadata <- data.frame(
+#'   featureID = rownames(feature_table),
+#'   featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
+#'   row.names = rownames(feature_table)
+#' )
+#' fit <- IL_conbin(
+#'   feature_table = feature_table,
+#'   sample_metadata = sample_metadata,
+#'   feature_metadata = feature_metadata,
+#'   folds = 3, base_learner = "SL.mean", run_stacked = FALSE,
+#'   run_concat = FALSE, print_learner = FALSE, family = stats::gaussian()
+#' )
+#' names(fit)
 #'
 #' @author Himel Mallick, \email{him4004@@med.cornell.edu}
 #'
@@ -125,9 +122,9 @@
 
 IL_conbin <- function(
   feature_table, sample_metadata, feature_metadata, feature_table_valid = NULL,
-  sample_metadata_valid = NULL, folds = 5, seed = 1234, base_learner = "SL.BART",
+  sample_metadata_valid = NULL, folds = 5, seed = 1234, base_learner = "sl_bart",
   base_screener = "All", run_screening = FALSE, screen_pct = NULL, filter_method = NULL,
-  filter_pct = NULL, prevalence_pct = NULL, meta_learner = "SL.nnls.auc", run_concat = TRUE,
+  filter_pct = NULL, prevalence_pct = NULL, meta_learner = "sl_nnls_auc", run_concat = TRUE,
   run_stacked = TRUE, drop_poor_performing_layers = FALSE, verbose = FALSE,
   print_learner = TRUE, refit.stack = FALSE, family = stats::gaussian(), ...
 ) {
@@ -135,14 +132,17 @@ IL_conbin <- function(
 
   start.time <- Sys.time()
 
-  .validate_IL_inputs(
+  validate_IL_inputs(
     feature_table = feature_table, sample_metadata = sample_metadata,
     feature_metadata = feature_metadata, feature_table_valid = feature_table_valid,
-    sample_metadata_valid = sample_metadata_valid, family_name = .safe_family_name(family),
+    sample_metadata_valid = sample_metadata_valid, family_name = safe_family_name(family),
     is_survival = FALSE
   )
 
-  filtered <- .filter_features_by_method(
+  base_learner <- normalize_il_learner_id(base_learner, role = "base_learner")
+  meta_learner <- normalize_il_learner_id(meta_learner, role = "meta_learner")
+
+  filtered <- filter_features_by_method(
     feature_table = feature_table, feature_metadata = feature_metadata,
     feature_table_valid = feature_table_valid, filter_method = filter_method,
     filter_pct = filter_pct, prevalence_pct = prevalence_pct, verbose = verbose
@@ -151,7 +151,7 @@ IL_conbin <- function(
   feature_metadata <- filtered$feature_metadata
   feature_table_valid <- filtered$feature_table_valid
 
-  screening <- .resolve_screening_args(
+  screening <- resolve_screening_args(
     run_screening = run_screening, screen_pct = screen_pct,
     base_screener = base_screener, context = "IL_conbin"
   )
@@ -160,12 +160,12 @@ IL_conbin <- function(
     warning("'base_screener' is deprecated; use run_screening/screen_pct.", call. = FALSE)
   }
 
-  sl_env <- .make_sl_env()
+  sl_env <- make_sl_env()
 
   base_library <- base_learner
   if (isTRUE(screening$enabled)) {
     screen_fun_name <- "screen.il.glmnet"
-    assign(screen_fun_name, .make_glmnet_screen_screener(
+    assign(screen_fun_name, make_glmnet_screen_screener(
       keep_pct = screening$screen_pct,
       seed = seed
     ), envir = sl_env)
@@ -200,39 +200,19 @@ IL_conbin <- function(
   ############################################################### for sample
   ############################################################### splitting #
 
-  .set_seed_internal(seed)
-  subjectID <- unique(sample_metadata$subjectID)
-
-  ################################## Trigger V-fold CV (Outer Loop) #
-
-  subjectCvFoldsIN <- caret::createFolds(seq_along(subjectID), k = folds, returnTrain = TRUE)
-
-  ######################################## Curate subject-level samples per
-  ######################################## fold #
-
-  obsIndexIn <- vector("list", folds)
-  for (k in seq_along(obsIndexIn)) {
-    x <- which(!sample_metadata$subjectID %in% subjectID[subjectCvFoldsIN[[k]]])
-    obsIndexIn[[k]] <- x
-  }
-  names(obsIndexIn) <- vapply(seq_len(folds), function(x) paste0("fold", x), character(1))
-
-  fold_id <- integer(nrow(sample_metadata))
-  for (k in seq_along(obsIndexIn)) {
-    fold_id[obsIndexIn[[k]]] <- k
-  }
-
-  ############################### Set up data for SL training #
-
-  cvControl <- list(V = folds, shuffle = FALSE, validRows = obsIndexIn)
+  cv_partition <- build_subject_cv_partition(
+    sample_metadata = sample_metadata,
+    folds = folds,
+    seed = seed
+  )
+  obsIndexIn <- cv_partition$obs_index_in
+  fold_id <- cv_partition$fold_id
+  cvControl <- cv_partition$cv_control
 
   ################################################# Stacked generalization
   ################################################# input data preparation #
 
-  feature_metadata$featureType <- as.factor(feature_metadata$featureType)
-  name_layers <- with(droplevels(feature_metadata), list(levels = levels(featureType)),
-    nlevels = nlevels(featureType)
-  )$levels
+  name_layers <- extract_layer_names(feature_metadata)
   SL_fit_predictions <- vector("list", length(name_layers))
   SL_fit_layers <- vector("list", length(name_layers))
   names(SL_fit_layers) <- name_layers
@@ -277,8 +257,7 @@ IL_conbin <- function(
 
     include_list <- feature_metadata |>
       dplyr::filter(featureType == name_layers[i])
-    t_dat_slice <- feature_table[rownames(feature_table) %in% include_list$featureID, ]
-    dat_slice <- as.data.frame(t(t_dat_slice))
+    dat_slice <- slice_feature_table(feature_table, include_list$featureID)
     Y <- sample_metadata$Y
     X <- dat_slice
     X_train_layers[[i]] <- X
@@ -310,9 +289,7 @@ IL_conbin <- function(
     ################################################################## predictions
     ################################################################## #
 
-    rm(t_dat_slice)
-    rm(dat_slice)
-    rm(X)
+    rm(dat_slice, X)
     SL_fit_predictions[[i]] <- SL_fit_layers[[i]]$Z
 
     ################################################## Re-fit to entire
@@ -330,25 +307,18 @@ IL_conbin <- function(
     ############################################################ #
 
     if (!is.null(feature_table_valid)) {
-      t_dat_slice_valid <- feature_table_valid[rownames(feature_table_valid) %in%
-        include_list$featureID, ]
-      dat_slice_valid <- as.data.frame(t(t_dat_slice_valid))
+      dat_slice_valid <- slice_feature_table(feature_table_valid, include_list$featureID)
       X_test_layers[[i]] <- dat_slice_valid
-      layer_wise_prediction_valid[[i]] <- SuperLearner::predict.SuperLearner(SL_fit_layers[[i]],
-        newdata = dat_slice_valid
-      )$pred
-      layer_wise_prediction_valid[[i]] <- matrix(layer_wise_prediction_valid[[i]],
-        ncol = 1
-      ) # <- Change here
-      rownames(layer_wise_prediction_valid[[i]]) <- rownames(dat_slice_valid)
-      SL_fit_layers[[i]]$validX <- dat_slice_valid
-      SL_fit_layers[[i]]$validPrediction <- layer_wise_prediction_valid[[i]]
-      SL_fit_layers[[i]]$validPrediction <- matrix(SL_fit_layers[[i]]$validPrediction,
-        ncol = 1
-      ) # <- Change here
-      colnames(SL_fit_layers[[i]]$validPrediction) <- "validPrediction"
-      rm(dat_slice_valid)
-      rm(include_list)
+      layer_wise_prediction_valid[[i]] <- predict_superlearner_matrix(
+        SL_fit_layers[[i]],
+        dat_slice_valid
+      )
+      SL_fit_layers[[i]] <- attach_sl_validation_payload(
+        SL_fit_layers[[i]],
+        validX = dat_slice_valid,
+        validPrediction = layer_wise_prediction_valid[[i]]
+      )
+      rm(dat_slice_valid, include_list)
     }
   }
 
@@ -367,13 +337,13 @@ IL_conbin <- function(
     names(combo_valid) <- name_layers
   }
 
-  family_name <- .safe_family_name(family)
-  fusion_layer_filter <- .single_layer_fusion_scores(
+  family_name <- safe_family_name(family)
+  fusion_layer_filter <- single_layer_fusion_scores(
     pred_mat = combo,
     y_true = Y,
     family_name = family_name
   )
-  fusion_layer_filter <- .select_fusion_layers(
+  fusion_layer_filter <- select_fusion_layers(
     scores = fusion_layer_filter$scores,
     threshold = fusion_layer_filter$threshold,
     metric_label = fusion_layer_filter$metric,
@@ -388,7 +358,7 @@ IL_conbin <- function(
     combo_valid_fusion <- combo_valid[, fusion_layers_retained, drop = FALSE]
   }
 
-  fusion_feature_ids <- .feature_ids_for_layers(feature_metadata, fusion_layers_retained)
+  fusion_feature_ids <- feature_ids_for_layers(feature_metadata, fusion_layers_retained)
 
   #################### Stack all models #
 
@@ -407,9 +377,10 @@ IL_conbin <- function(
 
     # Extract the fit object from SuperLearner
     model_stacked <- SL_fit_stacked$fitLibrary[[1]]$object
-    stacked_prediction_train <- SuperLearner::predict.SuperLearner(SL_fit_stacked,
-      newdata = combo_final_fusion
-    )$pred
+    stacked_prediction_train <- predict_superlearner_matrix(
+      SL_fit_stacked,
+      combo_final_fusion
+    )[, 1]
 
     ################################################### Append the
     ################################################### corresponding y and
@@ -433,13 +404,15 @@ IL_conbin <- function(
     ################################################################# #
 
     if (!is.null(feature_table_valid)) {
-      stacked_prediction_valid <- SuperLearner::predict.SuperLearner(SL_fit_stacked,
-        newdata = combo_valid_fusion
-      )$pred
-      rownames(stacked_prediction_valid) <- rownames(combo_valid_fusion)
-      SL_fit_stacked$validX <- combo_valid_fusion
-      SL_fit_stacked$validPrediction <- stacked_prediction_valid
-      colnames(SL_fit_stacked$validPrediction) <- "validPrediction"
+      stacked_prediction_valid <- predict_superlearner_matrix(
+        SL_fit_stacked,
+        combo_valid_fusion
+      )
+      SL_fit_stacked <- attach_sl_validation_payload(
+        SL_fit_stacked,
+        validX = combo_valid_fusion,
+        validPrediction = stacked_prediction_valid
+      )
     }
   }
 
@@ -452,7 +425,7 @@ IL_conbin <- function(
     }
     ################################### Prepate concatenated input data #
 
-    fulldat <- as.data.frame(t(feature_table[fusion_feature_ids, , drop = FALSE]))
+    fulldat <- slice_feature_table(feature_table, fusion_feature_ids)
 
     ################################### Run user-specified base learner #
 
@@ -487,178 +460,43 @@ IL_conbin <- function(
     ######################################################################### #
 
     if (!is.null(feature_table_valid)) {
-      fulldat_valid <- as.data.frame(t(feature_table_valid[fusion_feature_ids, , drop = FALSE]))
-      concat_prediction_valid <- SuperLearner::predict.SuperLearner(SL_fit_concat,
-        newdata = fulldat_valid
-      )$pred
-      SL_fit_concat$validX <- fulldat_valid
-      rownames(concat_prediction_valid) <- rownames(fulldat_valid)
-      SL_fit_concat$validPrediction <- concat_prediction_valid
-      colnames(SL_fit_concat$validPrediction) <- "validPrediction"
+      fulldat_valid <- slice_feature_table(feature_table_valid, fusion_feature_ids)
+      concat_prediction_valid <- predict_superlearner_matrix(
+        SL_fit_concat,
+        fulldat_valid
+      )
+      SL_fit_concat <- attach_sl_validation_payload(
+        SL_fit_concat,
+        validX = fulldat_valid,
+        validPrediction = concat_prediction_valid
+      )
     }
   }
 
   ###################### Save model results #
 
-  # Extract the fit object from superlearner
   model_layers <- vector("list", length(name_layers))
   names(model_layers) <- name_layers
   for (i in seq_along(name_layers)) {
     model_layers[[i]] <- SL_fit_layers[[i]]$fitLibrary[[1]]$object
   }
-
-  ################## CONCAT + STACK #
-
-  if (run_concat & run_stacked) {
-    model_fits <- list(
-      model_layers = model_layers, model_stacked = model_stacked,
-      model_concat = model_concat
-    )
-
-    SL_fits <- list(
-      SL_fit_layers = SL_fit_layers, SL_fit_stacked = SL_fit_stacked,
-      SL_fit_concat = SL_fit_concat
-    )
-
-    ############################### Prediction (Stack + Concat) #
-
-    yhat.train <- combo
-    if (refit.stack) {
-      yhat.train <- cbind(yhat.train, stacked_prediction_train)
-    } else {
-      yhat.train <- cbind(yhat.train, SL_fit_stacked$Z)
-    }
-    yhat.train <- cbind(yhat.train, SL_fit_concat$Z)
-    colnames(yhat.train)[(ncol(yhat.train) - 1L):ncol(yhat.train)] <- c("stacked", "concatenated")
-
-    ############################### Validation (Stack + Concat) #
-
-    if (!is.null(feature_table_valid)) {
-      yhat.test <- combo_valid
-      yhat.test <- cbind(yhat.test, SL_fit_stacked$validPrediction, SL_fit_concat$validPrediction)
-      colnames(yhat.test)[(ncol(yhat.test) - 1L):ncol(yhat.test)] <- c("stacked", "concatenated")
-
-      ######## Save #
-
-      res <- list(
-        model_fits = model_fits, SL_fits = SL_fits, X_train_layers = X_train_layers,
-        Y_train = Y, yhat.train = yhat.train, X_test_layers = X_test_layers,
-        yhat.test = yhat.test
-      )
-    } else {
-      res <- list(
-        model_fits = model_fits, SL_fits = SL_fits, X_train_layers = X_train_layers,
-        Y_train = Y, yhat.train = yhat.train
-      )
-    }
-
-    ############### CONCAT ONLY #
-  } else if (run_concat & !run_stacked) {
-    model_fits <- list(
-      model_layers = model_layers,
-      model_concat = model_concat
-    )
-
-    SL_fits <- list(SL_fit_layers = SL_fit_layers, SL_fit_concat = SL_fit_concat)
-
-
-    ############################ Prediction (Concat Only) #
-
-    yhat.train <- combo
-    yhat.train <- cbind(yhat.train, SL_fit_concat$Z)
-    colnames(yhat.train)[ncol(yhat.train)] <- "concatenated"
-
-    ############################ Validation (Concat Only) #
-
-    if (!is.null(feature_table_valid)) {
-      yhat.test <- combo_valid
-      yhat.test <- cbind(yhat.test, SL_fit_concat$validPrediction)
-      colnames(yhat.test)[ncol(yhat.test)] <- "concatenated"
-
-      res <- list(
-        model_fits = model_fits, SL_fits = SL_fits, X_train_layers = X_train_layers,
-        Y_train = Y, yhat.train = yhat.train, X_test_layers = X_test_layers,
-        yhat.test = yhat.test
-      )
-    } else {
-      res <- list(
-        model_fits = model_fits, SL_fits = SL_fits, X_train_layers = X_train_layers,
-        Y_train = Y, yhat.train = yhat.train
-      )
-    }
-
-
-    ############## STACK ONLY #
-  } else if (!run_concat & run_stacked) {
-    model_fits <- list(
-      model_layers = model_layers,
-      model_stacked = model_stacked
-    )
-
-    SL_fits <- list(SL_fit_layers = SL_fit_layers, SL_fit_stacked = SL_fit_stacked)
-
-    ########################### Prediction (Stack Only) #
-
-    yhat.train <- combo
-    if (refit.stack) {
-      yhat.train <- cbind(yhat.train, stacked_prediction_train)
-    } else {
-      yhat.train <- cbind(yhat.train, SL_fit_stacked$Z)
-    }
-    colnames(yhat.train)[ncol(yhat.train)] <- "stacked"
-
-    ########################### Validation (Stack Only) #
-
-    if (!is.null(feature_table_valid)) {
-      yhat.test <- combo_valid
-      yhat.test <- cbind(yhat.test, SL_fit_stacked$validPrediction)
-      colnames(yhat.test)[ncol(yhat.test)] <- "stacked"
-
-      ######## Save #
-
-      res <- list(
-        model_fits = model_fits, SL_fits = SL_fits, X_train_layers = X_train_layers,
-        Y_train = Y, yhat.train = yhat.train, X_test_layers = X_test_layers,
-        yhat.test = yhat.test
-      )
-    } else {
-      res <- list(
-        model_fits = model_fits, SL_fits = SL_fits, X_train_layers = X_train_layers,
-        Y_train = Y, yhat.train = yhat.train
-      )
-    }
-
-
-    ############################ NEITHER CONCAT NOR STACK #
-  } else {
-    model_fits <- list(model_layers = model_layers)
-    SL_fits <- list(SL_fit_layers = SL_fit_layers)
-
-    ######################################### Prediction (Neither Stack nor
-    ######################################### Concat) #
-
-    yhat.train <- combo
-
-    ######################################### Validation (Neither Stack nor
-    ######################################### Concat) #
-
-    if (!is.null(feature_table_valid)) {
-      yhat.test <- combo_valid
-
-      ######### Save #
-
-      res <- list(
-        model_fits = model_fits, SL_fits = SL_fits, X_train_layers = X_train_layers,
-        Y_train = Y, yhat.train = yhat.train, X_test_layers = X_test_layers,
-        yhat.test = yhat.test
-      )
-    } else {
-      res <- list(
-        model_fits = model_fits, SL_fits = SL_fits, X_train_layers = X_train_layers,
-        Y_train = Y, yhat.train = yhat.train
-      )
-    }
-  }
+  res <- assemble_conbin_outputs(
+    combo = combo,
+    combo_valid = if (!is.null(feature_table_valid)) combo_valid else NULL,
+    run_concat = run_concat,
+    run_stacked = run_stacked,
+    refit_stack = refit.stack,
+    X_train_layers = X_train_layers,
+    Y_train = Y,
+    X_test_layers = X_test_layers,
+    SL_fit_layers = SL_fit_layers,
+    SL_fit_stacked = if (isTRUE(run_stacked)) SL_fit_stacked else NULL,
+    SL_fit_concat = if (isTRUE(run_concat)) SL_fit_concat else NULL,
+    model_layers = model_layers,
+    model_stacked = if (isTRUE(run_stacked)) model_stacked else NULL,
+    model_concat = if (isTRUE(run_concat)) model_concat else NULL,
+    stacked_prediction_train = if (isTRUE(run_stacked)) stacked_prediction_train else NULL
+  )
   if (!is.null(sample_metadata_valid)) {
     res$Y_test <- validY$Y
   }
@@ -695,44 +533,17 @@ IL_conbin <- function(
   } else {
     res$test <- TRUE
   }
-  if (meta_learner == "SL.nnls.auc" & run_stacked) {
+  if (meta_learner == "sl_nnls_auc" & run_stacked) {
     res$weights <- res$model_fits$model_stacked$solution
     names(res$weights) <- colnames(combo_fusion)
   }
 
-  if (res$family == "binomial") {
-    train_metrics <- .binary_model_metrics(res$yhat.train, res$Y_train)
-    res$AUC.train <- train_metrics$auc
-    res$accuracy.train <- train_metrics$accuracy
-    res$balanced_accuracy.train <- train_metrics$balanced_accuracy
-    res$metrics.train <- train_metrics$metrics
-
-    if (res$test == TRUE) {
-      test_metrics <- .binary_model_metrics(res$yhat.test, res$Y_test)
-      res$AUC.test <- test_metrics$auc
-      res$accuracy.test <- test_metrics$accuracy
-      res$balanced_accuracy.test <- test_metrics$balanced_accuracy
-      res$metrics.test <- test_metrics$metrics
-    }
-  }
-  if (res$family == "gaussian") {
-    # Calculate R^2 for each layer, stacked and concatenated
-    R2 <- vector(length = ncol(res$yhat.train))
-    names(R2) <- names(res$yhat.train)
-    for (i in seq_along(R2)) {
-      R2[i] <- as.vector(stats::cor(res$yhat.train[, i], res$Y_train)^2)
-    }
-    res$R2.train <- R2
-    if (res$test == TRUE) {
-      # Calculate R^2 for each layer, stacked and concatenated
-      R2 <- vector(length = ncol(res$yhat.test))
-      names(R2) <- names(res$yhat.test)
-      for (i in seq_along(R2)) {
-        R2[i] <- as.vector(stats::cor(res$yhat.test[, i], res$Y_test)^2)
-      }
-      res$R2.test <- R2
-    }
-  }
+  res <- add_family_metrics(
+    result = res,
+    family_name = res$family,
+    y_train = res$Y_train,
+    y_test = if (isTRUE(res$test)) res$Y_test else NULL
+  )
 
   imp_signed <- compute_signed_univariate_importance(
     feature_table = feature_table,
@@ -749,9 +560,10 @@ IL_conbin <- function(
     units = "mins"
   )
   res$time <- time
+  class(res) <- unique(c("learner", class(res)))
   ########## Return #
 
-  if (print_learner == TRUE) {
+  if (isTRUE(print_learner)) {
     print.learner(res)
   }
   return(res)

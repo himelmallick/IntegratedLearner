@@ -4,11 +4,11 @@ test_that("infer_mae_defaults selects experiments and assays", {
     seed = 31
   )
 
-  defaults <- IntegratedLearner:::.infer_mae_defaults(mae_train = mae)
+  defaults <- IntegratedLearner:::infer_mae_defaults(mae_train = mae)
   expect_identical(defaults$experiment, c("taxonomy", "pathway"))
   expect_identical(unname(defaults$assay.type), c("relative_abundance", "pathway_abundance"))
 
-  defaults_idx <- IntegratedLearner:::.infer_mae_defaults(mae_train = mae, experiment = c(
+  defaults_idx <- IntegratedLearner:::infer_mae_defaults(mae_train = mae, experiment = c(
     2L,
     1L
   ), assay.type = c("pathway_abundance", "relative_abundance"))
@@ -22,12 +22,12 @@ test_that("infer_mae_defaults validates experiment and assay arguments", {
     seed = 32
   )
 
-  expect_error(IntegratedLearner:::.infer_mae_defaults(mae_train = mae, experiment = c(99L)),
+  expect_error(IntegratedLearner:::infer_mae_defaults(mae_train = mae, experiment = c(99L)),
     "'experiment' indices are out of range for mae_train.",
     fixed = TRUE
   )
 
-  expect_error(IntegratedLearner:::.infer_mae_defaults(mae_train = mae, experiment = c("missing_layer")),
+  expect_error(IntegratedLearner:::infer_mae_defaults(mae_train = mae, experiment = c("missing_layer")),
     "Some 'experiment' entries are not found in mae_train.",
     fixed = TRUE
   )
@@ -37,7 +37,7 @@ test_that("infer_mae_defaults validates experiment and assay arguments", {
     seed = 33, multi_assay_layer1 = TRUE
   )
 
-  expect_error(IntegratedLearner:::.infer_mae_defaults(mae_train = mae_multi_assay),
+  expect_error(IntegratedLearner:::infer_mae_defaults(mae_train = mae_multi_assay),
     "Multiple assays found for an experiment",
     fixed = TRUE
   )
@@ -57,7 +57,7 @@ test_that("get_data_from_MAE handles survival fallback and required colData colu
   }
   MultiAssayExperiment::experiments(mae) <- exps
 
-  long_df <- IntegratedLearner:::.get_data_from_MAE(
+  long_df <- IntegratedLearner:::get_data_from_MAE(
     mae = mae, experiment = c(
       "taxonomy",
       "pathway"
@@ -85,7 +85,7 @@ test_that("get_data_from_MAE handles survival fallback and required colData colu
   MultiAssayExperiment::experiments(mae_missing_subject) <- exps2
 
   expect_error(
-    IntegratedLearner:::.get_data_from_MAE(
+    IntegratedLearner:::get_data_from_MAE(
       mae = mae_missing_subject,
       experiment = c("taxonomy", "pathway"), assay.type = c(
         "relative_abundance",
@@ -102,7 +102,7 @@ test_that("prepare_from_MAE returns canonical objects and validates feature iden
     seed = 36
   )
 
-  out <- IntegratedLearner:::.prepare_from_MAE(
+  out <- IntegratedLearner:::prepare_from_MAE(
     mae_train = mae, experiment = c(
       "taxonomy",
       "pathway"
@@ -126,7 +126,7 @@ test_that("prepare_from_MAE returns canonical objects and validates feature iden
   MultiAssayExperiment::experiments(mae_valid) <- exps_valid
 
   expect_error(
-    IntegratedLearner:::.prepare_from_MAE(
+    IntegratedLearner:::prepare_from_MAE(
       mae_train = mae, mae_valid = mae_valid,
       experiment = c("taxonomy", "pathway"), assay.type = c(
         "relative_abundance",
@@ -154,7 +154,7 @@ test_that("prepare_from_MAE supports custom outcome and subject columns", {
   }
   MultiAssayExperiment::experiments(mae) <- exps
 
-  out <- IntegratedLearner:::.prepare_from_MAE(
+  out <- IntegratedLearner:::prepare_from_MAE(
     mae_train = mae,
     experiment = c("taxonomy", "pathway"),
     assay.type = c("relative_abundance", "pathway_abundance"),

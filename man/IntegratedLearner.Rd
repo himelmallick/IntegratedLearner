@@ -16,14 +16,14 @@ IntegratedLearner(
   na.rm = FALSE,
   folds = 5,
   seed = 1234,
-  base_learner = "SL.BART",
+  base_learner = "sl_bart",
   base_screener = "All",
   run_screening = FALSE,
   screen_pct = NULL,
   filter_method = NULL,
   filter_pct = NULL,
   prevalence_pct = NULL,
-  meta_learner = "SL.nnls.auc",
+  meta_learner = "sl_nnls_auc",
   run_concat = TRUE,
   run_stacked = TRUE,
   drop_poor_performing_layers = FALSE,
@@ -80,7 +80,7 @@ Default is 1234.}
 \item{base_learner}{Base learner for late fusion and early fusion.
 Check out the
 \href{https://CRAN.R-project.org/package=SuperLearner}{SuperLearner package page}
-for all available options. Default is \code{`SL.BART`}.}
+for all available options. Default is \code{`sl_bart`}.}
 
 \item{base_screener}{Deprecated for \code{IL_conbin} and \code{IL_multiclass};
 kept for backward compatibility and currently ignored in those backends.}
@@ -104,7 +104,7 @@ prevalence-based feature filtering before model fitting. Deprecated alias
 of \code{filter_pct} with \code{filter_method = 'prevalence'}.}
 
 \item{meta_learner}{Meta-learner for late fusion (stacked generalization).
-Defaults to \code{`SL.nnls.auc`}.
+Defaults to \code{`sl_nnls_auc`}.
 Check out the
 \href{https://CRAN.R-project.org/package=SuperLearner}{SuperLearner package page}
 for all available options.}
@@ -147,8 +147,9 @@ Performs integrated machine learning to predict a binary, continuous, or
 time-to-event outcome based on two or more omics layers (views).
 The \code{IntegratedLearner} function takes a training
 \code{MultiAssayExperiment} and, optionally, a validation
-\code{MultiAssayExperiment}, extracts multi-layer feature tables, and returns
-predicted values based on the validation set.
+\code{MultiAssayExperiment}, inspects standard Bioconductor containers and
+accessors, extracts multi-layer feature tables, and returns predicted values
+based on the validation set.
 It also performs V-fold nested cross-validation to estimate the prediction
 accuracy of various fusion algorithms.
 Two integration paradigms are supported: early and late.
@@ -158,41 +159,35 @@ exploration capabilities and visualization modules in a unified estimation
 framework.
 }
 \details{
-Internally, \code{IntegratedLearner()} converts the MultiAssayExperiment
-into tabular multi-view matrices and then calls \code{IL_conbin} for
-continuous/binary outcomes or \code{IL_survival} for time-to-event outcomes,
-depending on the specified \code{family}.
+In a typical Bioconductor workflow, users construct assay-level data in
+\code{SummarizedExperiment}, combine those assays in
+\code{MultiAssayExperiment}, inspect the object with \code{experiments()},
+\code{assay()}, \code{colData()}, and \code{sampleMap()}, and then pass the
+MAE into \code{IntegratedLearner()} for supervised multi-omics prediction.
+Internally, \code{IntegratedLearner()} converts the
+\code{MultiAssayExperiment} into tabular multi-view matrices and then calls
+\code{IL_conbin} for continuous/binary outcomes or \code{IL_survival} for
+time-to-event outcomes, depending on the specified \code{family}. Legacy
+PCL-style inputs remain available for backward compatibility, but the
+primary user-facing workflow is MAE-based.
 }
 \examples{
-is.function(IntegratedLearner)
-if (FALSE) {
-  set.seed(1)
-  n <- 20
-  feature_table <- rbind(
-    matrix(rnorm(3 * n), nrow = 3, dimnames = list(paste0("L1_F", 1:3), paste0("S", 1:n))),
-    matrix(rnorm(2 * n), nrow = 2, dimnames = list(paste0("L2_F", 1:2), paste0("S", 1:n)))
-  )
-  sample_metadata <- data.frame(
-    subjectID = paste0("ID", 1:n), Y = rnorm(n),
-    row.names = colnames(feature_table)
-  )
-  feature_metadata <- data.frame(
-    featureID = rownames(feature_table),
-    featureType = c(rep("Layer1", 3), rep("Layer2", 2)),
-    row.names = rownames(feature_table)
-  )
-  pcl <- list(
-    feature_table = feature_table,
-    sample_metadata = sample_metadata,
-    feature_metadata = feature_metadata
-  )
-  fit <- IntegratedLearner(
-    PCL_train = pcl, folds = 3, base_learner = "SL.mean",
-    run_stacked = FALSE, run_concat = FALSE, print_learner = FALSE,
-    family = stats::gaussian()
-  )
-  names(fit)
-}
+data("PRISM_MAE", package = "IntegratedLearner")
+mae <- PRISM_MAE
+names(MultiAssayExperiment::experiments(mae))
+head(as.data.frame(S4Vectors::DataFrame(MultiAssayExperiment::colData(mae)))[, 1:4])
+head(MultiAssayExperiment::sampleMap(mae))
+se <- MultiAssayExperiment::experiments(mae)[[1]]
+SummarizedExperiment::assayNames(se)
+fit <- IntegratedLearner(
+  MAE_train = mae,
+  experiment = names(MultiAssayExperiment::experiments(mae))[1:2],
+  assay.type = rep("abundance", 2),
+  folds = 2, base_learner = "SL.mean",
+  run_stacked = FALSE, run_concat = FALSE, print_learner = FALSE,
+  family = stats::binomial()
+)
+names(fit)
 
 }
 \author{
