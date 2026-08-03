@@ -17,7 +17,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.0</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.1</span>
       </span>
     </div>
 
@@ -27,6 +27,9 @@
 </li>
 <li>
   <a href="../reference/index.html">Reference</a>
+</li>
+<li>
+  <a href="../news/index.html">Changelog</a>
 </li>
       </ul><ul class="nav navbar-nav navbar-right"><li>
   <a href="https://github.com/himelmallick/IntegratedLearner/" class="external-link">
@@ -75,6 +78,14 @@
         </td>
         <td><p>Franzosa et al. 2019 validation species profile</p></td>
       </tr><tr><td>
+          <p><code><a href="Franzosa_MAE_train.html">Franzosa_MAE_train</a></code> </p>
+        </td>
+        <td><p>Franzosa multiclass MAE training fixture</p></td>
+      </tr><tr><td>
+          <p><code><a href="Franzosa_MAE_valid.html">Franzosa_MAE_valid</a></code> </p>
+        </td>
+        <td><p>Franzosa multiclass MAE validation fixture</p></td>
+      </tr><tr><td>
           <p><code><a href="IL_conbin.html">IL_conbin()</a></code> </p>
         </td>
         <td><p>Integrated machine learning for multi-omics prediction (continuous/binary outcomes)</p></td>
@@ -95,6 +106,10 @@
         </td>
         <td><p>NLIBD binary-outcome PCL fixture</p></td>
       </tr><tr><td>
+          <p><code><a href="NLIBD_MAE.html">NLIBD_MAE</a></code> </p>
+        </td>
+        <td><p>NLIBD binary-outcome MAE fixture</p></td>
+      </tr><tr><td>
           <p><code><a href="NNLS.html">NNLS()</a></code> </p>
         </td>
         <td><p>NNLS function to optimize weights of several base learners</p></td>
@@ -103,35 +118,19 @@
         </td>
         <td><p>PRISM binary-outcome PCL fixture</p></td>
       </tr><tr><td>
-          <p><code><a href="SL.BART.html">SL.BART()</a></code> </p>
+          <p><code><a href="PRISM_MAE.html">PRISM_MAE</a></code> </p>
         </td>
-        <td><p>Wrapper for bartMachine learner</p></td>
+        <td><p>PRISM binary-outcome MAE fixture</p></td>
       </tr><tr><td>
-          <p><code><a href="SL.LASSO.html">SL.LASSO()</a></code> </p>
+          <p><code><a href="TCGA_survival_MAE_train.html">TCGA_survival_MAE_train</a></code> </p>
         </td>
-        <td><p>Elastic net regression, including lasso and ridge with a fixed alpha</p></td>
+        <td><p>TCGA BRCA survival MAE training fixture</p></td>
       </tr><tr><td>
-          <p><code><a href="SL.enet.html">SL.enet()</a></code> </p>
+          <p><code><a href="TCGA_survival_MAE_valid.html">TCGA_survival_MAE_valid</a></code> </p>
         </td>
-        <td><p>Elastic net regression, including lasso and ridge with optimized alpha and lambda</p></td>
+        <td><p>TCGA BRCA survival MAE validation fixture</p></td>
       </tr><tr><td>
-          <p><code><a href="SL.glmnet2.html">SL.glmnet2()</a></code> </p>
-        </td>
-        <td><p>Elastic net regression, including lasso and ridge with a fixed alpha</p></td>
-      </tr><tr><td>
-          <p><code><a href="SL.horseshoe.html">SL.horseshoe()</a></code> </p>
-        </td>
-        <td><p>Horseshoe regression</p></td>
-      </tr><tr><td>
-          <p><code><a href="SL.mxBART.html">SL.mxBART()</a></code> </p>
-        </td>
-        <td><p>mxBART SuperLearner wrapper</p></td>
-      </tr><tr><td>
-          <p><code><a href="SL.nnls.auc.html">SL.nnls.auc()</a></code> </p>
-        </td>
-        <td><p>Combined SuperLearner function for both NNLS/AUC maximization</p></td>
-      </tr><tr><td>
-          <p><code><a href="auc.obj.html">auc.obj()</a></code> </p>
+          <p><code><a href="auc_obj.html">auc_obj()</a></code> </p>
         </td>
         <td><p>Title Meta level Objective function: NNLS for gaussian; Rank loss for binary observations</p></td>
       </tr><tr><td>
@@ -147,23 +146,51 @@
         </td>
         <td><p>Plot the summary curves produced by an IntegratedLearner object</p></td>
       </tr><tr><td>
-          <p><code><a href="predict.SL.BART.html">predict(<i>&lt;SL.BART&gt;</i>)</a></code> </p>
-        </td>
-        <td><p>Predict function for SL.BART</p></td>
-      </tr><tr><td>
-          <p><code><a href="predict.SL.nnls.auc.html">predict(<i>&lt;SL.nnls.auc&gt;</i>)</a></code> </p>
-        </td>
-        <td><p>Predict function for SL.nnls.auc</p></td>
-      </tr><tr><td>
           <p><code><a href="predict.learner.html">predict(<i>&lt;learner&gt;</i>)</a></code> </p>
         </td>
         <td><p>Make predictions using a trained 'IntegratedLearner' model</p></td>
+      </tr><tr><td>
+          <p><code><a href="predict.sl_bart.html">predict(<i>&lt;sl_bart&gt;</i>)</a></code> </p>
+        </td>
+        <td><p>Predict function for sl_bart</p></td>
+      </tr><tr><td>
+          <p><code><a href="predict.sl_nnls_auc.html">predict(<i>&lt;sl_nnls_auc&gt;</i>)</a></code> </p>
+        </td>
+        <td><p>Predict function for sl_nnls_auc</p></td>
       </tr><tr><td>
           <p><code><a href="pregnancy.html">pregnancy</a></code> </p>
         </td>
         <td><p>Pregnancy continuous-outcome PCL fixture</p></td>
       </tr><tr><td>
-          <p><code><a href="update.learner.html">update(<i>&lt;learner&gt;</i>)</a></code> </p>
+          <p><code><a href="pregnancy_MAE.html">pregnancy_MAE</a></code> </p>
+        </td>
+        <td><p>Pregnancy continuous-outcome MAE fixture</p></td>
+      </tr><tr><td>
+          <p><code><a href="sl_bart.html">sl_bart()</a></code> </p>
+        </td>
+        <td><p>Wrapper for bartMachine learner</p></td>
+      </tr><tr><td>
+          <p><code><a href="sl_enet.html">sl_enet()</a></code> </p>
+        </td>
+        <td><p>Elastic net regression, including lasso and ridge with optimized alpha and lambda</p></td>
+      </tr><tr><td>
+          <p><code><a href="sl_glmnet2.html">sl_glmnet2()</a></code> </p>
+        </td>
+        <td><p>Elastic net regression, including lasso and ridge with a fixed alpha</p></td>
+      </tr><tr><td>
+          <p><code><a href="sl_horseshoe.html">sl_horseshoe()</a></code> </p>
+        </td>
+        <td><p>Horseshoe regression</p></td>
+      </tr><tr><td>
+          <p><code><a href="sl_lasso.html">sl_lasso()</a></code> </p>
+        </td>
+        <td><p>Elastic net regression, including lasso and ridge with a fixed alpha</p></td>
+      </tr><tr><td>
+          <p><code><a href="sl_nnls_auc.html">sl_nnls_auc()</a></code> </p>
+        </td>
+        <td><p>Combined SuperLearner function for both NNLS/AUC maximization</p></td>
+      </tr><tr><td>
+          <p><code><a href="update.learner.html">update.learner()</a></code> </p>
         </td>
         <td><p>Update IntegratedLearner fit object based on layers available in the test set</p></td>
       </tr></tbody></table></div>
