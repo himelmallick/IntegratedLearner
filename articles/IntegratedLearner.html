@@ -32,7 +32,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.1</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.2</span>
       </span>
     </div>
 
@@ -1464,7 +1464,7 @@ with a meta-learner (<code>meta_learner</code>).</p>
 <span><span class="co">#&gt; CV SL.randomForest_screen.il.glmnet</span></span>
 <span><span class="co">#&gt; Non-Negative least squares convergence: TRUE</span></span>
 <span><span class="co">#&gt; full SL.randomForest_screen.il.glmnet</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.084 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.073 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Model fit for individual layers: SL.randomForest </span></span>
 <span><span class="co">#&gt; Model fit for stacked layer: sl_nnls_auc </span></span>
@@ -1609,7 +1609,7 @@ bytecode). In that case, either:</p>
 <span>  screen_pct <span class="op">=</span> <span class="fl">30</span>,</span>
 <span>  family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">gaussian</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.471 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.467 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Model fit for individual layers: sl_bart </span></span>
 <span><span class="co">#&gt; Model fit for stacked layer: sl_nnls_auc </span></span>
@@ -1888,7 +1888,7 @@ and pass them through <code>outcome_col</code> and
 <span><span class="co">#&gt; Running multiclass base model for layer 2...</span></span>
 <span><span class="co">#&gt; Running multiclass stacked model...</span></span>
 <span><span class="co">#&gt; Running multiclass concatenated model...</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.132 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.147 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Multiclass model fit with 3 classes</span></span>
 <span><span class="co">#&gt; Base learner: glmnet </span></span>
@@ -2024,7 +2024,7 @@ best fused survival model.</li>
 <span><span class="co"># Late fusion (two weighted integration summaries)</span></span>
 <span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">IBS</span><span class="op">$</span><span class="va">weights</span></span>
 <span><span class="co">#&gt;         gene        mirna </span></span>
-<span><span class="co">#&gt; 9.999989e-01 1.143658e-06</span></span>
+<span><span class="co">#&gt; 9.999989e-01 1.143657e-06</span></span>
 <span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">IBS</span><span class="op">$</span><span class="va">train_cindex</span></span>
 <span><span class="co">#&gt; [1] 0.5155855</span></span>
 <span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">IBS</span><span class="op">$</span><span class="va">train_auc</span></span>
@@ -2433,29 +2433,29 @@ possible within one fit object.</p>
 <span><span class="co">#&gt; [8] methods   base     </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; other attached packages:</span></span>
-<span><span class="co">#&gt;  [1] bartMachine_1.4.2           survival_3.8-9             </span></span>
-<span><span class="co">#&gt;  [3] MultiAssayExperiment_1.39.0 SummarizedExperiment_1.43.0</span></span>
+<span><span class="co">#&gt;  [1] bartMachine_1.4.2           survival_3.8-11            </span></span>
+<span><span class="co">#&gt;  [3] MultiAssayExperiment_1.39.1 SummarizedExperiment_1.43.0</span></span>
 <span><span class="co">#&gt;  [5] Biobase_2.73.2              GenomicRanges_1.65.1       </span></span>
-<span><span class="co">#&gt;  [7] Seqinfo_1.3.0               IRanges_2.47.2             </span></span>
+<span><span class="co">#&gt;  [7] Seqinfo_1.3.2               IRanges_2.47.5             </span></span>
 <span><span class="co">#&gt;  [9] MatrixGenerics_1.25.0       matrixStats_1.5.0          </span></span>
-<span><span class="co">#&gt; [11] S4Vectors_0.51.6            BiocGenerics_0.59.10       </span></span>
-<span><span class="co">#&gt; [13] generics_0.1.4              bayesplot_1.15.0           </span></span>
+<span><span class="co">#&gt; [11] S4Vectors_0.51.9            BiocGenerics_0.59.12       </span></span>
+<span><span class="co">#&gt; [13] generics_0.1.4              bayesplot_1.16.0           </span></span>
 <span><span class="co">#&gt; [15] cowplot_1.2.0               caret_7.0-1                </span></span>
-<span><span class="co">#&gt; [17] lattice_0.22-9              SuperLearner_2.0-40        </span></span>
+<span><span class="co">#&gt; [17] lattice_0.23-1              SuperLearner_2.0-41        </span></span>
 <span><span class="co">#&gt; [19] gam_1.22-7                  foreach_1.5.2              </span></span>
 <span><span class="co">#&gt; [21] nnls_1.6                    ggplot2_4.0.3              </span></span>
-<span><span class="co">#&gt; [23] dplyr_1.2.1                 IntegratedLearner_0.99.1   </span></span>
+<span><span class="co">#&gt; [23] dplyr_1.2.1                 IntegratedLearner_0.99.2   </span></span>
 <span><span class="co">#&gt; [25] BiocStyle_2.41.0           </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; loaded via a namespace (and not attached):</span></span>
 <span><span class="co">#&gt;   [1] RColorBrewer_1.1-3    tensorA_0.36.2.1      jsonlite_2.0.0       </span></span>
 <span><span class="co">#&gt;   [4] shape_1.4.6.1         magrittr_2.0.5        farver_2.1.2         </span></span>
-<span><span class="co">#&gt;   [7] nloptr_2.2.1          rmarkdown_2.31        fs_2.1.0             </span></span>
+<span><span class="co">#&gt;   [7] nloptr_2.2.1          rmarkdown_2.32        fs_2.1.0             </span></span>
 <span><span class="co">#&gt;  [10] ragg_1.5.2            vctrs_0.7.3           ROCR_1.0-12          </span></span>
 <span><span class="co">#&gt;  [13] htmltools_0.5.9       S4Arrays_1.13.0       BiocBaseUtils_1.15.1 </span></span>
 <span><span class="co">#&gt;  [16] itertools_0.1-3       missForest_1.6.1      distributional_0.8.1 </span></span>
-<span><span class="co">#&gt;  [19] SparseArray_1.13.2    pROC_1.19.0.1         sass_0.4.10          </span></span>
-<span><span class="co">#&gt;  [22] parallelly_1.48.0     bslib_0.11.0          htmlwidgets_1.6.4    </span></span>
+<span><span class="co">#&gt;  [19] SparseArray_1.13.2    pROC_1.19.1           sass_0.4.10          </span></span>
+<span><span class="co">#&gt;  [22] parallelly_1.48.0     bslib_0.12.0          htmlwidgets_1.6.4    </span></span>
 <span><span class="co">#&gt;  [25] desc_1.4.3            plyr_1.8.9            lubridate_1.9.5      </span></span>
 <span><span class="co">#&gt;  [28] cachem_1.1.0          lifecycle_1.0.5       iterators_1.0.14     </span></span>
 <span><span class="co">#&gt;  [31] pkgconfig_2.0.3       Matrix_1.7-6          R6_2.6.1             </span></span>
@@ -2464,17 +2464,17 @@ possible within one fit object.</p>
 <span><span class="co">#&gt;  [40] labeling_0.4.3        randomForest_4.7-1.2  timechange_0.4.0     </span></span>
 <span><span class="co">#&gt;  [43] abind_1.4-8           compiler_4.6.1        rngtools_1.5.2       </span></span>
 <span><span class="co">#&gt;  [46] withr_3.0.3           S7_0.2.2              backports_1.5.1      </span></span>
-<span><span class="co">#&gt;  [49] MASS_7.3-66           lava_1.9.2            DelayedArray_0.39.3  </span></span>
+<span><span class="co">#&gt;  [49] MASS_7.3-66           lava_1.9.3            DelayedArray_0.39.6  </span></span>
 <span><span class="co">#&gt;  [52] ModelMetrics_1.2.2.2  tools_4.6.1           ranger_0.18.0        </span></span>
-<span><span class="co">#&gt;  [55] otel_0.2.0            future.apply_1.20.2   nnet_7.3-20          </span></span>
+<span><span class="co">#&gt;  [55] otel_0.2.0            future.apply_1.20.2   nnet_7.3-21          </span></span>
 <span><span class="co">#&gt;  [58] glue_1.8.1            quadprog_1.5-8        nlme_3.1-170         </span></span>
 <span><span class="co">#&gt;  [61] grid_4.6.1            checkmate_2.3.4       reshape2_1.4.5       </span></span>
-<span><span class="co">#&gt;  [64] recipes_1.3.3         gtable_0.3.6          class_7.3-23         </span></span>
-<span><span class="co">#&gt;  [67] tidyr_1.3.2           data.table_1.18.4     XVector_0.53.0       </span></span>
+<span><span class="co">#&gt;  [64] recipes_1.4.0         gtable_0.3.6          class_7.3-24         </span></span>
+<span><span class="co">#&gt;  [67] tidyr_1.3.2           data.table_1.18.6.1   XVector_0.53.0       </span></span>
 <span><span class="co">#&gt;  [70] pillar_1.11.1         stringr_1.6.0         posterior_1.7.0      </span></span>
 <span><span class="co">#&gt;  [73] rJava_1.0-18          tidyselect_1.2.1      knitr_1.51           </span></span>
-<span><span class="co">#&gt;  [76] bookdown_0.47         bartMachineJARs_1.2.2 xfun_0.60            </span></span>
-<span><span class="co">#&gt;  [79] hardhat_1.4.3         timeDate_4052.112     stringi_1.8.7        </span></span>
+<span><span class="co">#&gt;  [76] bookdown_0.48         bartMachineJARs_1.2.2 xfun_0.60            </span></span>
+<span><span class="co">#&gt;  [79] hardhat_1.4.3         timeDate_4052.112     stringi_1.8.9        </span></span>
 <span><span class="co">#&gt;  [82] yaml_2.3.12           pec_2025.06.24        evaluate_1.0.5       </span></span>
 <span><span class="co">#&gt;  [85] codetools_0.2-20      tibble_3.3.1          BiocManager_1.30.27  </span></span>
 <span><span class="co">#&gt;  [88] cli_3.6.6             rpart_4.1.27          systemfonts_1.3.2    </span></span>
@@ -2482,7 +2482,7 @@ possible within one fit object.</p>
 <span><span class="co">#&gt;  [94] globals_0.19.1        parallel_4.6.1        pkgdown_2.2.1        </span></span>
 <span><span class="co">#&gt;  [97] gower_1.0.2           timeROC_0.4.1         doRNG_1.8.6.3        </span></span>
 <span><span class="co">#&gt; [100] listenv_1.0.0         glmnet_5.0            mvtnorm_1.4-2        </span></span>
-<span><span class="co">#&gt; [103] timereg_2.0.7         ipred_0.9-15          scales_1.4.0         </span></span>
+<span><span class="co">#&gt; [103] timereg_2.0.7         ipred_0.9-16          scales_1.4.0         </span></span>
 <span><span class="co">#&gt; [106] prodlim_2026.03.11    purrr_1.2.2           rlang_1.3.0</span></span></code></pre></div>
 </div>
 <div class="section level2">

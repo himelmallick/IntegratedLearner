@@ -17,7 +17,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.1</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.2</span>
       </span>
     </div>
 
@@ -51,13 +51,46 @@
     </div>
 
     <div class="section level2">
-<h2 class="page-header" data-toc-text="0.99.1" id="integratedlearner-0991">IntegratedLearner 0.99.1<a class="anchor" aria-label="anchor" href="#integratedlearner-0991"></a></h2>
-<ul><li>Updated package metadata for the current Bioconductor review cycle.</li>
+<h2 class="page-header" data-toc-text="0.99.2" id="integratedlearner-0992">IntegratedLearner 0.99.2<a class="anchor" aria-label="anchor" href="#integratedlearner-0992"></a></h2>
+<div class="section level3">
+<h3 id="review-driven-updates-0-99-2">Review-driven updates<a class="anchor" aria-label="anchor" href="#review-driven-updates-0-99-2"></a></h3>
+<ul><li>Revised package metadata for the current Bioconductor review cycle.</li>
 <li>Added Himel Mallick’s ORCID to the <code>Authors@R</code> field in <code>DESCRIPTION</code>.</li>
-<li>Promoted runtime dependencies used by package functions from <code>Suggests</code> to <code>Imports</code>.</li>
-<li>Reduced <code>Suggests</code> to packages used for the vignette, examples, and tests.</li>
-<li>Replaced the placeholder <code>NEWS</code> file with a versioned <code>NEWS.md</code> changelog.</li>
+<li>Replaced the previous unformatted news file with a versioned <code>NEWS.md</code>.</li>
 </ul></div>
+<div class="section level3">
+<h3 id="bioconductor-workflow-and-documentation-0-99-2">Bioconductor workflow and documentation<a class="anchor" aria-label="anchor" href="#bioconductor-workflow-and-documentation-0-99-2"></a></h3>
+<ul><li>Reworked the package documentation and vignette to make <code>MultiAssayExperiment</code> the primary user-facing workflow.</li>
+<li>Expanded the vignette introduction to describe how <code>IntegratedLearner</code> fits into a typical Bioconductor pipeline.</li>
+<li>Updated examples and vignette code to use standard Bioconductor containers and accessors such as <code>MultiAssayExperiment</code>, <code>SummarizedExperiment</code>, <code><a href="https://github.com/waldronlab/MultiAssayExperiment/reference/MultiAssayExperiment-methods.html" class="external-link">experiments()</a></code>, <code><a href="https://rdrr.io/pkg/SummarizedExperiment/man/SummarizedExperiment-class.html" class="external-link">assay()</a></code>, <code><a href="https://rdrr.io/pkg/SummarizedExperiment/man/SummarizedExperiment-class.html" class="external-link">colData()</a></code>, and <code><a href="https://github.com/waldronlab/MultiAssayExperiment/reference/MultiAssayExperiment-methods.html" class="external-link">sampleMap()</a></code>.</li>
+<li>Added package-level documentation and clarified return values for exported methods, including <code><a href="../reference/predict.learner.html">predict.learner()</a></code>.</li>
+<li>Revised man page examples to be runnable under package checking and removed blank <code>if (FALSE)</code> example blocks.</li>
+<li>Removed disabled vignette install chunks and switched installation snippets to plain code blocks to reduce the risk of documentation drift.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="dependencies-and-installation-0-99-2">Dependencies and installation<a class="anchor" aria-label="anchor" href="#dependencies-and-installation-0-99-2"></a></h3>
+<ul><li>Reorganized dependencies so that packages needed at runtime are listed in <code>Imports</code>, while vignette/example/test-only packages are kept in <code>Suggests</code> where appropriate.</li>
+<li>Removed the runtime package-code dependence on <code>stringr</code> and replaced those uses with base R equivalents.</li>
+<li>Updated README installation instructions to include Bioconductor usage.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="api-and-naming-cleanup-0-99-2">API and naming cleanup<a class="anchor" aria-label="anchor" href="#api-and-naming-cleanup-0-99-2"></a></h3>
+<ul><li>Continued aligning package-specific exported helper/learner names with <code>snake_case</code> conventions and reserving <code>.</code> for S3 methods.</li>
+<li>Preserved backward compatibility for older learner identifiers while supporting the newer naming style.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="examples-testing-and-package-checks-0-99-2">Examples, testing, and package checks<a class="anchor" aria-label="anchor" href="#examples-testing-and-package-checks-0-99-2"></a></h3>
+<ul><li>Updated exported examples for <code>IntegratedLearner</code>, <code><a href="../reference/predict.learner.html">predict.learner()</a></code>, <code><a href="../reference/update.learner.html">update.learner()</a></code>, and <code><a href="../reference/plot.learner.html">plot.learner()</a></code> to improve reproducibility under <code>R CMD check</code>.</li>
+<li>Removed rendered vignette artifacts from <code>vignettes/</code> and added ignore rules to avoid recommitting generated HTML outputs.</li>
+<li>Expanded and refreshed tests around model methods, MAE workflows, prediction/update behavior, and utility helpers.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="internal-code-quality-0-99-2">Internal code quality<a class="anchor" aria-label="anchor" href="#internal-code-quality-0-99-2"></a></h3>
+<ul><li>Replaced the previous internal seed handling approach with a cleaner <code>withr</code>-based implementation.</li>
+<li>Updated <code>print.learner()</code> to return invisibly, consistent with base <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code> conventions.</li>
+<li>Reduced code repetition in the continuous/binary training, prediction, and update paths by introducing shared helper utilities for validation-layer prediction assembly, fusion prediction assembly, and family-specific metric calculation.</li>
+</ul></div>
+</div>
   </div>
 
   <div class="col-md-3 hidden-xs hidden-sm" id="pkgdown-sidebar">
