@@ -22,6 +22,10 @@ IL_multiclass(
   meta_learner = "glmnet",
   run_concat = TRUE,
   run_stacked = TRUE,
+  run_intermediate = FALSE,
+  cooperative_rho = c(0, 0.1, 0.25, 0.5, 1),
+  cooperative_s = "lambda.min",
+  cooperative_type_measure = NULL,
   verbose = FALSE,
   print_learner = TRUE,
   family = stats::binomial(),
@@ -95,6 +99,19 @@ Defaults to \code{sl_nnls_auc}.}
 \item{run_concat}{Should early fusion be run? Default is TRUE.}
 
 \item{run_stacked}{Should stacked model (late fusion) be run? Default is TRUE.}
+
+\item{run_intermediate}{Ignored for multiclass outcomes with a message;
+cooperative \pkg{multiview} learning is not currently supported for
+multiclass fits.}
+
+\item{cooperative_rho}{Non-negative agreement-penalty values to evaluate for
+cooperative learning.}
+
+\item{cooperative_s}{Penalty value used when predicting from the selected
+cooperative model. Defaults to \code{"lambda.min"}.}
+
+\item{cooperative_type_measure}{Optional \pkg{multiview} CV loss/score. If
+\code{NULL}, an outcome-appropriate default is used.}
 
 \item{verbose}{logical; TRUE for printing SuperLearner progress. Default FALSE.}
 
