@@ -6,6 +6,9 @@
 #' probability modeling and multiclass stacking.
 #'
 #' @inheritParams IL_conbin
+#' @param run_intermediate Ignored for multiclass outcomes with a message;
+#'   cooperative \pkg{multiview} learning is not currently supported for
+#'   multiclass fits.
 #' @param eps Small positive constant used to stabilize probabilities.
 #' @return A fitted multiclass IntegratedLearner object containing class
 #'   probabilities, predicted classes, fitted single-layer and fusion models,
@@ -43,7 +46,9 @@ IL_multiclass <- function(
   sample_metadata_valid = NULL, folds = 5, seed = 1234, base_learner = "glmnet",
   base_screener = "All", run_screening = FALSE, screen_pct = NULL, filter_method = NULL,
   filter_pct = NULL, prevalence_pct = NULL, meta_learner = "glmnet", run_concat = TRUE,
-  run_stacked = TRUE, verbose = FALSE, print_learner = TRUE, family = stats::binomial(),
+  run_stacked = TRUE, run_intermediate = FALSE,
+  cooperative_rho = c(0, 0.1, 0.25, 0.5, 1), cooperative_s = "lambda.min",
+  cooperative_type_measure = NULL, verbose = FALSE, print_learner = TRUE, family = stats::binomial(),
   eps = 1e-15, ...
 ) {
   start.time <- Sys.time()
@@ -70,6 +75,11 @@ IL_multiclass <- function(
   )
   Y <- validated$Y
   class_levels <- validated$class_levels
+
+  if (isTRUE(run_intermediate)) {
+    message("'run_intermediate' is not supported for multiclass outcomes and will be ignored.")
+    run_intermediate <- FALSE
+  }
 
   learner_id <- map_multiclass_learner(base_learner)
   meta_id <- map_multiclass_meta_learner(meta_learner)
@@ -254,6 +264,8 @@ IL_multiclass <- function(
     }
   }
 
+  cooperative_fit <- NULL
+
   prob_train <- layer_oof_probs
   if (isTRUE(run_stacked)) {
     prob_train$stacked <- stacked_oof_prob
@@ -315,7 +327,7 @@ IL_multiclass <- function(
 
   model_fits <- list(
     model_layers = full_layer_models, model_stacked = stacked_full_model,
-    model_concat = concat_full_model
+    model_concat = concat_full_model, model_cooperative = cooperative_fit
   )
 
   res <- list(
@@ -329,7 +341,13 @@ IL_multiclass <- function(
     screen_pct = screening$screen_pct, filter_method = filtered$filter_method,
     filter_pct = filtered$filter_pct, prevalence_pct = filtered$prevalence_pct,
     selected_features_by_layer = selected_features_by_layer, selected_features_concat = concat_selected_features,
-    run_concat = run_concat, run_stacked = run_stacked, family = "multinomial",
+    run_concat = run_concat, run_stacked = run_stacked, run_intermediate = FALSE,
+    cooperative_rho = NULL,
+    cooperative_rho_grid = cooperative_rho,
+    cooperative_rho_scores = NULL,
+    cooperative_s = cooperative_s,
+    cooperative_type_measure = cooperative_type_measure,
+    family = "multinomial",
     feature.names = rownames(feature_table), feature_importance_signed_by_class = imp$by_class,
     feature_importance_signed_by_layer_by_class = imp$by_layer_class, feature_importance_global = imp$global,
     folds = folds, fold_id = fold_id, cvControl = cv_partition$cv_control,

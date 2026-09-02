@@ -29,6 +29,10 @@ ILsurv(
   optim_maxit_cox = 4000,
   optim_maxit_ibs = 300,
   ibs_shrink_to_uniform = 0,
+  run_intermediate = FALSE,
+  cooperative_rho = c(0, 0.1, 0.25, 0.5, 1),
+  cooperative_s = "lambda.min",
+  cooperative_type_measure = NULL,
   ...
 )
 
@@ -56,6 +60,10 @@ IL_survival(
   optim_maxit_cox = 4000,
   optim_maxit_ibs = 300,
   ibs_shrink_to_uniform = 0,
+  run_intermediate = FALSE,
+  cooperative_rho = c(0, 0.1, 0.25, 0.5, 1),
+  cooperative_s = "lambda.min",
+  cooperative_type_measure = NULL,
   ...
 )
 }
@@ -133,6 +141,18 @@ is \code{NULL}.}
 
 \item{ibs_shrink_to_uniform}{Optional convex shrinkage of IBS weights toward
 uniform.}
+
+\item{run_intermediate}{Should direct cooperative learning via
+\pkg{multiview} be run? Default is FALSE.}
+
+\item{cooperative_rho}{Non-negative agreement-penalty values to evaluate for
+cooperative learning.}
+
+\item{cooperative_s}{Penalty value used when predicting from the selected
+cooperative model. Defaults to \code{"lambda.min"}.}
+
+\item{cooperative_type_measure}{Optional \pkg{multiview} CV loss/score. If
+\code{NULL}, an outcome-appropriate default is used.}
 
 \item{...}{Additional base-learner hyperparameters passed to
 \code{base_learner}. You may also pass \code{model_args = list(...)} as a

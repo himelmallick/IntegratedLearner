@@ -185,6 +185,17 @@ predict.learner <- function(
     )
   }
 
+  if (isTRUE(fit$run_intermediate) && !is.null(fit$model_fits$model_cooperative)) {
+    cooperative_x_valid <- build_multiview_x_list(
+      feature_table = feature_table_valid,
+      feature_metadata = feature_metadata,
+      layers = fusion_layers
+    )
+    cooperative_prediction_valid <- predict_cooperative_vector(
+      fit$model_fits$model_cooperative, cooperative_x_valid
+    )
+  }
+
   res <- list()
 
   if (!is.null(sample_metadata_valid)) {
@@ -197,6 +208,10 @@ predict.learner <- function(
     stacked_prediction = if (isTRUE(fit$run_stacked)) stacked_prediction_valid else NULL,
     concat_prediction = if (isTRUE(fit$run_concat)) concat_prediction_valid else NULL
   )
+  if (isTRUE(fit$run_intermediate) && !is.null(fit$model_fits$model_cooperative)) {
+    res$yhat.test <- cbind(res$yhat.test, cooperative_prediction_valid)
+    colnames(res$yhat.test)[ncol(res$yhat.test)] <- "cooperative"
+  }
   res <- add_prediction_metrics(
     result = res,
     family_name = fit$family,

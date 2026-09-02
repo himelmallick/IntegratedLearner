@@ -53,6 +53,7 @@ Imports:
     tibble,
     tidyr,
     withr,
+    multiview,
     xgboost
 Suggests:
     BiocStyle,

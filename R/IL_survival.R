@@ -1369,6 +1369,8 @@ ILsurv_bioc_core <- function(
     "entropy"
   ), cox_weight_cap = 1,
   cox_optim_maxit = 4000, verbose = FALSE, model_args = list()
+  , run_intermediate = FALSE, cooperative_rho = c(0, 0.1, 0.25, 0.5, 1),
+  cooperative_s = "lambda.min", cooperative_type_measure = NULL
 ) {
   vmsg <- function(...) {
     if (isTRUE(verbose)) {
@@ -1585,6 +1587,34 @@ ILsurv_bioc_core <- function(
     )
   }
 
+  cooperative_train <- NULL
+  if (isTRUE(run_intermediate)) {
+    vmsg("Running cooperative multiview survival model")
+    cooperative_x_train <- build_multiview_x_list(
+      feature_table = feature_table,
+      feature_metadata = feature_metadata,
+      layers = fusion_layers_retained
+    )
+    coop_y <- survival::Surv(times, events)
+    cooperative_fit <- fit_cooperative_multiview(
+      x_list = cooperative_x_train, y = coop_y, family_name = "survival",
+      fold_id = fold_id, rho = cooperative_rho, type_measure = cooperative_type_measure,
+      s = cooperative_s, seed = seed + 13000, trace.it = as.integer(isTRUE(verbose))
+    )
+    cooperative_train_risk <- prevalidated_cooperative_vector(cooperative_fit)
+    cooperative_met <- compute_auc_cindex(times, events, cooperative_train_risk)
+    cooperative_train <- list(
+      model = cooperative_fit,
+      train_cindex = cooperative_met$cindex,
+      train_auc = cooperative_met$auc,
+      train_auc_mean = cooperative_met$auc_mean,
+      train_brier = cooperative_met$brier,
+      train_ibs = cooperative_met$ibs,
+      train_risk = cooperative_train_risk
+    )
+    vmsg("  [cooperative] cindex=", fmt(cooperative_train$train_cindex))
+  }
+
   valid_out_formatted <- NULL
   if (!is.null(valid_feature_table) && !is.null(valid_sample_metadata)) {
     vmsg("Running validation")
@@ -1666,6 +1696,28 @@ ILsurv_bioc_core <- function(
       vmsg("  [valid early] cindex=", fmt(early_valid$cindex))
     }
 
+    cooperative_valid <- NULL
+    if (isTRUE(run_intermediate) && !is.null(cooperative_train$model)) {
+      cooperative_x_valid <- build_multiview_x_list(
+        feature_table = valid_feature_table,
+        feature_metadata = feature_metadata,
+        layers = fusion_layers_retained
+      )
+      cooperative_valid_risk <- predict_cooperative_vector(
+        cooperative_train$model, cooperative_x_valid
+      )
+      cooperative_valid_met <- compute_auc_cindex(V_times, V_events, cooperative_valid_risk)
+      cooperative_valid <- list(
+        valid_cindex = cooperative_valid_met$cindex,
+        valid_auc = cooperative_valid_met$auc,
+        valid_auc_mean = cooperative_valid_met$auc_mean,
+        valid_brier = cooperative_valid_met$brier,
+        valid_ibs = cooperative_valid_met$ibs,
+        valid_risk = cooperative_valid_risk
+      )
+      vmsg("  [valid cooperative] cindex=", fmt(cooperative_valid$valid_cindex))
+    }
+
     valid_out_formatted <- list(single = list(
       valid_cindex = lapply(
         single_valid_metrics,
@@ -1684,7 +1736,7 @@ ILsurv_bioc_core <- function(
         valid_auc = early_valid$auc, valid_auc_mean = early_valid$auc_mean, valid_brier = early_valid$brier,
         valid_ibs = early_valid$ibs, valid_risk = risk_early_v
       )
-    }, late = late_valid_results)
+    }, late = late_valid_results, cooperative = cooperative_valid)
   } else {
     vmsg("No validation data provided; skipping validation metrics")
   }
@@ -1699,7 +1751,7 @@ ILsurv_bioc_core <- function(
         train_brier = early_fusion_out$train_brier, train_ibs = early_fusion_out$train_ibs,
         combined_importance = early_fusion_out$combined_importance, train_risk = early_fusion_out$train_risk
       )
-    }, late = late_train_results
+    }, late = late_train_results, cooperative = cooperative_train
   )
 
   vmsg("ILsurv completed")
@@ -1717,6 +1769,12 @@ ILsurv_bioc_core <- function(
     ),
     drop_poor_performing_layers = isTRUE(drop_poor_performing_layers),
     late_methods = late_methods,
+    run_intermediate = isTRUE(run_intermediate),
+    cooperative_rho = if (isTRUE(run_intermediate)) cooperative_train$model$rho else NULL,
+    cooperative_rho_grid = if (isTRUE(run_intermediate)) cooperative_train$model$rho_grid else cooperative_rho,
+    cooperative_rho_scores = if (isTRUE(run_intermediate)) cooperative_train$model$rho_scores else NULL,
+    cooperative_s = cooperative_s,
+    cooperative_type_measure = if (isTRUE(run_intermediate)) cooperative_train$model$type_measure else cooperative_type_measure,
     fusion_layers_retained = fusion_layers_retained,
     fusion_layers_removed = fusion_layers_removed,
     fusion_layer_scores = fusion_layer_filter$scores,
@@ -1797,7 +1855,9 @@ ILsurv <- function(
     0.75, 0.95
   ), layer_score = c("sum", "mean", "l2"), eps = 1e-12, weight_lambda = 0.02,
   weight_penalty = c("l2_to_uniform", "entropy"), weight_cap = 1, optim_maxit_cox = 4000,
-  optim_maxit_ibs = 300, ibs_shrink_to_uniform = 0,
+  optim_maxit_ibs = 300, ibs_shrink_to_uniform = 0, run_intermediate = FALSE,
+  cooperative_rho = c(0, 0.1, 0.25, 0.5, 1), cooperative_s = "lambda.min",
+  cooperative_type_measure = NULL,
   ...
 ) {
   layer_score <- match.arg(layer_score)
@@ -1839,7 +1899,9 @@ ILsurv <- function(
     cox_t_vec = t_vec, cox_t_vec_probs = t_vec_probs, cox_layer_score = layer_score,
     cox_eps = eps, cox_weight_lambda = weight_lambda, cox_weight_penalty = weight_penalty,
     cox_weight_cap = weight_cap, cox_optim_maxit = optim_maxit_cox,
-    verbose = verbose, model_args = model_args
+    verbose = verbose, model_args = model_args, run_intermediate = run_intermediate,
+    cooperative_rho = cooperative_rho, cooperative_s = cooperative_s,
+    cooperative_type_measure = cooperative_type_measure
   )
 
   out <- list(
@@ -1850,6 +1912,12 @@ ILsurv <- function(
     fold_id = res$fold_id, folds = folds, test = !is.null(valid_sample_metadata),
     drop_poor_performing_layers = res$drop_poor_performing_layers,
     late_methods = res$late_methods,
+    run_intermediate = res$run_intermediate,
+    cooperative_rho = res$cooperative_rho,
+    cooperative_rho_grid = res$cooperative_rho_grid,
+    cooperative_rho_scores = res$cooperative_rho_scores,
+    cooperative_s = res$cooperative_s,
+    cooperative_type_measure = res$cooperative_type_measure,
     fusion_layers_retained = res$fusion_layers_retained,
     fusion_layers_removed = res$fusion_layers_removed,
     fusion_layer_scores = res$fusion_layer_scores,

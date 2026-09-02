@@ -26,6 +26,10 @@ IntegratedLearner(
   meta_learner = "sl_nnls_auc",
   run_concat = TRUE,
   run_stacked = TRUE,
+  run_intermediate = FALSE,
+  cooperative_rho = c(0, 0.1, 0.25, 0.5, 1),
+  cooperative_s = "lambda.min",
+  cooperative_type_measure = NULL,
   drop_poor_performing_layers = FALSE,
   verbose = FALSE,
   print_learner = TRUE,
@@ -113,6 +117,21 @@ for all available options.}
 Uses the specified \code{base_learner} as the learning algorithm.}
 
 \item{run_stacked}{Should stacked model (late fusion) be run? Default is TRUE.}
+
+\item{run_intermediate}{Should direct cooperative learning via
+\pkg{multiview} be run? Default is FALSE. Supported for continuous,
+binary, and survival outcomes; ignored with a message for multiclass
+outcomes.}
+
+\item{cooperative_rho}{Non-negative agreement-penalty values to evaluate for
+cooperative learning. A separate \code{cv.multiview()} fit is trained for
+each value, and the best value is selected by cross-validation.}
+
+\item{cooperative_s}{Penalty value used when predicting from the selected
+cooperative model. Defaults to \code{"lambda.min"}.}
+
+\item{cooperative_type_measure}{Optional \pkg{multiview} CV loss/score. If
+\code{NULL}, an outcome-appropriate default is used.}
 
 \item{drop_poor_performing_layers}{Logical; if \code{TRUE}, layers with
 poor single-layer performance are removed from early and late fusion only.

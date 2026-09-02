@@ -85,6 +85,17 @@
 #' @param run_concat Should early fusion be run? Default is TRUE.
 #'   Uses the specified \code{base_learner} as the learning algorithm.
 #' @param run_stacked Should stacked model (late fusion) be run? Default is TRUE.
+#' @param run_intermediate Should direct cooperative learning via
+#'   \pkg{multiview} be run? Default is FALSE. Supported for continuous,
+#'   binary, and survival outcomes; ignored with a message for multiclass
+#'   outcomes.
+#' @param cooperative_rho Non-negative agreement-penalty values to evaluate for
+#'   cooperative learning. A separate \code{cv.multiview()} fit is trained for
+#'   each value, and the best value is selected by cross-validation.
+#' @param cooperative_s Penalty value used when predicting from the selected
+#'   cooperative model. Defaults to \code{"lambda.min"}.
+#' @param cooperative_type_measure Optional \pkg{multiview} CV loss/score. If
+#'   \code{NULL}, an outcome-appropriate default is used.
 #' @param drop_poor_performing_layers Logical; if \code{TRUE}, layers with
 #'   poor single-layer performance are removed from early and late fusion only.
 #'   The thresholds are AUC < 0.5 for binary, R\eqn{^2} < 0.5 for continuous,
@@ -140,6 +151,8 @@ IntegratedLearner <- function(
   seed = 1234, base_learner = "sl_bart", base_screener = "All", run_screening = FALSE,
   screen_pct = NULL, filter_method = NULL, filter_pct = NULL, prevalence_pct = NULL,
   meta_learner = "sl_nnls_auc", run_concat = TRUE, run_stacked = TRUE,
+  run_intermediate = FALSE, cooperative_rho = c(0, 0.1, 0.25, 0.5, 1),
+  cooperative_s = "lambda.min", cooperative_type_measure = NULL,
   drop_poor_performing_layers = FALSE, verbose = FALSE, print_learner = TRUE,
   refit.stack = FALSE, family = stats::gaussian(), ...
 ) {
@@ -255,7 +268,9 @@ IntegratedLearner <- function(
       feature_metadata = feature_metadata, valid_feature_table = feature_table_valid,
       valid_sample_metadata = sample_metadata_valid, base_learner = base_learner,
       folds = folds, seed = seed, run_screening = run_screening, screen_pct = screen_pct,
-      verbose = verbose, drop_poor_performing_layers = drop_poor_performing_layers, ...
+      verbose = verbose, drop_poor_performing_layers = drop_poor_performing_layers,
+      run_intermediate = run_intermediate, cooperative_rho = cooperative_rho,
+      cooperative_s = cooperative_s, cooperative_type_measure = cooperative_type_measure, ...
     )
     res$family <- "survival"
     res$feature.names <- rownames(feature_table)
@@ -266,6 +281,10 @@ IntegratedLearner <- function(
     if (isTRUE(drop_poor_performing_layers)) {
       message("'drop_poor_performing_layers' is ignored for multiclass outcomes.")
     }
+    if (isTRUE(run_intermediate)) {
+      message("'run_intermediate' is not supported for multiclass outcomes and will be ignored.")
+      run_intermediate <- FALSE
+    }
     res <- IL_multiclass(
       feature_table = feature_table, sample_metadata = sample_metadata,
       feature_metadata = feature_metadata, feature_table_valid = feature_table_valid,
@@ -274,7 +293,9 @@ IntegratedLearner <- function(
       screen_pct = screen_pct, filter_method = filter_method, filter_pct = filter_pct,
       prevalence_pct = prevalence_pct, meta_learner = meta_learner, run_concat = run_concat,
       run_stacked = run_stacked, verbose = verbose, print_learner = print_learner,
-      family = family, ...
+      family = family, run_intermediate = run_intermediate,
+      cooperative_rho = cooperative_rho, cooperative_s = cooperative_s,
+      cooperative_type_measure = cooperative_type_measure, ...
     )
   } else {
     res <- IL_conbin(
@@ -284,7 +305,10 @@ IntegratedLearner <- function(
       base_learner = base_learner, base_screener = base_screener, run_screening = run_screening,
       screen_pct = screen_pct, filter_method = filter_method, filter_pct = filter_pct,
       prevalence_pct = prevalence_pct, meta_learner = meta_learner, run_concat = run_concat,
-      run_stacked = run_stacked, drop_poor_performing_layers = drop_poor_performing_layers,
+      run_stacked = run_stacked, run_intermediate = run_intermediate,
+      cooperative_rho = cooperative_rho, cooperative_s = cooperative_s,
+      cooperative_type_measure = cooperative_type_measure,
+      drop_poor_performing_layers = drop_poor_performing_layers,
       verbose = verbose, print_learner = print_learner, refit.stack = refit.stack, family = family, ...
     )
   }

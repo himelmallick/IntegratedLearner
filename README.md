@@ -190,6 +190,10 @@ Custom metadata names are optional. If omitted, defaults remain `outcome_col = "
 * `meta_learner`: Meta learner for non-survival late fusion. Defaults to `"sl_nnls_auc"` in binary/continuous; multiclass supports native learners (for example `glmnet`, `randomforest`, `xgboost`).
 * `run_concat`: Logical; include early-fusion (concatenated) model for non-survival.
 * `run_stacked`: Logical; include late-fusion stacked model for non-survival.
+* `run_intermediate`: Logical; include direct cooperative learning via the `multiview` package. Default is `FALSE`.
+* `cooperative_rho`: Non-negative agreement-penalty values to evaluate for cooperative learning. Default is `c(0, 0.1, 0.25, 0.5, 1)`.
+* `cooperative_s`: Penalty value used for cooperative predictions. Default is `"lambda.min"`.
+* `cooperative_type_measure`: Optional `multiview` CV loss/score. If `NULL`, IL uses an outcome-appropriate default.
 * `drop_poor_performing_layers`: If `TRUE`, layers with poor single-layer performance are removed from early and late fusion only (`AUC < 0.5` for binary, `R2 < 0.5` for continuous, `C-index < 0.5` for survival). Single-layer outputs are still retained.
 * `family`: `gaussian()` (continuous), `binomial()` (binary or multiclass), or survival family/metadata.
 * `verbose`: Logical progress flag.
@@ -205,12 +209,13 @@ Supported model families:
 * Binary/continuous non-survival: any available `SuperLearner` `SL.*` model.
 * Multiclass non-survival: `glmnet`, `randomforest`, `ranger`, `xgboost`, `mbart`, `multinom`.
 * Survival: `surv.coxph`, `surv.glmnet`, `surv.ranger`, `surv.ranger.extratrees`, `surv.ranger.maxstat`, `surv.ranger.C`, `surv.rfsrc`, `surv.coxboost`, `surv.gbm`, `surv.xgboost.cox`, `surv.xgboost.aft`, `surv.mboost`, `surv.bart`.
+* Direct cooperative learning: `multiview` feature-level fusion for continuous, binary, and survival outcomes. Multiclass cooperative learning is not supported.
 
 Supported fusion modules:
 
-* Continuous/Binary: single-layer + early (`run_concat`) + late (`run_stacked`).
-* Multiclass: single-layer + early (`run_concat`) + late (`run_stacked`).
-* Survival: single-layer + early (`do_early_fusion`) + late weighted fusion with both `COX` and `IBS` outputs returned.
+* Continuous/Binary: single-layer + early (`run_concat`) + late (`run_stacked`) + cooperative (`run_intermediate`).
+* Multiclass: single-layer + early (`run_concat`) + late (`run_stacked`). `run_intermediate` is ignored with a message.
+* Survival: single-layer + early (`do_early_fusion`) + late weighted fusion with both `COX` and `IBS` outputs returned + cooperative (`run_intermediate`).
 
 #### The IntegratedLearner workflow
 
@@ -225,6 +230,7 @@ For continuous/binary fits (`IL_conbin` path):
 * `X_train_layers`, `Y_train`, `yhat.train`: training inputs and predictions.
 * `X_test_layers`, `Y_test`, `yhat.test`: validation inputs and predictions (if validation provided).
 * `weights`: Layer weights in stacked model (`meta_learner = "sl_nnls_auc"` and `run_stacked = TRUE`).
+* `model_fits$model_cooperative`, `yhat.train[, "cooperative"]`, and `yhat.test[, "cooperative"]`: cooperative `multiview` model and predictions when `run_intermediate = TRUE`.
 * `AUC.train`/`AUC.test` (binomial) or `R2.train`/`R2.test` (gaussian).
 * `feature_importance_signed`: Global signed feature importance.
 * `feature_importance_signed_by_layer`: Per-layer signed feature importance.
@@ -243,6 +249,7 @@ For survival fits (`ILsurv` path):
 * `train_out$single`: Single-layer metrics.
 * `train_out$early`: Early-fusion metrics (if enabled).
 * `train_out$late$IBS` and `train_out$late$COX`: Late-fusion metrics and learned layer weights for both survival fusion strategies.
+* `train_out$cooperative` / `valid_out$cooperative`: cooperative `multiview` Cox model metrics and risk scores when `run_intermediate = TRUE`.
 * `valid_out$...`: Validation analogs of single/early/late outputs (if validation provided).
 * `train_out$late$combined_importance` and (if available) `train_out$early$combined_importance`: survival feature-importance outputs.
 
