@@ -20,7 +20,7 @@ mlr3proba/mlr3extralearners."><!-- mathjax --><script src="https://cdnjs.cloudfl
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.2</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.3</span>
       </span>
     </div>
 
@@ -50,7 +50,7 @@ mlr3proba/mlr3extralearners."><!-- mathjax --><script src="https://cdnjs.cloudfl
   <div class="col-md-9 contents">
     <div class="page-header">
     <h1>IntegratedLearner Survival Engine</h1>
-    <small class="dont-index">Source: <a href="https://github.com/himelmallick/IntegratedLearner/blob/master/R/IL_survival.R" class="external-link"><code>R/IL_survival.R</code></a></small>
+    <small class="dont-index">Source: <a href="https://github.com/himelmallick/IntegratedLearner/blob/Intermediate_Fusion_Extension/R/IL_survival.R" class="external-link"><code>R/IL_survival.R</code></a></small>
     <div class="hidden name"><code>ILsurv.Rd</code></div>
     </div>
 
@@ -86,6 +86,10 @@ interface while using model fitting and fusion routines that do not depend on
 <span>  optim_maxit_cox <span class="op">=</span> <span class="fl">4000</span>,</span>
 <span>  optim_maxit_ibs <span class="op">=</span> <span class="fl">300</span>,</span>
 <span>  ibs_shrink_to_uniform <span class="op">=</span> <span class="fl">0</span>,</span>
+<span>  run_intermediate <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  cooperative_rho <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.1</span>, <span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">1</span><span class="op">)</span>,</span>
+<span>  cooperative_s <span class="op">=</span> <span class="st">"lambda.min"</span>,</span>
+<span>  cooperative_type_measure <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span>
 <span></span>
@@ -113,6 +117,10 @@ interface while using model fitting and fusion routines that do not depend on
 <span>  optim_maxit_cox <span class="op">=</span> <span class="fl">4000</span>,</span>
 <span>  optim_maxit_ibs <span class="op">=</span> <span class="fl">300</span>,</span>
 <span>  ibs_shrink_to_uniform <span class="op">=</span> <span class="fl">0</span>,</span>
+<span>  run_intermediate <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  cooperative_rho <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.1</span>, <span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">1</span><span class="op">)</span>,</span>
+<span>  cooperative_s <span class="op">=</span> <span class="st">"lambda.min"</span>,</span>
+<span>  cooperative_type_measure <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -241,6 +249,26 @@ is <code>NULL</code>.</p></dd>
 uniform.</p></dd>
 
 
+<dt id="arg-run-intermediate">run_intermediate<a class="anchor" aria-label="anchor" href="#arg-run-intermediate"></a></dt>
+<dd><p>Should direct cooperative learning via
+<span class="pkg">multiview</span> be run? Default is FALSE.</p></dd>
+
+
+<dt id="arg-cooperative-rho">cooperative_rho<a class="anchor" aria-label="anchor" href="#arg-cooperative-rho"></a></dt>
+<dd><p>Non-negative agreement-penalty values to evaluate for
+cooperative learning.</p></dd>
+
+
+<dt id="arg-cooperative-s">cooperative_s<a class="anchor" aria-label="anchor" href="#arg-cooperative-s"></a></dt>
+<dd><p>Penalty value used when predicting from the selected
+cooperative model. Defaults to <code>"lambda.min"</code>.</p></dd>
+
+
+<dt id="arg-cooperative-type-measure">cooperative_type_measure<a class="anchor" aria-label="anchor" href="#arg-cooperative-type-measure"></a></dt>
+<dd><p>Optional <span class="pkg">multiview</span> CV loss/score. If
+<code>NULL</code>, an outcome-appropriate default is used.</p></dd>
+
+
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
 <dd><p>Additional base-learner hyperparameters passed to
 <code>base_learner</code>. You may also pass <code>model_args = list(...)</code> as a
@@ -288,9 +316,12 @@ and the analogous validation entries.</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  [9] "supported_learners"          "fold_id"                    </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [11] "folds"                       "test"                       </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [13] "drop_poor_performing_layers" "late_methods"               </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [15] "fusion_layers_retained"      "fusion_layers_removed"      </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [17] "fusion_layer_scores"         "fusion_layer_metric"        </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [19] "fusion_layer_threshold"     </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [15] "run_intermediate"            "cooperative_rho"            </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [17] "cooperative_rho_grid"        "cooperative_rho_scores"     </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [19] "cooperative_s"               "cooperative_type_measure"   </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [21] "fusion_layers_retained"      "fusion_layers_removed"      </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [23] "fusion_layer_scores"         "fusion_layer_metric"        </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [25] "fusion_layer_threshold"     </span>
 </code></pre></div>
     </div>
   </div>

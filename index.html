@@ -33,7 +33,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.2</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.3</span>
       </span>
     </div>
 
@@ -265,6 +265,14 @@
 <li>
 <code>run_stacked</code>: Logical; include late-fusion stacked model for non-survival.</li>
 <li>
+<code>run_intermediate</code>: Logical; include direct cooperative learning via the <code>multiview</code> package. Default is <code>FALSE</code>.</li>
+<li>
+<code>cooperative_rho</code>: Non-negative agreement-penalty values to evaluate for cooperative learning. Default is <code>c(0, 0.1, 0.25, 0.5, 1)</code>.</li>
+<li>
+<code>cooperative_s</code>: Penalty value used for cooperative predictions. Default is <code>"lambda.min"</code>.</li>
+<li>
+<code>cooperative_type_measure</code>: Optional <code>multiview</code> CV loss/score. If <code>NULL</code>, IL uses an outcome-appropriate default.</li>
+<li>
 <code>drop_poor_performing_layers</code>: If <code>TRUE</code>, layers with poor single-layer performance are removed from early and late fusion only (<code>AUC &lt; 0.5</code> for binary, <code>R2 &lt; 0.5</code> for continuous, <code>C-index &lt; 0.5</code> for survival). Single-layer outputs are still retained.</li>
 <li>
 <code>family</code>: <code><a href="https://rdrr.io/r/stats/family.html" class="external-link">gaussian()</a></code> (continuous), <code><a href="https://rdrr.io/r/stats/family.html" class="external-link">binomial()</a></code> (binary or multiclass), or survival family/metadata.</li>
@@ -279,12 +287,13 @@
 <li>Binary/continuous non-survival: any available <code>SuperLearner</code> <code>SL.*</code> model.</li>
 <li>Multiclass non-survival: <code>glmnet</code>, <code>randomforest</code>, <code>ranger</code>, <code>xgboost</code>, <code>mbart</code>, <code>multinom</code>.</li>
 <li>Survival: <code>surv.coxph</code>, <code>surv.glmnet</code>, <code>surv.ranger</code>, <code>surv.ranger.extratrees</code>, <code>surv.ranger.maxstat</code>, <code>surv.ranger.C</code>, <code>surv.rfsrc</code>, <code>surv.coxboost</code>, <code>surv.gbm</code>, <code>surv.xgboost.cox</code>, <code>surv.xgboost.aft</code>, <code>surv.mboost</code>, <code>surv.bart</code>.</li>
+<li>Direct cooperative learning: <code>multiview</code> feature-level fusion for continuous, binary, and survival outcomes. Multiclass cooperative learning is not supported.</li>
 </ul>
 <p>Supported fusion modules:</p>
 <ul>
-<li>Continuous/Binary: single-layer + early (<code>run_concat</code>) + late (<code>run_stacked</code>).</li>
-<li>Multiclass: single-layer + early (<code>run_concat</code>) + late (<code>run_stacked</code>).</li>
-<li>Survival: single-layer + early (<code>do_early_fusion</code>) + late weighted fusion with both <code>COX</code> and <code>IBS</code> outputs returned.</li>
+<li>Continuous/Binary: single-layer + early (<code>run_concat</code>) + late (<code>run_stacked</code>) + cooperative (<code>run_intermediate</code>).</li>
+<li>Multiclass: single-layer + early (<code>run_concat</code>) + late (<code>run_stacked</code>). <code>run_intermediate</code> is ignored with a message.</li>
+<li>Survival: single-layer + early (<code>do_early_fusion</code>) + late weighted fusion with both <code>COX</code> and <code>IBS</code> outputs returned + cooperative (<code>run_intermediate</code>).</li>
 </ul>
 <div class="section level4">
 <h4 id="the-integratedlearner-workflow">The IntegratedLearner workflow<a class="anchor" aria-label="anchor" href="#the-integratedlearner-workflow"></a>
@@ -308,6 +317,8 @@
 <code>X_test_layers</code>, <code>Y_test</code>, <code>yhat.test</code>: validation inputs and predictions (if validation provided).</li>
 <li>
 <code>weights</code>: Layer weights in stacked model (<code>meta_learner = "sl_nnls_auc"</code> and <code>run_stacked = TRUE</code>).</li>
+<li>
+<code>model_fits$model_cooperative</code>, <code>yhat.train[, "cooperative"]</code>, and <code>yhat.test[, "cooperative"]</code>: cooperative <code>multiview</code> model and predictions when <code>run_intermediate = TRUE</code>.</li>
 <li>
 <code>AUC.train</code>/<code>AUC.test</code> (binomial) or <code>R2.train</code>/<code>R2.test</code> (gaussian).</li>
 <li>
@@ -338,6 +349,8 @@
 <code>train_out$early</code>: Early-fusion metrics (if enabled).</li>
 <li>
 <code>train_out$late$IBS</code> and <code>train_out$late$COX</code>: Late-fusion metrics and learned layer weights for both survival fusion strategies.</li>
+<li>
+<code>train_out$cooperative</code> / <code>valid_out$cooperative</code>: cooperative <code>multiview</code> Cox model metrics and risk scores when <code>run_intermediate = TRUE</code>.</li>
 <li>
 <code>valid_out$...</code>: Validation analogs of single/early/late outputs (if validation provided).</li>
 <li>

@@ -32,7 +32,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.2</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.3</span>
       </span>
     </div>
 
@@ -74,7 +74,7 @@ Anupreet Porwal and Himel Mallick</h4>
             
             <h4 data-toc-skip class="date">2026-03-10</h4>
       
-      <small class="dont-index">Source: <a href="https://github.com/himelmallick/IntegratedLearner/blob/master/vignettes/IntegratedLearner.Rmd" class="external-link"><code>vignettes/IntegratedLearner.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/himelmallick/IntegratedLearner/blob/Intermediate_Fusion_Extension/vignettes/IntegratedLearner.Rmd" class="external-link"><code>vignettes/IntegratedLearner.Rmd</code></a></small>
       <div class="hidden name"><code>IntegratedLearner.Rmd</code></div>
 
     </div>
@@ -635,16 +635,18 @@ standard Bioconductor accessors for inspection, and then fits
 <span><span class="co">#&gt;  [7] "meta_learner"                       "base_screener"                     </span></span>
 <span><span class="co">#&gt;  [9] "base_screener_used"                 "screening_used"                    </span></span>
 <span><span class="co">#&gt; [11] "run_concat"                         "run_stacked"                       </span></span>
-<span><span class="co">#&gt; [13] "drop_poor_performing_layers"        "fusion_layers_retained"            </span></span>
-<span><span class="co">#&gt; [15] "fusion_layers_removed"              "fusion_layer_scores"               </span></span>
-<span><span class="co">#&gt; [17] "fusion_layer_metric"                "fusion_layer_threshold"            </span></span>
-<span><span class="co">#&gt; [19] "family"                             "feature.names"                     </span></span>
-<span><span class="co">#&gt; [21] "test"                               "AUC.train"                         </span></span>
-<span><span class="co">#&gt; [23] "accuracy.train"                     "balanced_accuracy.train"           </span></span>
-<span><span class="co">#&gt; [25] "metrics.train"                      "feature_importance_signed"         </span></span>
-<span><span class="co">#&gt; [27] "feature_importance_signed_by_layer" "folds"                             </span></span>
-<span><span class="co">#&gt; [29] "cvControl"                          "time"                              </span></span>
-<span><span class="co">#&gt; [31] "input_mode"                         "column_map"</span></span></code></pre></div>
+<span><span class="co">#&gt; [13] "run_intermediate"                   "cooperative_rho_grid"              </span></span>
+<span><span class="co">#&gt; [15] "cooperative_s"                      "drop_poor_performing_layers"       </span></span>
+<span><span class="co">#&gt; [17] "fusion_layers_retained"             "fusion_layers_removed"             </span></span>
+<span><span class="co">#&gt; [19] "fusion_layer_scores"                "fusion_layer_metric"               </span></span>
+<span><span class="co">#&gt; [21] "fusion_layer_threshold"             "family"                            </span></span>
+<span><span class="co">#&gt; [23] "feature.names"                      "test"                              </span></span>
+<span><span class="co">#&gt; [25] "AUC.train"                          "accuracy.train"                    </span></span>
+<span><span class="co">#&gt; [27] "balanced_accuracy.train"            "metrics.train"                     </span></span>
+<span><span class="co">#&gt; [29] "feature_importance_signed"          "feature_importance_signed_by_layer"</span></span>
+<span><span class="co">#&gt; [31] "folds"                              "cvControl"                         </span></span>
+<span><span class="co">#&gt; [33] "time"                               "input_mode"                        </span></span>
+<span><span class="co">#&gt; [35] "column_map"</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="parameter-reference-conbin-multiclass-and-survival">Parameter Reference (Conbin, Multiclass, and Survival)<a class="anchor" aria-label="anchor" href="#parameter-reference-conbin-multiclass-and-survival"></a>
@@ -1609,7 +1611,7 @@ bytecode). In that case, either:</p>
 <span>  screen_pct <span class="op">=</span> <span class="fl">30</span>,</span>
 <span>  family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">gaussian</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.467 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.483 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Model fit for individual layers: sl_bart </span></span>
 <span><span class="co">#&gt; Model fit for stacked layer: sl_nnls_auc </span></span>
@@ -1888,7 +1890,7 @@ and pass them through <code>outcome_col</code> and
 <span><span class="co">#&gt; Running multiclass base model for layer 2...</span></span>
 <span><span class="co">#&gt; Running multiclass stacked model...</span></span>
 <span><span class="co">#&gt; Running multiclass concatenated model...</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.147 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.145 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Multiclass model fit with 3 classes</span></span>
 <span><span class="co">#&gt; Base learner: glmnet </span></span>
@@ -2444,7 +2446,7 @@ possible within one fit object.</p>
 <span><span class="co">#&gt; [17] lattice_0.23-1              SuperLearner_2.0-41        </span></span>
 <span><span class="co">#&gt; [19] gam_1.22-7                  foreach_1.5.2              </span></span>
 <span><span class="co">#&gt; [21] nnls_1.6                    ggplot2_4.0.3              </span></span>
-<span><span class="co">#&gt; [23] dplyr_1.2.1                 IntegratedLearner_0.99.2   </span></span>
+<span><span class="co">#&gt; [23] dplyr_1.2.1                 IntegratedLearner_0.99.3   </span></span>
 <span><span class="co">#&gt; [25] BiocStyle_2.41.0           </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; loaded via a namespace (and not attached):</span></span>
