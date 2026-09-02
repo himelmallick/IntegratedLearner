@@ -1,7 +1,7 @@
 Package: IntegratedLearner
 Type: Package
 Title: Integrated Multi-Omics Learning for Survival and Other Outcomes
-Version: 0.99.2
+Version: 0.99.3
 Authors@R: c(
     person("Nalin", "Arora", email = "naa4050@med.cornell.edu",
         role = c("aut", "cre", "cph"),
