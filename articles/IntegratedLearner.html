@@ -89,10 +89,11 @@ continuous, and survival outcome workflows in
 <code>IntegratedLearner</code>.</p>
 <p><code>IntegratedLearner</code> is designed for multi-omics studies
 where each assay layer can carry complementary signal and where users
-want a unified interface for per-layer modeling, early fusion, and late
-fusion. This makes the package a natural fit for Bioconductor workflows
-built around <code>MultiAssayExperiment</code>,
-<code>SummarizedExperiment</code>, and curated assay containers.</p>
+want a unified interface for per-layer modeling, early fusion, late
+fusion, and direct cooperative multiview learning. This makes the
+package a natural fit for Bioconductor workflows built around
+<code>MultiAssayExperiment</code>, <code>SummarizedExperiment</code>,
+and curated assay containers.</p>
 <p>Within the Bioconductor ecosystem, the package is intended to sit
 after assay assembly and harmonization, and before downstream
 interpretation. IntegratedLearner focuses on supervised multi-omics
@@ -138,12 +139,19 @@ your own multi-omics study:</p>
 survival discrimination curves, layer weights, and feature
 signals).</li>
 </ol>
-<p><code>IntegratedLearner</code> supports two integration
+<p><code>IntegratedLearner</code> supports three integration
 paradigms:</p>
 <ul>
 <li>Early fusion: concatenated features across layers.</li>
 <li>Late fusion: layer-specific models combined by a meta-learner.</li>
+<li>Intermediate/cooperative fusion: direct <code>multiview</code>
+cooperative learning over feature matrices from each layer.</li>
 </ul>
+<p>Cooperative learning is enabled with
+<code>run_intermediate = TRUE</code>. It is currently supported for
+continuous, binary, and survival outcomes. For multiclass outcomes,
+<code>IntegratedLearner</code> prints a message and ignores
+<code>run_intermediate</code>.</p>
 <p>Optional feature selection workflow used in this vignette:</p>
 <ol style="list-style-type: decimal">
 <li>Filtering first (<code>filter_method</code>,
@@ -191,6 +199,9 @@ paradigms:</p>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://bioconductor.org/packages/SummarizedExperiment" class="external-link">SummarizedExperiment</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="http://waldronlab.io/MultiAssayExperiment/" class="external-link">MultiAssayExperiment</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/therneau/survival" class="external-link">survival</a></span><span class="op">)</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"multiview"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">multiview</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
 <span><span class="kw">if</span> <span class="op">(</span><span class="va">use_sl_bart</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">bartMachine</span><span class="op">)</span></span>
 <span><span class="op">}</span></span></code></pre></div>
@@ -785,6 +796,38 @@ performance from early and late fusion only (AUC &lt; 0.5 for binary, R²
 results are still retained.</td>
 </tr>
 <tr class="odd">
+<td><code>run_intermediate</code></td>
+<td><code>FALSE</code></td>
+<td>continuous, binary, survival</td>
+<td>Enables direct cooperative learning through <code>multiview</code>.
+Multiclass fits print a message and ignore this option. Requires at
+least 3 CV folds.</td>
+</tr>
+<tr class="even">
+<td><code>cooperative_rho</code></td>
+<td><code>c(0, 0.1, 0.25, 0.5, 1)</code></td>
+<td>continuous, binary, survival</td>
+<td>Candidate agreement-penalty values. <code>IntegratedLearner</code>
+fits one <code><a href="https://rdrr.io/pkg/multiview/man/cv.multiview.html" class="external-link">cv.multiview()</a></code> model per <code>rho</code> using
+the same fold assignments, then keeps the best <code>rho</code> by CV
+score.</td>
+</tr>
+<tr class="odd">
+<td><code>cooperative_s</code></td>
+<td><code>"lambda.min"</code></td>
+<td>continuous, binary, survival</td>
+<td>Lambda selection used for cooperative predictions. Can be
+<code>"lambda.min"</code>, <code>"lambda.1se"</code>, or a numeric
+lambda.</td>
+</tr>
+<tr class="even">
+<td><code>cooperative_type_measure</code></td>
+<td><code>NULL</code></td>
+<td>continuous, binary, survival</td>
+<td>Optional <code>multiview</code> CV metric. Defaults are MSE for
+gaussian, AUC for binomial, and Harrell’s C for survival.</td>
+</tr>
+<tr class="odd">
 <td><code>verbose</code></td>
 <td><code>FALSE</code></td>
 <td>all</td>
@@ -903,11 +946,17 @@ Supported: <code>glmnet</code>, <code>randomforest</code>,
 <td>Enables early-fusion concatenated multiclass model.</td>
 </tr>
 <tr class="even">
+<td><code>run_intermediate</code></td>
+<td><code>FALSE</code></td>
+<td>Not supported for multiclass outcomes; if set to <code>TRUE</code>,
+a message is printed and the option is ignored.</td>
+</tr>
+<tr class="odd">
 <td><code>folds</code></td>
 <td><code>5</code></td>
 <td>Subject-level CV folds for OOF multiclass probabilities.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>
 <code>run_screening</code>, <code>screen_pct</code>
 </td>
@@ -1039,16 +1088,18 @@ original <code>SL.*</code> names.</td>
 </h3>
 <table class="table">
 <colgroup>
-<col width="25%">
-<col width="25%">
-<col width="25%">
-<col width="25%">
+<col width="20%">
+<col width="20%">
+<col width="20%">
+<col width="20%">
+<col width="20%">
 </colgroup>
 <thead><tr class="header">
 <th>Path</th>
 <th>Single-layer</th>
 <th>Early fusion</th>
 <th>Late fusion</th>
+<th>Cooperative/intermediate fusion</th>
 </tr></thead>
 <tbody>
 <tr class="odd">
@@ -1057,6 +1108,9 @@ original <code>SL.*</code> names.</td>
 <td><code>run_concat = TRUE</code></td>
 <td>
 <code>run_stacked = TRUE</code> with <code>meta_learner</code>
+</td>
+<td>
+<code>run_intermediate = TRUE</code> via <code>multiview</code>
 </td>
 </tr>
 <tr class="even">
@@ -1067,6 +1121,7 @@ original <code>SL.*</code> names.</td>
 <code>run_stacked = TRUE</code> with native multiclass
 <code>meta_learner</code>
 </td>
+<td>Not supported; prints a message and is ignored</td>
 </tr>
 <tr class="odd">
 <td>Survival</td>
@@ -1074,6 +1129,9 @@ original <code>SL.*</code> names.</td>
 <td><code>do_early_fusion = TRUE</code></td>
 <td>Weighted layer blending with both <code>IBS</code> and
 <code>COX</code> outputs returned</td>
+<td>
+<code>run_intermediate = TRUE</code> via <code>multiview</code> Cox
+model</td>
 </tr>
 </tbody>
 </table>
@@ -1130,6 +1188,18 @@ method and where to find weights/importance values.</p>
 </td>
 </tr>
 <tr class="even">
+<td>Cooperative/intermediate fusion</td>
+<td>Direct cooperative <code>multiview</code> model trained on layer
+feature matrices</td>
+<td>Enable with <code>run_intermediate = TRUE</code>; outputs in
+<code>fit$yhat.train[, "cooperative"]</code>,
+<code>fit$yhat.test[, "cooperative"]</code>,
+<code>fit$model_fits$model_cooperative</code>,
+<code>fit$cooperative_rho</code>, and
+<code>fit$cooperative_rho_scores</code>
+</td>
+</tr>
+<tr class="odd">
 <td>Layer weights (stacked)</td>
 <td>Relative contribution of each layer in late fusion</td>
 <td>
@@ -1137,7 +1207,7 @@ method and where to find weights/importance values.</p>
 <code>meta_learner = "sl_nnls_auc"</code> and
 <code>run_stacked = TRUE</code>)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Binary metric table</td>
 <td>Per-model AUC, accuracy, and balanced accuracy</td>
 <td>
@@ -1191,13 +1261,20 @@ validation provided)</td>
 </td>
 </tr>
 <tr class="even">
+<td>Cooperative/intermediate fusion</td>
+<td>Not supported for multiclass outcomes</td>
+<td>
+<code>run_intermediate = TRUE</code> prints a message and is
+ignored; no cooperative probability object is returned</td>
+</tr>
+<tr class="odd">
 <td>Multiclass performance metrics</td>
 <td>Accuracy, balanced accuracy, one-vs-rest AUC, and log-loss</td>
 <td>
 <code>fit$metrics.train</code> and <code>fit$metrics.test</code> (if
 validation provided)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Feature-selection metadata</td>
 <td>Filtering/screening settings used in fit</td>
 <td>
@@ -1206,7 +1283,7 @@ validation provided)</td>
 <code>fit$screen_method</code>, <code>fit$screen_pct</code>
 </td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Screened feature sets</td>
 <td>Features retained by fold-safe screening</td>
 <td>
@@ -1269,6 +1346,16 @@ time-dependent AUC, and risks</td>
 metrics</td>
 </tr>
 <tr class="even">
+<td>Cooperative/intermediate fusion</td>
+<td>
+<code>fit$train_out$cooperative</code>, containing the selected
+<code>multiview</code> model, C-index, time-dependent AUC, and risk
+scores</td>
+<td>
+<code>fit$valid_out$cooperative</code>, with analogous validation
+metrics and risk scores</td>
+</tr>
+<tr class="odd">
 <td>Survival plotting payload</td>
 <td><code>fit$surv_plot_data$train</code></td>
 <td><code>fit$surv_plot_data$valid</code></td>
@@ -1346,6 +1433,9 @@ by effect magnitude/sign.</td>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># ---- Conbin: weights + top features ----</span></span>
 <span><span class="va">fit</span><span class="op">$</span><span class="va">weights</span></span>
+<span><span class="va">fit</span><span class="op">$</span><span class="va">cooperative_rho</span></span>
+<span><span class="va">fit</span><span class="op">$</span><span class="va">cooperative_rho_scores</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">yhat.train</span><span class="op">[</span>, <span class="st">"cooperative"</span><span class="op">]</span>, <span class="fl">10</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">feature_importance_signed</span>, <span class="fl">20</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">feature_importance_signed_by_layer</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">feature_importance_signed_by_layer</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span>, <span class="fl">20</span><span class="op">)</span></span>
@@ -1362,6 +1452,8 @@ by effect magnitude/sign.</td>
 <span><span class="co"># ---- Survival: late-fusion weights + top combined features ----</span></span>
 <span><span class="va">fit_surv</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">IBS</span><span class="op">$</span><span class="va">weights</span></span>
 <span><span class="va">fit_surv</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">COX</span><span class="op">$</span><span class="va">weights</span></span>
+<span><span class="va">fit_surv</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">cooperative</span><span class="op">$</span><span class="va">train_cindex</span></span>
+<span><span class="va">fit_surv</span><span class="op">$</span><span class="va">cooperative_rho</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit_surv</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">IBS</span><span class="op">$</span><span class="va">combined_importance</span>, <span class="fl">20</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit_surv</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">COX</span><span class="op">$</span><span class="va">combined_importance</span>, <span class="fl">20</span><span class="op">)</span></span>
 <span></span>
@@ -1466,7 +1558,7 @@ with a meta-learner (<code>meta_learner</code>).</p>
 <span><span class="co">#&gt; CV SL.randomForest_screen.il.glmnet</span></span>
 <span><span class="co">#&gt; Non-Negative least squares convergence: TRUE</span></span>
 <span><span class="co">#&gt; full SL.randomForest_screen.il.glmnet</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.076 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.079 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Model fit for individual layers: SL.randomForest </span></span>
 <span><span class="co">#&gt; Model fit for stacked layer: sl_nnls_auc </span></span>
@@ -1553,6 +1645,47 @@ predicted probabilities.</li>
 strongest and whether stacked fusion outperforms both individual layers
 and simple concatenation.</p>
 </div>
+<div class="section level3">
+<h3 id="optional-direct-cooperative-learning-with-multiview">Optional: Direct Cooperative Learning with
+<code>multiview</code><a class="anchor" aria-label="anchor" href="#optional-direct-cooperative-learning-with-multiview"></a>
+</h3>
+<p>Set <code>run_intermediate = TRUE</code> to add a direct cooperative
+multiview model. This branch uses the original layer feature matrices as
+views, fits <code><a href="https://rdrr.io/pkg/multiview/man/cv.multiview.html" class="external-link">cv.multiview()</a></code> once per candidate
+<code>rho</code> using the same fold assignments, and keeps the
+<code>rho</code> with the best CV score. Within each <code>rho</code>,
+<code><a href="https://rdrr.io/pkg/multiview/man/cv.multiview.html" class="external-link">cv.multiview()</a></code> selects the lambda path in the usual way;
+predictions use <code>cooperative_s</code>, which defaults to
+<code>"lambda.min"</code>.</p>
+<p>The chunk below is not evaluated during vignette builds because
+<code>multiview</code> fits can be expensive on real omics matrices. It
+can be run directly in an analysis session.</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">fit_coop</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/IntegratedLearner.html">IntegratedLearner</a></span><span class="op">(</span></span>
+<span>  MAE_train <span class="op">=</span> <span class="va">mae_train</span>,</span>
+<span>  MAE_valid <span class="op">=</span> <span class="va">mae_valid</span>,</span>
+<span>  experiment <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="fu">MultiAssayExperiment</span><span class="fu">::</span><span class="fu"><a href="https://github.com/waldronlab/MultiAssayExperiment/reference/MultiAssayExperiment-methods.html" class="external-link">experiments</a></span><span class="op">(</span><span class="va">mae_train</span><span class="op">)</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">2</span><span class="op">]</span>,</span>
+<span>  assay.type <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="st">"abundance"</span>, <span class="fl">2</span><span class="op">)</span>,</span>
+<span>  folds <span class="op">=</span> <span class="fl">3</span>,</span>
+<span>  base_learner <span class="op">=</span> <span class="st">"SL.mean"</span>,</span>
+<span>  meta_learner <span class="op">=</span> <span class="st">"sl_nnls_auc"</span>,</span>
+<span>  run_stacked <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  run_concat <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  run_intermediate <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  cooperative_rho <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.25</span>, <span class="fl">1</span><span class="op">)</span>,</span>
+<span>  cooperative_s <span class="op">=</span> <span class="st">"lambda.min"</span>,</span>
+<span>  filter_method <span class="op">=</span> <span class="st">"prevalence"</span>,</span>
+<span>  filter_pct <span class="op">=</span> <span class="fl">20</span>,</span>
+<span>  print_learner <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">binomial</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">fit_coop</span><span class="op">$</span><span class="va">cooperative_rho</span></span>
+<span><span class="va">fit_coop</span><span class="op">$</span><span class="va">cooperative_rho_scores</span></span>
+<span><span class="va">fit_coop</span><span class="op">$</span><span class="va">metrics.train</span></span>
+<span><span class="va">fit_coop</span><span class="op">$</span><span class="va">metrics.test</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit_coop</span><span class="op">$</span><span class="va">yhat.test</span><span class="op">[</span>, <span class="st">"cooperative"</span><span class="op">]</span><span class="op">)</span></span></code></pre></div>
+</div>
 </div>
 <div class="section level2">
 <h2 id="example-2-continuous-outcome-gestational-age">Example 2: Continuous Outcome (Gestational Age)<a class="anchor" aria-label="anchor" href="#example-2-continuous-outcome-gestational-age"></a>
@@ -1563,7 +1696,7 @@ converted into <code>MultiAssayExperiment</code> format. Here
 <div class="section level3">
 <h3 id="step-1-load-and-inspect-data">Step 1: Load and Inspect Data<a class="anchor" aria-label="anchor" href="#step-1-load-and-inspect-data"></a>
 </h3>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"pregnancy_MAE"</span>, package <span class="op">=</span> <span class="st">"IntegratedLearner"</span><span class="op">)</span></span>
 <span><span class="va">mae_train</span> <span class="op">&lt;-</span> <span class="va">pregnancy_MAE</span></span>
 <span></span>
@@ -1597,7 +1730,7 @@ bytecode). In that case, either:</p>
 <li>upgrade Java runtime to 21 and restart R, or</li>
 <li>use a non-Java learner (example fallback shown below).</li>
 </ul>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">options</a></span><span class="op">(</span>java.parameters <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"-Xmx6G"</span>, <span class="st">"--add-modules=jdk.incubator.vector"</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/IntegratedLearner.html">IntegratedLearner</a></span><span class="op">(</span></span>
@@ -1611,7 +1744,7 @@ bytecode). In that case, either:</p>
 <span>  screen_pct <span class="op">=</span> <span class="fl">30</span>,</span>
 <span>  family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">gaussian</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.51 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.543 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Model fit for individual layers: sl_bart </span></span>
 <span><span class="co">#&gt; Model fit for stacked layer: sl_nnls_auc </span></span>
@@ -1636,7 +1769,7 @@ bytecode). In that case, either:</p>
 <span><span class="co">#&gt;           0.942           0.000 </span></span>
 <span><span class="co">#&gt; ========================================</span></span></code></pre></div>
 <p>Fallback (non-Java) run:</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/IntegratedLearner.html">IntegratedLearner</a></span><span class="op">(</span></span>
 <span>  MAE_train <span class="op">=</span> <span class="va">mae_train</span>,</span>
 <span>  folds <span class="op">=</span> <span class="fl">2</span>,</span>
@@ -1655,13 +1788,13 @@ bytecode). In that case, either:</p>
 <p>For continuous outcomes, <code>IntegratedLearner</code> reports
 <code>R2.train</code> (and <code>R2.test</code> if validation is
 provided).</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span><span class="op">$</span><span class="va">R2.train</span></span>
 <span><span class="co">#&gt;     CellfreeRNA    ImmuneSystem    Metabolomics      Microbiome   PlasmaLuminex </span></span>
 <span><span class="co">#&gt;     0.118017257     0.067791243     0.470728259     0.499920701     0.091806692 </span></span>
 <span><span class="co">#&gt; PlasmaSomalogic    SerumLuminex         stacked    concatenated </span></span>
 <span><span class="co">#&gt;     0.726580060     0.001698481     0.723832715     0.148696740</span></span></code></pre></div>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plot.obj</span> <span class="op">&lt;-</span> <span class="fu">IntegratedLearner</span><span class="fu">:::</span><span class="fu"><a href="../reference/plot.learner.html">plot.learner</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
 <span><span class="va">plot.obj</span><span class="op">$</span><span class="va">plot</span></span></code></pre></div>
 <p><img src="IntegratedLearner_files/figure-html/chunk-21-1.png" class="r-plt" alt="" width="672"></p>
@@ -1671,7 +1804,7 @@ provided).</p>
 </h3>
 <p>When using <code>sl_bart</code>, you can inspect posterior predictive
 distributions and derive weighted posterior summaries.</p>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">weights</span> <span class="op">&lt;-</span> <span class="va">fit</span><span class="op">$</span><span class="va">weights</span></span>
 <span></span>
 <span><span class="va">dataX</span> <span class="op">&lt;-</span> <span class="va">fit</span><span class="op">$</span><span class="va">X_train_layers</span></span>
@@ -1710,7 +1843,7 @@ distributions and derive weighted posterior summaries.</p>
 <span><span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/row_colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">weighted.post.samples</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/row_colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">dataX</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">dataY</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/row_colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">dataX</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">)</span></span></code></pre></div>
 <p>Visualize 68% and 95% credible intervals for observations:</p>
-<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">ord_names</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/sort.html" class="external-link">sort</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/MatrixGenerics/man/rowMeans.html" class="external-link">rowMeans</a></span><span class="op">(</span><span class="va">weighted.post.samples</span><span class="op">)</span>, decreasing <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://mc-stan.org/bayesplot/reference/MCMC-intervals.html" class="external-link">mcmc_intervals</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">weighted.post.samples</span><span class="op">)</span>, prob <span class="op">=</span> <span class="fl">0.68</span>, prob_outer <span class="op">=</span> <span class="fl">0.95</span><span class="op">)</span> <span class="op">+</span></span>
@@ -1728,7 +1861,7 @@ distributions and derive weighted posterior summaries.</p>
 <p><img src="IntegratedLearner_files/figure-html/chunk-22-1.png" class="r-plt" alt="" width="864"></p>
 <p>Layer weights and feature-level inclusion proportions can also be
 examined for biological interpretation.</p>
-<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">omicsEye_theme</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">angle</span> <span class="op">&lt;-</span> <span class="fl">45</span></span>
 <span>  <span class="va">hjust</span> <span class="op">&lt;-</span> <span class="fl">1</span></span>
@@ -1815,7 +1948,7 @@ examined for biological interpretation.</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>strip.background <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">ylab</a></span><span class="op">(</span><span class="st">"Inclusion proportion"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">xlab</a></span><span class="op">(</span><span class="st">""</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://wilkelab.org/cowplot/reference/plot_grid.html" class="external-link">plot_grid</a></span><span class="op">(</span></span>
 <span>  <span class="va">p4</span>,</span>
 <span>  ncol <span class="op">=</span> <span class="fl">1</span>,</span>
@@ -1824,7 +1957,7 @@ examined for biological interpretation.</p>
 <span>  vjust <span class="op">=</span> <span class="fl">0.1</span></span>
 <span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>plot.margin <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grid/unit.html" class="external-link">unit</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">0.5</span>, <span class="fl">0.5</span>, <span class="fl">0.5</span><span class="op">)</span>, <span class="st">"cm"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p><img src="IntegratedLearner_files/figure-html/chunk-23-1.png" class="r-plt" alt="" width="672"></p>
-<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://wilkelab.org/cowplot/reference/plot_grid.html" class="external-link">plot_grid</a></span><span class="op">(</span></span>
 <span>  <span class="va">p5</span>,</span>
 <span>  ncol <span class="op">=</span> <span class="fl">1</span>,</span>
@@ -1844,7 +1977,7 @@ local fixtures. Here we keep the original outcome column name
 (<code>diseaseCat</code>) and subject ID column (<code>sample_id</code>)
 and pass them through <code>outcome_col</code> and
 <code>subject_id_col</code>.</p>
-<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"Franzosa_MAE_train"</span>, package <span class="op">=</span> <span class="st">"IntegratedLearner"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"Franzosa_MAE_valid"</span>, package <span class="op">=</span> <span class="st">"IntegratedLearner"</span><span class="op">)</span></span>
 <span></span>
@@ -1890,7 +2023,7 @@ and pass them through <code>outcome_col</code> and
 <span><span class="co">#&gt; Running multiclass base model for layer 2...</span></span>
 <span><span class="co">#&gt; Running multiclass stacked model...</span></span>
 <span><span class="co">#&gt; Running multiclass concatenated model...</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.144 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.146 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Multiclass model fit with 3 classes</span></span>
 <span><span class="co">#&gt; Base learner: glmnet </span></span>
@@ -1931,7 +2064,7 @@ and pass them through <code>outcome_col</code> and
 one-vs-rest AUC, and log-loss. The plotting helper also returns a single
 one-vs-rest ROC figure with all class curves overlaid for each fitted
 model.</p>
-<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plot.obj.mc</span> <span class="op">&lt;-</span> <span class="fu">IntegratedLearner</span><span class="fu">:::</span><span class="fu"><a href="../reference/plot.learner.html">plot.learner</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
 <span><span class="va">plot.obj.mc</span><span class="op">$</span><span class="va">plot</span></span></code></pre></div>
 <p><img src="IntegratedLearner_files/figure-html/chunk-17b-1.png" class="r-plt" alt="" width="768"></p>
@@ -1960,7 +2093,7 @@ column.</li>
 best fused survival model.</li>
 </ul>
 <p>This section provides a complete MAE workflow.</p>
-<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"TCGA_survival_MAE_train"</span>, package <span class="op">=</span> <span class="st">"IntegratedLearner"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"TCGA_survival_MAE_valid"</span>, package <span class="op">=</span> <span class="st">"IntegratedLearner"</span><span class="op">)</span></span>
 <span></span>
@@ -2016,10 +2149,31 @@ best fused survival model.</li>
 <span><span class="co">#&gt;   [valid late:COX] cindex=0.7111</span></span>
 <span><span class="co">#&gt;   [valid early] cindex=0.6364</span></span>
 <span><span class="co">#&gt; ILsurv completed</span></span></code></pre></div>
+<p>To add direct cooperative survival modeling, use at least 3 folds and
+set the cooperative options:</p>
+<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">fit_surv_coop</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/IntegratedLearner.html">IntegratedLearner</a></span><span class="op">(</span></span>
+<span>  MAE_train <span class="op">=</span> <span class="va">mae_train</span>,</span>
+<span>  MAE_valid <span class="op">=</span> <span class="va">mae_valid</span>,</span>
+<span>  experiment <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"gene"</span>, <span class="st">"mirna"</span><span class="op">)</span>,</span>
+<span>  assay.type <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"abundance"</span>, <span class="st">"abundance"</span><span class="op">)</span>,</span>
+<span>  outcome_col <span class="op">=</span> <span class="st">"outcome_surv"</span>,</span>
+<span>  subject_id_col <span class="op">=</span> <span class="st">"patient_id"</span>,</span>
+<span>  folds <span class="op">=</span> <span class="fl">3</span>,</span>
+<span>  base_learner <span class="op">=</span> <span class="st">"surv.coxph"</span>,</span>
+<span>  filter_method <span class="op">=</span> <span class="st">"variance"</span>,</span>
+<span>  filter_pct <span class="op">=</span> <span class="fl">40</span>,</span>
+<span>  run_screening <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  screen_pct <span class="op">=</span> <span class="fl">25</span>,</span>
+<span>  run_intermediate <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  cooperative_rho <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.25</span>, <span class="fl">1</span><span class="op">)</span>,</span>
+<span>  cooperative_s <span class="op">=</span> <span class="st">"lambda.min"</span>,</span>
+<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span></span></code></pre></div>
 <div class="section level3">
 <h3 id="interpret-survival-outputs">Interpret Survival Outputs<a class="anchor" aria-label="anchor" href="#interpret-survival-outputs"></a>
 </h3>
-<div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Single-layer training metrics</span></span>
 <span><span class="co"># fit_surv_mae$train_out$single$metrics</span></span>
 <span></span>
@@ -2392,7 +2546,13 @@ best fused survival model.</li>
 <span><span class="co">#&gt; [1] 0.7191919</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; $mirna</span></span>
-<span><span class="co">#&gt; [1] 0.6484848</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] 0.6484848</span></span>
+<span></span>
+<span><span class="co"># Cooperative survival branch, if run_intermediate = TRUE</span></span>
+<span><span class="co"># fit_surv_coop$cooperative_rho</span></span>
+<span><span class="co"># fit_surv_coop$cooperative_rho_scores</span></span>
+<span><span class="co"># fit_surv_coop$train_out$cooperative$train_cindex</span></span>
+<span><span class="co"># fit_surv_coop$valid_out$cooperative$valid_cindex</span></span></code></pre></div>
 <p>The <code>train_auc</code> and <code>valid_auc</code> objects for
 both <code>IBS</code> and <code>COX</code> are data frames with
 <code>time</code> and <code>AUC</code> columns, so they can be plotted
@@ -2400,7 +2560,7 @@ as true time-dependent discrimination curves. In practice, these two
 late-fusion outputs provide complementary summaries over the same
 single-layer and early-fusion backbone, making side-by-side comparison
 possible within one fit object.</p>
-<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plot.obj.surv</span> <span class="op">&lt;-</span> <span class="fu">IntegratedLearner</span><span class="fu">:::</span><span class="fu"><a href="../reference/plot.learner.html">plot.learner</a></span><span class="op">(</span><span class="va">fit_surv_mae</span><span class="op">)</span></span>
 <span><span class="va">plot.obj.surv</span><span class="op">$</span><span class="va">plot</span></span></code></pre></div>
 <p><img src="IntegratedLearner_files/figure-html/chunk-19b-1.png" class="r-plt" alt="" width="768"></p>
@@ -2409,7 +2569,7 @@ possible within one fit object.</p>
 <div class="section level2">
 <h2 id="session-information">Session Information<a class="anchor" aria-label="anchor" href="#session-information"></a>
 </h2>
-<div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb30"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="co">#&gt; R version 4.6.1 (2026-06-24)</span></span>
 <span><span class="co">#&gt; Platform: x86_64-pc-linux-gnu</span></span>
@@ -2435,19 +2595,19 @@ possible within one fit object.</p>
 <span><span class="co">#&gt; [8] methods   base     </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; other attached packages:</span></span>
-<span><span class="co">#&gt;  [1] bartMachine_1.4.2           survival_3.8-11            </span></span>
-<span><span class="co">#&gt;  [3] MultiAssayExperiment_1.39.1 SummarizedExperiment_1.43.0</span></span>
-<span><span class="co">#&gt;  [5] Biobase_2.73.2              GenomicRanges_1.65.1       </span></span>
-<span><span class="co">#&gt;  [7] Seqinfo_1.3.2               IRanges_2.47.5             </span></span>
-<span><span class="co">#&gt;  [9] MatrixGenerics_1.25.0       matrixStats_1.5.0          </span></span>
-<span><span class="co">#&gt; [11] S4Vectors_0.51.9            BiocGenerics_0.59.12       </span></span>
-<span><span class="co">#&gt; [13] generics_0.1.4              bayesplot_1.16.0           </span></span>
-<span><span class="co">#&gt; [15] cowplot_1.2.0               caret_7.0-1                </span></span>
-<span><span class="co">#&gt; [17] lattice_0.23-1              SuperLearner_2.0-41        </span></span>
-<span><span class="co">#&gt; [19] gam_1.22-7                  foreach_1.5.2              </span></span>
-<span><span class="co">#&gt; [21] nnls_1.6                    ggplot2_4.0.3              </span></span>
-<span><span class="co">#&gt; [23] dplyr_1.2.1                 IntegratedLearner_0.99.3   </span></span>
-<span><span class="co">#&gt; [25] BiocStyle_2.41.0           </span></span>
+<span><span class="co">#&gt;  [1] bartMachine_1.4.2           multiview_1.0              </span></span>
+<span><span class="co">#&gt;  [3] survival_3.8-11             MultiAssayExperiment_1.39.1</span></span>
+<span><span class="co">#&gt;  [5] SummarizedExperiment_1.43.0 Biobase_2.73.2             </span></span>
+<span><span class="co">#&gt;  [7] GenomicRanges_1.65.1        Seqinfo_1.3.2              </span></span>
+<span><span class="co">#&gt;  [9] IRanges_2.47.5              MatrixGenerics_1.25.0      </span></span>
+<span><span class="co">#&gt; [11] matrixStats_1.5.0           S4Vectors_0.51.9           </span></span>
+<span><span class="co">#&gt; [13] BiocGenerics_0.59.12        generics_0.1.4             </span></span>
+<span><span class="co">#&gt; [15] bayesplot_1.16.0            cowplot_1.2.0              </span></span>
+<span><span class="co">#&gt; [17] caret_7.0-1                 lattice_0.23-1             </span></span>
+<span><span class="co">#&gt; [19] SuperLearner_2.0-41         gam_1.22-7                 </span></span>
+<span><span class="co">#&gt; [21] foreach_1.5.2               nnls_1.6                   </span></span>
+<span><span class="co">#&gt; [23] ggplot2_4.0.3               dplyr_1.2.1                </span></span>
+<span><span class="co">#&gt; [25] IntegratedLearner_0.99.3    BiocStyle_2.41.0           </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; loaded via a namespace (and not attached):</span></span>
 <span><span class="co">#&gt;   [1] RColorBrewer_1.1-3    tensorA_0.36.2.1      jsonlite_2.0.0       </span></span>
@@ -2455,7 +2615,7 @@ possible within one fit object.</p>
 <span><span class="co">#&gt;   [7] nloptr_2.2.1          rmarkdown_2.32        fs_2.1.0             </span></span>
 <span><span class="co">#&gt;  [10] ragg_1.5.2            vctrs_0.7.3           ROCR_1.0-12          </span></span>
 <span><span class="co">#&gt;  [13] htmltools_0.5.9       S4Arrays_1.13.0       BiocBaseUtils_1.15.1 </span></span>
-<span><span class="co">#&gt;  [16] itertools_0.1-3       missForest_1.6.1      distributional_0.8.1 </span></span>
+<span><span class="co">#&gt;  [16] itertools_0.1-3       distributional_0.8.1  missForest_1.6.1     </span></span>
 <span><span class="co">#&gt;  [19] SparseArray_1.13.2    pROC_1.19.1           sass_0.4.10          </span></span>
 <span><span class="co">#&gt;  [22] parallelly_1.48.0     bslib_0.12.0          htmlwidgets_1.6.4    </span></span>
 <span><span class="co">#&gt;  [25] desc_1.4.3            plyr_1.8.9            lubridate_1.9.5      </span></span>
