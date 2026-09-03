@@ -85,10 +85,11 @@
 #' @param run_concat Should early fusion be run? Default is TRUE.
 #'   Uses the specified \code{base_learner} as the learning algorithm.
 #' @param run_stacked Should stacked model (late fusion) be run? Default is TRUE.
-#' @param run_intermediate Should direct cooperative learning via
-#'   \pkg{multiview} be run? Default is FALSE. Supported for continuous,
-#'   binary, and survival outcomes; ignored with a message for multiclass
-#'   outcomes.
+#' @param run_intermediate Should standalone cooperative learning via
+#'   \pkg{multiview} be run? Default is FALSE. When TRUE, IntegratedLearner
+#'   runs only the cooperative multiview model and skips base learners, early
+#'   fusion, and late fusion. Supported for continuous, binary, and survival
+#'   outcomes; ignored with a message for multiclass outcomes.
 #' @param cooperative_rho Non-negative agreement-penalty values to evaluate for
 #'   cooperative learning. A separate \code{cv.multiview()} fit is trained for
 #'   each value, and the best value is selected by cross-validation.
@@ -162,9 +163,6 @@ IntegratedLearner <- function(
   if (!is_a_string(subject_id_col)) {
     stop("'subject_id_col' must be a single character value.", call. = FALSE)
   }
-
-  base_learner <- normalize_il_learner_id(base_learner, role = "base_learner")
-  meta_learner <- normalize_il_learner_id(meta_learner, role = "meta_learner")
 
   ## ------------------------------------------------------------ 1. Detect
   ## input mode (MAE vs PCL)
@@ -263,15 +261,29 @@ IntegratedLearner <- function(
     feature_metadata <- filtered_surv$feature_metadata
     feature_table_valid <- filtered_surv$feature_table_valid
 
-    res <- ILsurv(
-      feature_table = feature_table, sample_metadata = sample_metadata,
-      feature_metadata = feature_metadata, valid_feature_table = feature_table_valid,
-      valid_sample_metadata = sample_metadata_valid, base_learner = base_learner,
-      folds = folds, seed = seed, run_screening = run_screening, screen_pct = screen_pct,
-      verbose = verbose, drop_poor_performing_layers = drop_poor_performing_layers,
-      run_intermediate = run_intermediate, cooperative_rho = cooperative_rho,
-      cooperative_s = cooperative_s, cooperative_type_measure = cooperative_type_measure, ...
-    )
+    if (isTRUE(run_intermediate)) {
+      if (isTRUE(run_screening)) {
+        message("'run_screening' is ignored for standalone cooperative multiview learning.")
+      }
+      if (isTRUE(drop_poor_performing_layers)) {
+        message("'drop_poor_performing_layers' is ignored for standalone cooperative multiview learning.")
+      }
+      res <- fit_intermediate_survival(
+        feature_table = feature_table, sample_metadata = sample_metadata,
+        feature_metadata = feature_metadata, valid_feature_table = feature_table_valid,
+        valid_sample_metadata = sample_metadata_valid, folds = folds, seed = seed,
+        cooperative_rho = cooperative_rho, cooperative_s = cooperative_s,
+        cooperative_type_measure = cooperative_type_measure, verbose = verbose
+      )
+    } else {
+      res <- ILsurv(
+        feature_table = feature_table, sample_metadata = sample_metadata,
+        feature_metadata = feature_metadata, valid_feature_table = feature_table_valid,
+        valid_sample_metadata = sample_metadata_valid, base_learner = base_learner,
+        folds = folds, seed = seed, run_screening = run_screening, screen_pct = screen_pct,
+        verbose = verbose, drop_poor_performing_layers = drop_poor_performing_layers, ...
+      )
+    }
     res$family <- "survival"
     res$feature.names <- rownames(feature_table)
     res$filter_method <- filtered_surv$filter_method
@@ -297,6 +309,22 @@ IntegratedLearner <- function(
       cooperative_rho = cooperative_rho, cooperative_s = cooperative_s,
       cooperative_type_measure = cooperative_type_measure, ...
     )
+  } else if (isTRUE(run_intermediate)) {
+    if (isTRUE(run_screening)) {
+      message("'run_screening' is ignored for standalone cooperative multiview learning.")
+    }
+    if (isTRUE(drop_poor_performing_layers)) {
+      message("'drop_poor_performing_layers' is ignored for standalone cooperative multiview learning.")
+    }
+    res <- fit_intermediate_conbin(
+      feature_table = feature_table, sample_metadata = sample_metadata,
+      feature_metadata = feature_metadata, feature_table_valid = feature_table_valid,
+      sample_metadata_valid = sample_metadata_valid, folds = folds, seed = seed,
+      family = family, cooperative_rho = cooperative_rho, cooperative_s = cooperative_s,
+      cooperative_type_measure = cooperative_type_measure, filter_method = filter_method,
+      filter_pct = filter_pct, prevalence_pct = prevalence_pct, verbose = verbose,
+      print_learner = print_learner
+    )
   } else {
     res <- IL_conbin(
       feature_table = feature_table, sample_metadata = sample_metadata,
@@ -305,9 +333,7 @@ IntegratedLearner <- function(
       base_learner = base_learner, base_screener = base_screener, run_screening = run_screening,
       screen_pct = screen_pct, filter_method = filter_method, filter_pct = filter_pct,
       prevalence_pct = prevalence_pct, meta_learner = meta_learner, run_concat = run_concat,
-      run_stacked = run_stacked, run_intermediate = run_intermediate,
-      cooperative_rho = cooperative_rho, cooperative_s = cooperative_s,
-      cooperative_type_measure = cooperative_type_measure,
+      run_stacked = run_stacked,
       drop_poor_performing_layers = drop_poor_performing_layers,
       verbose = verbose, print_learner = print_learner, refit.stack = refit.stack, family = family, ...
     )

@@ -142,8 +142,10 @@ is \code{NULL}.}
 \item{ibs_shrink_to_uniform}{Optional convex shrinkage of IBS weights toward
 uniform.}
 
-\item{run_intermediate}{Should direct cooperative learning via
-\pkg{multiview} be run? Default is FALSE.}
+\item{run_intermediate}{Should standalone cooperative learning via
+\pkg{multiview} be run? Default is FALSE. When TRUE, only the cooperative
+multiview Cox model is fit; survival base learners, early fusion, and late
+fusion are skipped.}
 
 \item{cooperative_rho}{Non-negative agreement-penalty values to evaluate for
 cooperative learning.}
@@ -152,7 +154,7 @@ cooperative learning.}
 cooperative model. Defaults to \code{"lambda.min"}.}
 
 \item{cooperative_type_measure}{Optional \pkg{multiview} CV loss/score. If
-\code{NULL}, an outcome-appropriate default is used.}
+\code{NULL}, Harrell's C is used.}
 
 \item{...}{Additional base-learner hyperparameters passed to
 \code{base_learner}. You may also pass \code{model_args = list(...)} as a

@@ -118,10 +118,11 @@ Uses the specified \code{base_learner} as the learning algorithm.}
 
 \item{run_stacked}{Should stacked model (late fusion) be run? Default is TRUE.}
 
-\item{run_intermediate}{Should direct cooperative learning via
-\pkg{multiview} be run? Default is FALSE. Supported for continuous,
-binary, and survival outcomes; ignored with a message for multiclass
-outcomes.}
+\item{run_intermediate}{Should standalone cooperative learning via
+\pkg{multiview} be run? Default is FALSE. When TRUE, IntegratedLearner
+runs only the cooperative multiview model and skips base learners, early
+fusion, and late fusion. Supported for continuous, binary, and survival
+outcomes; ignored with a message for multiclass outcomes.}
 
 \item{cooperative_rho}{Non-negative agreement-penalty values to evaluate for
 cooperative learning. A separate \code{cv.multiview()} fit is trained for

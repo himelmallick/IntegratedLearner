@@ -1811,6 +1811,16 @@ ILsurv_bioc_core <- function(
 #' @param optim_maxit_ibs Maximum iterations for IBS-weight optimization.
 #' @param ibs_shrink_to_uniform Optional convex shrinkage of IBS weights toward
 #'   uniform.
+#' @param run_intermediate Should standalone cooperative learning via
+#'   \pkg{multiview} be run? Default is FALSE. When TRUE, only the cooperative
+#'   multiview Cox model is fit; survival base learners, early fusion, and late
+#'   fusion are skipped.
+#' @param cooperative_rho Non-negative agreement-penalty values to evaluate for
+#'   cooperative learning.
+#' @param cooperative_s Penalty value used when predicting from the selected
+#'   cooperative model. Defaults to \code{"lambda.min"}.
+#' @param cooperative_type_measure Optional \pkg{multiview} CV loss/score. If
+#'   \code{NULL}, Harrell's C is used.
 #' @param ... Additional base-learner hyperparameters passed to
 #'   \code{base_learner}. You may also pass \code{model_args = list(...)} as a
 #'   named list where each entry is keyed by learner ID.
@@ -1871,6 +1881,26 @@ ILsurv <- function(
       "'IBS' and 'COX' late-fusion outputs under train_out$late and valid_out$late.",
       call. = FALSE
     )
+  }
+
+  if (isTRUE(run_intermediate)) {
+    if (isTRUE(run_screening)) {
+      message("'run_screening' is ignored for standalone cooperative multiview learning.")
+    }
+    if (isTRUE(drop_poor_performing_layers)) {
+      message("'drop_poor_performing_layers' is ignored for standalone cooperative multiview learning.")
+    }
+    sample_metadata <- ensure_survival_metadata(sample_metadata, context = "training")
+    valid_sample_metadata <- ensure_survival_metadata(valid_sample_metadata,
+      context = "validation"
+    )
+    return(fit_intermediate_survival(
+      feature_table = feature_table, sample_metadata = sample_metadata,
+      feature_metadata = feature_metadata, valid_feature_table = valid_feature_table,
+      valid_sample_metadata = valid_sample_metadata, folds = folds, seed = seed,
+      cooperative_rho = cooperative_rho, cooperative_s = cooperative_s,
+      cooperative_type_measure = cooperative_type_measure, verbose = verbose
+    ))
   }
 
   model_args <- list()

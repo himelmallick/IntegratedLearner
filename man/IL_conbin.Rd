@@ -101,8 +101,10 @@ Defaults to \code{sl_nnls_auc}.}
 
 \item{run_stacked}{Should stacked model (late fusion) be run? Default is TRUE.}
 
-\item{run_intermediate}{Should direct cooperative learning via
-\pkg{multiview} be run? Default is FALSE.}
+\item{run_intermediate}{Should standalone cooperative learning via
+\pkg{multiview} be run? Default is FALSE. When TRUE, only the cooperative
+multiview model is fit; base learners, early fusion, and late fusion are
+skipped.}
 
 \item{cooperative_rho}{Non-negative agreement-penalty values to evaluate for
 cooperative learning.}
