@@ -1,3 +1,23 @@
+# IntegratedLearner 0.99.3
+
+## Cooperative multiview learning
+
+- Added `run_intermediate` as a standalone cooperative multiview learning mode
+  powered by `multiview`. In this mode, continuous/binary and survival fits use
+  direct feature-level cooperative learning and skip base learners, early
+  fusion, late fusion, and supervised screening.
+- Multiclass outcomes do not support cooperative multiview learning; if
+  `run_intermediate = TRUE`, a message is printed and the option is ignored.
+- Added cooperative tuning controls `cooperative_rho`, `cooperative_s`, and
+  `cooperative_type_measure`. `rho` is selected across repeated
+  `cv.multiview()` fits with shared folds, while lambda selection is handled by
+  `cv.multiview()`.
+- Updated the README, vignette, and Rd files to document standalone
+  intermediate/cooperative mode and its output structure.
+- Added tests for gaussian, binomial, survival, and multiclass
+  `run_intermediate` behavior, including checks that cooperative mode does not
+  depend on base or meta learners.
+
 # IntegratedLearner 0.99.2
 
 ## Review-driven updates

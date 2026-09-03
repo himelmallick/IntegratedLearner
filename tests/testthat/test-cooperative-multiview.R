@@ -37,7 +37,6 @@ make_cooperative_toy_multiclass_pcl <- function(
 }
 
 test_that("IntegratedLearner adds cooperative predictions for gaussian outcomes", {
-  skip_if_not_installed("SuperLearner")
   skip_if_not_installed("multiview")
 
   pcl <- make_toy_pcl(n_samples = 36, n_features = 12, seed = 301, binary = FALSE)
@@ -46,9 +45,8 @@ test_that("IntegratedLearner adds cooperative predictions for gaussian outcomes"
     PCL_train = pcl,
     folds = 3,
     seed = 2026,
-    base_learner = "SL.mean",
-    run_stacked = FALSE,
-    run_concat = FALSE,
+    base_learner = "not_a_real_base_learner",
+    meta_learner = "not_a_real_meta_learner",
     run_intermediate = TRUE,
     cooperative_rho = c(0, 0.25),
     print_learner = FALSE,
@@ -56,13 +54,16 @@ test_that("IntegratedLearner adds cooperative predictions for gaussian outcomes"
   ))
 
   expect_true(isTRUE(fit$run_intermediate))
-  expect_true("cooperative" %in% colnames(fit$yhat.train))
+  expect_identical(colnames(fit$yhat.train), "cooperative")
+  expect_false(isTRUE(fit$run_stacked))
+  expect_false(isTRUE(fit$run_concat))
+  expect_null(fit$base_learner)
+  expect_null(fit$meta_learner)
   expect_true(is.finite(fit$R2.train[["cooperative"]]))
   expect_true(fit$cooperative_rho %in% fit$cooperative_rho_grid)
 })
 
 test_that("IntegratedLearner adds cooperative predictions for binary outcomes", {
-  skip_if_not_installed("SuperLearner")
   skip_if_not_installed("multiview")
 
   pcl <- make_toy_pcl(n_samples = 36, n_features = 12, seed = 302, binary = TRUE)
@@ -72,17 +73,19 @@ test_that("IntegratedLearner adds cooperative predictions for binary outcomes", 
     PCL_valid = pcl,
     folds = 3,
     seed = 2026,
-    base_learner = "SL.mean",
-    run_stacked = FALSE,
-    run_concat = FALSE,
+    base_learner = "not_a_real_base_learner",
+    meta_learner = "not_a_real_meta_learner",
     run_intermediate = TRUE,
     cooperative_rho = c(0, 0.25),
     print_learner = FALSE,
     family = stats::binomial()
   ))
 
-  expect_true("cooperative" %in% colnames(fit$yhat.train))
-  expect_true("cooperative" %in% colnames(fit$yhat.test))
+  expect_identical(colnames(fit$yhat.train), "cooperative")
+  expect_identical(colnames(fit$yhat.test), "cooperative")
+  expect_null(fit$model_fits$model_layers)
+  expect_null(fit$model_fits$model_stacked)
+  expect_null(fit$model_fits$model_concat)
   expect_true(is.finite(fit$AUC.train[["cooperative"]]))
   expect_true(fit$AUC.train[["cooperative"]] >= 0)
   expect_true(fit$AUC.train[["cooperative"]] <= 1)
@@ -132,16 +135,22 @@ test_that("ILsurv adds cooperative survival risk output", {
     PCL_valid = tcga$valid,
     folds = 3,
     seed = 2026,
-    base_learner = "surv.coxph",
     run_intermediate = TRUE,
     cooperative_rho = c(0, 0.25),
     verbose = FALSE
   ))
 
   expect_true(isTRUE(fit$run_intermediate))
+  expect_null(fit$base_learner)
+  expect_null(fit$train_out$single)
+  expect_null(fit$train_out$early)
+  expect_null(fit$train_out$late)
   expect_true(is.list(fit$train_out$cooperative))
   expect_true(is.finite(fit$train_out$cooperative$train_cindex))
   expect_equal(length(fit$train_out$cooperative$train_risk), nrow(tcga$train$sample_metadata))
+  expect_null(fit$valid_out$single)
+  expect_null(fit$valid_out$early)
+  expect_null(fit$valid_out$late)
   expect_true(is.list(fit$valid_out$cooperative))
   expect_equal(length(fit$valid_out$cooperative$valid_risk), nrow(tcga$valid$sample_metadata))
 })

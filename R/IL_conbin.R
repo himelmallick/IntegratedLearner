@@ -70,8 +70,10 @@
 #'   Defaults to \code{sl_nnls_auc}.
 #' @param run_concat Should early fusion be run? Default is TRUE.
 #' @param run_stacked Should stacked model (late fusion) be run? Default is TRUE.
-#' @param run_intermediate Should direct cooperative learning via
-#'   \pkg{multiview} be run? Default is FALSE.
+#' @param run_intermediate Should standalone cooperative learning via
+#'   \pkg{multiview} be run? Default is FALSE. When TRUE, only the cooperative
+#'   multiview model is fit; base learners, early fusion, and late fusion are
+#'   skipped.
 #' @param cooperative_rho Non-negative agreement-penalty values to evaluate for
 #'   cooperative learning.
 #' @param cooperative_s Penalty value used when predicting from the selected
@@ -148,6 +150,39 @@ IL_conbin <- function(
     sample_metadata_valid = sample_metadata_valid, family_name = safe_family_name(family),
     is_survival = FALSE
   )
+
+  if (isTRUE(run_intermediate)) {
+    family_name <- safe_family_name(family)
+    coerced_train <- coerce_outcome_by_family(
+      sample_metadata = sample_metadata,
+      family_name = family_name,
+      context = "training sample_metadata"
+    )
+    sample_metadata <- coerced_train$sample_metadata
+    if (!is.null(sample_metadata_valid)) {
+      sample_metadata_valid <- coerce_outcome_by_family(
+        sample_metadata = sample_metadata_valid,
+        family_name = family_name,
+        context = "validation sample_metadata",
+        binary_levels = coerced_train$binary_levels
+      )$sample_metadata
+    }
+    if (isTRUE(run_screening)) {
+      message("'run_screening' is ignored for standalone cooperative multiview learning.")
+    }
+    if (isTRUE(drop_poor_performing_layers)) {
+      message("'drop_poor_performing_layers' is ignored for standalone cooperative multiview learning.")
+    }
+    return(fit_intermediate_conbin(
+      feature_table = feature_table, sample_metadata = sample_metadata,
+      feature_metadata = feature_metadata, feature_table_valid = feature_table_valid,
+      sample_metadata_valid = sample_metadata_valid, folds = folds, seed = seed,
+      family = family, cooperative_rho = cooperative_rho, cooperative_s = cooperative_s,
+      cooperative_type_measure = cooperative_type_measure, filter_method = filter_method,
+      filter_pct = filter_pct, prevalence_pct = prevalence_pct, verbose = verbose,
+      print_learner = print_learner
+    ))
+  }
 
   base_learner <- normalize_il_learner_id(base_learner, role = "base_learner")
   meta_learner <- normalize_il_learner_id(meta_learner, role = "meta_learner")
