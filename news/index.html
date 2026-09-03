@@ -51,6 +51,17 @@
     </div>
 
     <div class="section level2">
+<h2 class="page-header" data-toc-text="0.99.3" id="integratedlearner-0993">IntegratedLearner 0.99.3<a class="anchor" aria-label="anchor" href="#integratedlearner-0993"></a></h2>
+<div class="section level3">
+<h3 id="cooperative-multiview-learning-0-99-3">Cooperative multiview learning<a class="anchor" aria-label="anchor" href="#cooperative-multiview-learning-0-99-3"></a></h3>
+<ul><li>Added <code>run_intermediate</code> as a standalone cooperative multiview learning mode powered by <code>multiview</code>. In this mode, continuous/binary and survival fits use direct feature-level cooperative learning and skip base learners, early fusion, late fusion, and supervised screening.</li>
+<li>Multiclass outcomes do not support cooperative multiview learning; if <code>run_intermediate = TRUE</code>, a message is printed and the option is ignored.</li>
+<li>Added cooperative tuning controls <code>cooperative_rho</code>, <code>cooperative_s</code>, and <code>cooperative_type_measure</code>. <code>rho</code> is selected across repeated <code><a href="https://rdrr.io/pkg/multiview/man/cv.multiview.html" class="external-link">cv.multiview()</a></code> fits with shared folds, while lambda selection is handled by <code><a href="https://rdrr.io/pkg/multiview/man/cv.multiview.html" class="external-link">cv.multiview()</a></code>.</li>
+<li>Updated the README, vignette, and Rd files to document standalone intermediate/cooperative mode and its output structure.</li>
+<li>Added tests for gaussian, binomial, survival, and multiclass <code>run_intermediate</code> behavior, including checks that cooperative mode does not depend on base or meta learners.</li>
+</ul></div>
+</div>
+    <div class="section level2">
 <h2 class="page-header" data-toc-text="0.99.2" id="integratedlearner-0992">IntegratedLearner 0.99.2<a class="anchor" aria-label="anchor" href="#integratedlearner-0992"></a></h2>
 <div class="section level3">
 <h3 id="review-driven-updates-0-99-2">Review-driven updates<a class="anchor" aria-label="anchor" href="#review-driven-updates-0-99-2"></a></h3>

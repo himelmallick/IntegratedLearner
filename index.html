@@ -245,7 +245,7 @@
 <li>
 <code>seed</code>: Integer seed for reproducibility. Default is <code>1234</code>.</li>
 <li>
-<code>base_learner</code>: Binary/continuous uses <code>SL.*</code>; multiclass uses native multiclass learners; survival uses supported <code>surv.*</code> learners.</li>
+<code>base_learner</code>: Binary/continuous uses <code>SL.*</code>; multiclass uses native multiclass learners; survival uses supported <code>surv.*</code> learners. Not used when <code>run_intermediate = TRUE</code>.</li>
 <li>
 <code>base_screener</code>: Deprecated. Kept for backward compatibility.</li>
 <li>
@@ -259,13 +259,13 @@
 <li>
 <code>prevalence_pct</code>: Deprecated alias of <code>filter_pct</code> when <code>filter_method = "prevalence"</code>.</li>
 <li>
-<code>meta_learner</code>: Meta learner for non-survival late fusion. Defaults to <code>"sl_nnls_auc"</code> in binary/continuous; multiclass supports native learners (for example <code>glmnet</code>, <code>randomforest</code>, <code>xgboost</code>).</li>
+<code>meta_learner</code>: Meta learner for non-survival late fusion. Defaults to <code>"sl_nnls_auc"</code> in binary/continuous; multiclass supports native learners (for example <code>glmnet</code>, <code>randomforest</code>, <code>xgboost</code>). Not used when <code>run_intermediate = TRUE</code>.</li>
 <li>
 <code>run_concat</code>: Logical; include early-fusion (concatenated) model for non-survival.</li>
 <li>
 <code>run_stacked</code>: Logical; include late-fusion stacked model for non-survival.</li>
 <li>
-<code>run_intermediate</code>: Logical; include direct cooperative learning via the <code>multiview</code> package. Default is <code>FALSE</code>.</li>
+<code>run_intermediate</code>: Logical; run standalone direct cooperative learning via the <code>multiview</code> package. Default is <code>FALSE</code>. When <code>TRUE</code>, early fusion, late fusion, single-layer base learners, and supervised screening are skipped.</li>
 <li>
 <code>cooperative_rho</code>: Non-negative agreement-penalty values to evaluate for cooperative learning. Default is <code>c(0, 0.1, 0.25, 0.5, 1)</code>.</li>
 <li>
@@ -273,7 +273,7 @@
 <li>
 <code>cooperative_type_measure</code>: Optional <code>multiview</code> CV loss/score. If <code>NULL</code>, IL uses an outcome-appropriate default.</li>
 <li>
-<code>drop_poor_performing_layers</code>: If <code>TRUE</code>, layers with poor single-layer performance are removed from early and late fusion only (<code>AUC &lt; 0.5</code> for binary, <code>R2 &lt; 0.5</code> for continuous, <code>C-index &lt; 0.5</code> for survival). Single-layer outputs are still retained.</li>
+<code>drop_poor_performing_layers</code>: If <code>TRUE</code>, layers with poor single-layer performance are removed from early and late fusion only (<code>AUC &lt; 0.5</code> for binary, <code>R2 &lt; 0.5</code> for continuous, <code>C-index &lt; 0.5</code> for survival). Single-layer outputs are still retained. Ignored when <code>run_intermediate = TRUE</code>.</li>
 <li>
 <code>family</code>: <code><a href="https://rdrr.io/r/stats/family.html" class="external-link">gaussian()</a></code> (continuous), <code><a href="https://rdrr.io/r/stats/family.html" class="external-link">binomial()</a></code> (binary or multiclass), or survival family/metadata.</li>
 <li>
@@ -287,13 +287,13 @@
 <li>Binary/continuous non-survival: any available <code>SuperLearner</code> <code>SL.*</code> model.</li>
 <li>Multiclass non-survival: <code>glmnet</code>, <code>randomforest</code>, <code>ranger</code>, <code>xgboost</code>, <code>mbart</code>, <code>multinom</code>.</li>
 <li>Survival: <code>surv.coxph</code>, <code>surv.glmnet</code>, <code>surv.ranger</code>, <code>surv.ranger.extratrees</code>, <code>surv.ranger.maxstat</code>, <code>surv.ranger.C</code>, <code>surv.rfsrc</code>, <code>surv.coxboost</code>, <code>surv.gbm</code>, <code>surv.xgboost.cox</code>, <code>surv.xgboost.aft</code>, <code>surv.mboost</code>, <code>surv.bart</code>.</li>
-<li>Direct cooperative learning: <code>multiview</code> feature-level fusion for continuous, binary, and survival outcomes. Multiclass cooperative learning is not supported.</li>
+<li>Direct cooperative learning: standalone <code>multiview</code> feature-level fusion for continuous, binary, and survival outcomes. Multiclass cooperative learning is not supported.</li>
 </ul>
 <p>Supported fusion modules:</p>
 <ul>
-<li>Continuous/Binary: single-layer + early (<code>run_concat</code>) + late (<code>run_stacked</code>) + cooperative (<code>run_intermediate</code>).</li>
+<li>Continuous/Binary: either standard IL mode with single-layer + early (<code>run_concat</code>) + late (<code>run_stacked</code>), or standalone cooperative mode (<code>run_intermediate</code>).</li>
 <li>Multiclass: single-layer + early (<code>run_concat</code>) + late (<code>run_stacked</code>). <code>run_intermediate</code> is ignored with a message.</li>
-<li>Survival: single-layer + early (<code>do_early_fusion</code>) + late weighted fusion with both <code>COX</code> and <code>IBS</code> outputs returned + cooperative (<code>run_intermediate</code>).</li>
+<li>Survival: either standard IL mode with single-layer + early (<code>do_early_fusion</code>) + late weighted fusion with both <code>COX</code> and <code>IBS</code>, or standalone cooperative mode (<code>run_intermediate</code>).</li>
 </ul>
 <div class="section level4">
 <h4 id="the-integratedlearner-workflow">The IntegratedLearner workflow<a class="anchor" aria-label="anchor" href="#the-integratedlearner-workflow"></a>
@@ -308,17 +308,17 @@
 <p>For continuous/binary fits (<code>IL_conbin</code> path):</p>
 <ul>
 <li>
-<code>SL_fits</code>: Fitted SuperLearner objects (layer-wise, stacked, concatenated as applicable).</li>
+<code>SL_fits</code>: Fitted SuperLearner objects (layer-wise, stacked, concatenated as applicable in standard IL mode).</li>
 <li>
-<code>model_fits</code>: Extracted learner objects.</li>
+<code>model_fits</code>: Extracted learner objects. In standalone cooperative mode this contains only <code>model_fits$model_cooperative</code>.</li>
 <li>
-<code>X_train_layers</code>, <code>Y_train</code>, <code>yhat.train</code>: training inputs and predictions.</li>
+<code>X_train_layers</code>, <code>Y_train</code>, <code>yhat.train</code>: training inputs and predictions. In standalone cooperative mode, <code>yhat.train</code> contains only the <code>cooperative</code> column.</li>
 <li>
 <code>X_test_layers</code>, <code>Y_test</code>, <code>yhat.test</code>: validation inputs and predictions (if validation provided).</li>
 <li>
 <code>weights</code>: Layer weights in stacked model (<code>meta_learner = "sl_nnls_auc"</code> and <code>run_stacked = TRUE</code>).</li>
 <li>
-<code>model_fits$model_cooperative</code>, <code>yhat.train[, "cooperative"]</code>, and <code>yhat.test[, "cooperative"]</code>: cooperative <code>multiview</code> model and predictions when <code>run_intermediate = TRUE</code>.</li>
+<code>model_fits$model_cooperative</code>, <code>yhat.train[, "cooperative"]</code>, and <code>yhat.test[, "cooperative"]</code>: standalone cooperative <code>multiview</code> model and predictions when <code>run_intermediate = TRUE</code>.</li>
 <li>
 <code>AUC.train</code>/<code>AUC.test</code> (binomial) or <code>R2.train</code>/<code>R2.test</code> (gaussian).</li>
 <li>
@@ -344,13 +344,13 @@
 <p>For survival fits (<code>ILsurv</code> path):</p>
 <ul>
 <li>
-<code>train_out$single</code>: Single-layer metrics.</li>
+<code>train_out$single</code>: Single-layer metrics in standard IL survival mode.</li>
 <li>
-<code>train_out$early</code>: Early-fusion metrics (if enabled).</li>
+<code>train_out$early</code>: Early-fusion metrics in standard IL survival mode (if enabled).</li>
 <li>
-<code>train_out$late$IBS</code> and <code>train_out$late$COX</code>: Late-fusion metrics and learned layer weights for both survival fusion strategies.</li>
+<code>train_out$late$IBS</code> and <code>train_out$late$COX</code>: Late-fusion metrics and learned layer weights for both survival fusion strategies in standard IL survival mode.</li>
 <li>
-<code>train_out$cooperative</code> / <code>valid_out$cooperative</code>: cooperative <code>multiview</code> Cox model metrics and risk scores when <code>run_intermediate = TRUE</code>.</li>
+<code>train_out$cooperative</code> / <code>valid_out$cooperative</code>: standalone cooperative <code>multiview</code> Cox model metrics and risk scores when <code>run_intermediate = TRUE</code>.</li>
 <li>
 <code>valid_out$...</code>: Validation analogs of single/early/late outputs (if validation provided).</li>
 <li>

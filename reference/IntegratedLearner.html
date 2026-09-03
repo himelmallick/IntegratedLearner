@@ -243,10 +243,11 @@ Uses the specified <code>base_learner</code> as the learning algorithm.</p></dd>
 
 
 <dt id="arg-run-intermediate">run_intermediate<a class="anchor" aria-label="anchor" href="#arg-run-intermediate"></a></dt>
-<dd><p>Should direct cooperative learning via
-<span class="pkg">multiview</span> be run? Default is FALSE. Supported for continuous,
-binary, and survival outcomes; ignored with a message for multiclass
-outcomes.</p></dd>
+<dd><p>Should standalone cooperative learning via
+<span class="pkg">multiview</span> be run? Default is FALSE. When TRUE, IntegratedLearner
+runs only the cooperative multiview model and skips base learners, early
+fusion, and late fusion. Supported for continuous, binary, and survival
+outcomes; ignored with a message for multiclass outcomes.</p></dd>
 
 
 <dt id="arg-cooperative-rho">cooperative_rho<a class="anchor" aria-label="anchor" href="#arg-cooperative-rho"></a></dt>

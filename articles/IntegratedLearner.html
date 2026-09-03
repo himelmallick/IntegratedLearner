@@ -89,11 +89,10 @@ continuous, and survival outcome workflows in
 <code>IntegratedLearner</code>.</p>
 <p><code>IntegratedLearner</code> is designed for multi-omics studies
 where each assay layer can carry complementary signal and where users
-want a unified interface for per-layer modeling, early fusion, late
-fusion, and direct cooperative multiview learning. This makes the
-package a natural fit for Bioconductor workflows built around
-<code>MultiAssayExperiment</code>, <code>SummarizedExperiment</code>,
-and curated assay containers.</p>
+want a unified interface for standard integrated learning or standalone
+cooperative multiview learning. This makes the package a natural fit for
+Bioconductor workflows built around <code>MultiAssayExperiment</code>,
+<code>SummarizedExperiment</code>, and curated assay containers.</p>
 <p>Within the Bioconductor ecosystem, the package is intended to sit
 after assay assembly and harmonization, and before downstream
 interpretation. IntegratedLearner focuses on supervised multi-omics
@@ -139,17 +138,18 @@ your own multi-omics study:</p>
 survival discrimination curves, layer weights, and feature
 signals).</li>
 </ol>
-<p><code>IntegratedLearner</code> supports three integration
-paradigms:</p>
+<p><code>IntegratedLearner</code> supports two execution modes:</p>
 <ul>
-<li>Early fusion: concatenated features across layers.</li>
-<li>Late fusion: layer-specific models combined by a meta-learner.</li>
-<li>Intermediate/cooperative fusion: direct <code>multiview</code>
+<li>Standard IL mode: per-layer base learners, early fusion from
+concatenated features, and late fusion through a meta-learner.</li>
+<li>Intermediate/cooperative mode: standalone <code>multiview</code>
 cooperative learning over feature matrices from each layer.</li>
 </ul>
 <p>Cooperative learning is enabled with
-<code>run_intermediate = TRUE</code>. It is currently supported for
-continuous, binary, and survival outcomes. For multiclass outcomes,
+<code>run_intermediate = TRUE</code>. In this mode, IntegratedLearner
+skips base learners, early fusion, late fusion, and supervised
+screening. It is currently supported for continuous, binary, and
+survival outcomes. For multiclass outcomes,
 <code>IntegratedLearner</code> prints a message and ignores
 <code>run_intermediate</code>.</p>
 <p>Optional feature selection workflow used in this vignette:</p>
@@ -744,13 +744,14 @@ tabular sample metadata, if using PCL mode).</td>
 <tr class="even">
 <td><code>base_learner</code></td>
 <td><code>"sl_bart"</code></td>
-<td>all</td>
+<td>standard IL mode</td>
 <td>Base learner. Standard <code>SuperLearner</code> learners still use
 <code>SL.*</code> IDs for continuous/binary, while IntegratedLearner
 wrappers use snake_case IDs such as <code>sl_bart</code>; multiclass
 uses native IDs (for example <code>randomforest</code>,
 <code>xgboost</code>, <code>mbart</code>), and survival runs should use
-a supported <code>surv.*</code> ID.</td>
+a supported <code>surv.*</code> ID. Not used when
+<code>run_intermediate = TRUE</code>.</td>
 </tr>
 <tr class="odd">
 <td><code>filter_method</code></td>
@@ -769,8 +770,9 @@ filtering.</td>
 <tr class="odd">
 <td><code>run_screening</code></td>
 <td><code>FALSE</code></td>
-<td>all</td>
-<td>Enable supervised screening.</td>
+<td>standard IL mode</td>
+<td>Enable supervised screening. Ignored when
+<code>run_intermediate = TRUE</code>.</td>
 </tr>
 <tr class="even">
 <td><code>screen_pct</code></td>
@@ -789,19 +791,21 @@ when screening is enabled.</td>
 <tr class="even">
 <td><code>drop_poor_performing_layers</code></td>
 <td><code>FALSE</code></td>
-<td>continuous, binary, survival</td>
+<td>standard IL mode</td>
 <td>If <code>TRUE</code>, removes layers with poor single-layer
 performance from early and late fusion only (AUC &lt; 0.5 for binary, R²
 &lt; 0.5 for continuous, C-index &lt; 0.5 for survival). Single-layer
-results are still retained.</td>
+results are still retained. Ignored when
+<code>run_intermediate = TRUE</code>.</td>
 </tr>
 <tr class="odd">
 <td><code>run_intermediate</code></td>
 <td><code>FALSE</code></td>
 <td>continuous, binary, survival</td>
-<td>Enables direct cooperative learning through <code>multiview</code>.
-Multiclass fits print a message and ignore this option. Requires at
-least 3 CV folds.</td>
+<td>Enables standalone direct cooperative learning through
+<code>multiview</code>. Base learners, early fusion, late fusion, and
+supervised screening are skipped. Multiclass fits print a message and
+ignore this option. Requires at least 3 CV folds.</td>
 </tr>
 <tr class="even">
 <td><code>cooperative_rho</code></td>
@@ -1104,13 +1108,14 @@ original <code>SL.*</code> names.</td>
 <tbody>
 <tr class="odd">
 <td>Continuous/Binary</td>
-<td>Yes</td>
-<td><code>run_concat = TRUE</code></td>
+<td>Yes in standard IL mode</td>
 <td>
-<code>run_stacked = TRUE</code> with <code>meta_learner</code>
-</td>
+<code>run_concat = TRUE</code> in standard IL mode</td>
 <td>
-<code>run_intermediate = TRUE</code> via <code>multiview</code>
+<code>run_stacked = TRUE</code> with <code>meta_learner</code> in
+standard IL mode</td>
+<td>Standalone <code>run_intermediate = TRUE</code> via
+<code>multiview</code>
 </td>
 </tr>
 <tr class="even">
@@ -1125,13 +1130,13 @@ original <code>SL.*</code> names.</td>
 </tr>
 <tr class="odd">
 <td>Survival</td>
-<td>Yes (<code>train_out$single</code>)</td>
-<td><code>do_early_fusion = TRUE</code></td>
-<td>Weighted layer blending with both <code>IBS</code> and
-<code>COX</code> outputs returned</td>
+<td>Yes (<code>train_out$single</code>) in standard IL mode</td>
 <td>
-<code>run_intermediate = TRUE</code> via <code>multiview</code> Cox
-model</td>
+<code>do_early_fusion = TRUE</code> in standard IL mode</td>
+<td>Weighted layer blending with both <code>IBS</code> and
+<code>COX</code> outputs returned in standard IL mode</td>
+<td>Standalone <code>run_intermediate = TRUE</code> via
+<code>multiview</code> Cox model</td>
 </tr>
 </tbody>
 </table>
@@ -1189,15 +1194,15 @@ method and where to find weights/importance values.</p>
 </tr>
 <tr class="even">
 <td>Cooperative/intermediate fusion</td>
-<td>Direct cooperative <code>multiview</code> model trained on layer
+<td>Standalone cooperative <code>multiview</code> model trained on layer
 feature matrices</td>
 <td>Enable with <code>run_intermediate = TRUE</code>; outputs in
 <code>fit$yhat.train[, "cooperative"]</code>,
 <code>fit$yhat.test[, "cooperative"]</code>,
 <code>fit$model_fits$model_cooperative</code>,
 <code>fit$cooperative_rho</code>, and
-<code>fit$cooperative_rho_scores</code>
-</td>
+<code>fit$cooperative_rho_scores</code>. No base learner, early-fusion,
+or late-fusion objects are returned in this mode.</td>
 </tr>
 <tr class="odd">
 <td>Layer weights (stacked)</td>
@@ -1347,13 +1352,13 @@ metrics</td>
 </tr>
 <tr class="even">
 <td>Cooperative/intermediate fusion</td>
-<td>
-<code>fit$train_out$cooperative</code>, containing the selected
-<code>multiview</code> model, C-index, time-dependent AUC, and risk
-scores</td>
+<td>Standalone <code>fit$train_out$cooperative</code>, containing the
+selected <code>multiview</code> model, C-index, time-dependent AUC, and
+risk scores</td>
 <td>
 <code>fit$valid_out$cooperative</code>, with analogous validation
-metrics and risk scores</td>
+metrics and risk scores. <code>single</code>, <code>early</code>, and
+<code>late</code> outputs are <code>NULL</code> in this mode.</td>
 </tr>
 <tr class="odd">
 <td>Survival plotting payload</td>
@@ -1558,7 +1563,7 @@ with a meta-learner (<code>meta_learner</code>).</p>
 <span><span class="co">#&gt; CV SL.randomForest_screen.il.glmnet</span></span>
 <span><span class="co">#&gt; Non-Negative least squares convergence: TRUE</span></span>
 <span><span class="co">#&gt; full SL.randomForest_screen.il.glmnet</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.079 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.085 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Model fit for individual layers: SL.randomForest </span></span>
 <span><span class="co">#&gt; Model fit for stacked layer: sl_nnls_auc </span></span>
@@ -1649,9 +1654,9 @@ and simple concatenation.</p>
 <h3 id="optional-direct-cooperative-learning-with-multiview">Optional: Direct Cooperative Learning with
 <code>multiview</code><a class="anchor" aria-label="anchor" href="#optional-direct-cooperative-learning-with-multiview"></a>
 </h3>
-<p>Set <code>run_intermediate = TRUE</code> to add a direct cooperative
-multiview model. This branch uses the original layer feature matrices as
-views, fits <code><a href="https://rdrr.io/pkg/multiview/man/cv.multiview.html" class="external-link">cv.multiview()</a></code> once per candidate
+<p>Set <code>run_intermediate = TRUE</code> to run a standalone direct
+cooperative multiview model. This branch uses the original layer feature
+matrices as views, fits <code><a href="https://rdrr.io/pkg/multiview/man/cv.multiview.html" class="external-link">cv.multiview()</a></code> once per candidate
 <code>rho</code> using the same fold assignments, and keeps the
 <code>rho</code> with the best CV score. Within each <code>rho</code>,
 <code><a href="https://rdrr.io/pkg/multiview/man/cv.multiview.html" class="external-link">cv.multiview()</a></code> selects the lambda path in the usual way;
@@ -1667,10 +1672,6 @@ can be run directly in an analysis session.</p>
 <span>  experiment <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="fu">MultiAssayExperiment</span><span class="fu">::</span><span class="fu"><a href="https://github.com/waldronlab/MultiAssayExperiment/reference/MultiAssayExperiment-methods.html" class="external-link">experiments</a></span><span class="op">(</span><span class="va">mae_train</span><span class="op">)</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">2</span><span class="op">]</span>,</span>
 <span>  assay.type <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="st">"abundance"</span>, <span class="fl">2</span><span class="op">)</span>,</span>
 <span>  folds <span class="op">=</span> <span class="fl">3</span>,</span>
-<span>  base_learner <span class="op">=</span> <span class="st">"SL.mean"</span>,</span>
-<span>  meta_learner <span class="op">=</span> <span class="st">"sl_nnls_auc"</span>,</span>
-<span>  run_stacked <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  run_concat <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  run_intermediate <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  cooperative_rho <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.25</span>, <span class="fl">1</span><span class="op">)</span>,</span>
 <span>  cooperative_s <span class="op">=</span> <span class="st">"lambda.min"</span>,</span>
@@ -1744,7 +1745,7 @@ bytecode). In that case, either:</p>
 <span>  screen_pct <span class="op">=</span> <span class="fl">30</span>,</span>
 <span>  family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">gaussian</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.543 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.48 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Model fit for individual layers: sl_bart </span></span>
 <span><span class="co">#&gt; Model fit for stacked layer: sl_nnls_auc </span></span>
@@ -2023,7 +2024,7 @@ and pass them through <code>outcome_col</code> and
 <span><span class="co">#&gt; Running multiclass base model for layer 2...</span></span>
 <span><span class="co">#&gt; Running multiclass stacked model...</span></span>
 <span><span class="co">#&gt; Running multiclass concatenated model...</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.146 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.147 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Multiclass model fit with 3 classes</span></span>
 <span><span class="co">#&gt; Base learner: glmnet </span></span>
@@ -2149,8 +2150,8 @@ best fused survival model.</li>
 <span><span class="co">#&gt;   [valid late:COX] cindex=0.7111</span></span>
 <span><span class="co">#&gt;   [valid early] cindex=0.6364</span></span>
 <span><span class="co">#&gt; ILsurv completed</span></span></code></pre></div>
-<p>To add direct cooperative survival modeling, use at least 3 folds and
-set the cooperative options:</p>
+<p>To run standalone direct cooperative survival modeling, use at least
+3 folds and set the cooperative options:</p>
 <div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_surv_coop</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/IntegratedLearner.html">IntegratedLearner</a></span><span class="op">(</span></span>
 <span>  MAE_train <span class="op">=</span> <span class="va">mae_train</span>,</span>
@@ -2160,7 +2161,6 @@ set the cooperative options:</p>
 <span>  outcome_col <span class="op">=</span> <span class="st">"outcome_surv"</span>,</span>
 <span>  subject_id_col <span class="op">=</span> <span class="st">"patient_id"</span>,</span>
 <span>  folds <span class="op">=</span> <span class="fl">3</span>,</span>
-<span>  base_learner <span class="op">=</span> <span class="st">"surv.coxph"</span>,</span>
 <span>  filter_method <span class="op">=</span> <span class="st">"variance"</span>,</span>
 <span>  filter_pct <span class="op">=</span> <span class="fl">40</span>,</span>
 <span>  run_screening <span class="op">=</span> <span class="cn">TRUE</span>,</span>

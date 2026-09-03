@@ -196,8 +196,10 @@ Defaults to <code>sl_nnls_auc</code>.</p></dd>
 
 
 <dt id="arg-run-intermediate">run_intermediate<a class="anchor" aria-label="anchor" href="#arg-run-intermediate"></a></dt>
-<dd><p>Should direct cooperative learning via
-<span class="pkg">multiview</span> be run? Default is FALSE.</p></dd>
+<dd><p>Should standalone cooperative learning via
+<span class="pkg">multiview</span> be run? Default is FALSE. When TRUE, only the cooperative
+multiview model is fit; base learners, early fusion, and late fusion are
+skipped.</p></dd>
 
 
 <dt id="arg-cooperative-rho">cooperative_rho<a class="anchor" aria-label="anchor" href="#arg-cooperative-rho"></a></dt>
