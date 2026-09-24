@@ -13,7 +13,7 @@ library(devtools)
 
 Optional dependency for BART workflows:
 - `sl_bart` and BART uncertainty utilities rely on `bartMachine` and a working Java setup.
-- If Java/BART are unavailable, use non-Java learners such as `SL.randomForest` (continuous/binary) or native multiclass learners.
+- If Java/BART are unavailable, use another continuous/binary learner (`SL.randomForest` is a standard SuperLearner alternative) or a native multiclass learner for multiclass outcomes.
 
 ## Installation
 
@@ -37,7 +37,7 @@ BiocManager::install("himelmallick/IntegratedLearner")
 * Supports binary, multiclass, continuous, and survival outcomes
 * Supports custom outcome/subject column names via `outcome_col` and `subject_id_col`
 * Supports early and late fusion in one interface
-* Integrates with [SuperLearner](https://cran.r-project.org/web/packages/SuperLearner/index.html) for binary/continuous models (`SL.*`)
+* Integrates with [SuperLearner](https://cran.r-project.org/web/packages/SuperLearner/index.html) for binary/continuous models, using IntegratedLearner `sl_*` wrappers by default (standard SuperLearner `SL.*` learners are also supported)
 * Includes a native multiclass backend with multiclass learners (`glmnet`, `randomforest`, `ranger`, `xgboost`, `mbart`, `multinom`)
 * Uses a native BioC-friendly survival backend (`ILsurv`) for `surv.*` models
 * Supports optional feature filtering (`filter_method`, `filter_pct`) and supervised screening (`run_screening`, `screen_pct`)
@@ -63,7 +63,11 @@ For multiclass outcomes (`family = binomial()` with more than two outcome classe
 
 For survival outcomes, `IntegratedLearner` dispatches to the native survival engine (`ILsurv`) with configurable late-fusion weighting (`COX`/`IBS`). Supported survival learners include Cox, penalized Cox, tree ensembles, boosting, and XGBoost-based survival variants (see full list below).
 
-For binary/continuous non-survival tasks, standard `SuperLearner` learners still use the `SL.*` naming convention (for example, `SL.randomForest`, `SL.glmnet`). IntegratedLearner's package-specific wrappers now use snake_case names such as `sl_bart`, `sl_lasso`, and `sl_nnls_auc`. For multiclass, use multiclass learner IDs such as `randomforest`, `ranger`, `xgboost`, `glmnet`, `mbart`, or `multinom`.
+Naming conventions:
+
+* Use IntegratedLearner's snake_case `sl_*` wrappers for the documented defaults and package-provided learners, such as `sl_bart`, `sl_lasso`, and `sl_nnls_auc`.
+* Standard `SuperLearner` learners remain available with their upstream names (`SL.randomForest`, `SL.glmnet`).
+* Multiclass learners use native IDs without either prefix, such as `randomforest`, `ranger`, `xgboost`, `glmnet`, `mbart`, and `multinom`.
 
 Feature workflow (when enabled):
 1. Filtering happens first (`filter_method`, `filter_pct`) on the training feature table.
@@ -97,7 +101,7 @@ IntegratedLearner(
   outcome_col = "Y",
   subject_id_col = "subjectID",
   folds = 5,
-  base_learner = "SL.randomForest",
+  base_learner = "sl_bart",
   meta_learner = "sl_nnls_auc",
   filter_method = "prevalence",
   filter_pct = 40,
@@ -158,7 +162,7 @@ IntegratedLearner(
   outcome_col = "disease_status",
   subject_id_col = "participant_id",
   folds = 5,
-  base_learner = "SL.randomForest",
+  base_learner = "sl_bart",
   meta_learner = "sl_nnls_auc",
   filter_method = "prevalence",
   filter_pct = 40,
@@ -180,7 +184,7 @@ Custom metadata names are optional. If omitted, defaults remain `outcome_col = "
 * `na.rm`: Logical; drop features containing missing values after extraction/prep.
 * `folds`: Integer. Number of folds for cross-validation. Default is `5`.
 * `seed`: Integer seed for reproducibility. Default is `1234`.
-* `base_learner`: Binary/continuous uses `SL.*`; multiclass uses native multiclass learners; survival uses supported `surv.*` learners. Not used when `run_intermediate = TRUE`.
+* `base_learner`: Binary/continuous uses IntegratedLearner `sl_*` wrappers by default (standard SuperLearner `SL.*` learners are also supported); multiclass uses native multiclass learners; survival uses supported `surv.*` learners. Not used when `run_intermediate = TRUE`.
 * `base_screener`: Deprecated. Kept for backward compatibility.
 * `filter_method`: Optional feature filtering method (`"prevalence"` or `"variance"`).
 * `filter_pct`: Optional retention percentage in `(0,100]` for filtering.
@@ -206,7 +210,7 @@ Automatic outcome coercion:
 
 Supported model families:
 
-* Binary/continuous non-survival: any available `SuperLearner` `SL.*` model.
+* Binary/continuous non-survival: IntegratedLearner `sl_*` wrappers (or any available standard SuperLearner `SL.*` model).
 * Multiclass non-survival: `glmnet`, `randomforest`, `ranger`, `xgboost`, `mbart`, `multinom`.
 * Survival: `surv.coxph`, `surv.glmnet`, `surv.ranger`, `surv.ranger.extratrees`, `surv.ranger.maxstat`, `surv.ranger.C`, `surv.rfsrc`, `surv.coxboost`, `surv.gbm`, `surv.xgboost.cox`, `surv.xgboost.aft`, `surv.mboost`, `surv.bart`.
 * Direct cooperative learning: standalone `multiview` feature-level fusion for continuous, binary, and survival outcomes. Multiclass cooperative learning is not supported.
