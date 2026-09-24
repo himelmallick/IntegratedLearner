@@ -79,7 +79,7 @@
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"devtools"</span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://devtools.r-lib.org/" class="external-link">devtools</a></span><span class="op">)</span></span></code></pre></div>
-<p>Optional dependency for BART workflows: - <code>sl_bart</code> and BART uncertainty utilities rely on <code>bartMachine</code> and a working Java setup. - If Java/BART are unavailable, use non-Java learners such as <code>SL.randomForest</code> (continuous/binary) or native multiclass learners.</p>
+<p>Optional dependency for BART workflows: - <code>sl_bart</code> and BART uncertainty utilities rely on <code>bartMachine</code> and a working Java setup. - If Java/BART are unavailable, use another continuous/binary learner (<code>SL.randomForest</code> is a standard SuperLearner alternative) or a native multiclass learner for multiclass outcomes.</p>
 </div>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
@@ -103,7 +103,7 @@
 <li>Supports custom outcome/subject column names via <code>outcome_col</code> and <code>subject_id_col</code>
 </li>
 <li>Supports early and late fusion in one interface</li>
-<li>Integrates with <a href="https://cran.r-project.org/web/packages/SuperLearner/index.html" class="external-link">SuperLearner</a> for binary/continuous models (<code>SL.*</code>)</li>
+<li>Integrates with <a href="https://cran.r-project.org/web/packages/SuperLearner/index.html" class="external-link">SuperLearner</a> for binary/continuous models, using IntegratedLearner <code>sl_*</code> wrappers by default (standard SuperLearner <code>SL.*</code> learners are also supported)</li>
 <li>Includes a native multiclass backend with multiclass learners (<code>glmnet</code>, <code>randomforest</code>, <code>ranger</code>, <code>xgboost</code>, <code>mbart</code>, <code>multinom</code>)</li>
 <li>Uses a native BioC-friendly survival backend (<code>ILsurv</code>) for <code>surv.*</code> models</li>
 <li>Supports optional feature filtering (<code>filter_method</code>, <code>filter_pct</code>) and supervised screening (<code>run_screening</code>, <code>screen_pct</code>)</li>
@@ -127,7 +127,12 @@
 <p>For binary/continuous outcomes, late fusion proceeds by 1) fitting a machine learning algorithm (<code>base_learner</code>) per layer and 2) combining layer-wise cross-validated predictions using a meta model (<code>meta_learner</code>). A common default is <a href="https://arxiv.org/abs/0806.3286" class="external-link">BART</a> as base learner (<code>base_learner = "sl_bart"</code>) with <code>sl_nnls_auc</code> as the meta-learner.</p>
 <p>For multiclass outcomes (<code>family = binomial()</code> with more than two outcome classes), <code>IntegratedLearner</code> dispatches to a native multiclass backend that performs multiclass probability modeling at layer, stacked, and concatenated levels. Optional filtering and screening are supported via <code>filter_method</code>/<code>filter_pct</code> and <code>run_screening</code>/<code>screen_pct</code>.</p>
 <p>For survival outcomes, <code>IntegratedLearner</code> dispatches to the native survival engine (<code>ILsurv</code>) with configurable late-fusion weighting (<code>COX</code>/<code>IBS</code>). Supported survival learners include Cox, penalized Cox, tree ensembles, boosting, and XGBoost-based survival variants (see full list below).</p>
-<p>For binary/continuous non-survival tasks, standard <code>SuperLearner</code> learners still use the <code>SL.*</code> naming convention (for example, <code>SL.randomForest</code>, <code>SL.glmnet</code>). IntegratedLearner’s package-specific wrappers now use snake_case names such as <code>sl_bart</code>, <code>sl_lasso</code>, and <code>sl_nnls_auc</code>. For multiclass, use multiclass learner IDs such as <code>randomforest</code>, <code>ranger</code>, <code>xgboost</code>, <code>glmnet</code>, <code>mbart</code>, or <code>multinom</code>.</p>
+<p>Naming conventions:</p>
+<ul>
+<li>Use IntegratedLearner’s snake_case <code>sl_*</code> wrappers for the documented defaults and package-provided learners, such as <code>sl_bart</code>, <code>sl_lasso</code>, and <code>sl_nnls_auc</code>.</li>
+<li>Standard <code>SuperLearner</code> learners remain available with their upstream names (<code>SL.randomForest</code>, <code>SL.glmnet</code>).</li>
+<li>Multiclass learners use native IDs without either prefix, such as <code>randomforest</code>, <code>ranger</code>, <code>xgboost</code>, <code>glmnet</code>, <code>mbart</code>, and <code>multinom</code>.</li>
+</ul>
 <p>Feature workflow (when enabled): 1. Filtering happens first (<code>filter_method</code>, <code>filter_pct</code>) on the training feature table. 2. Screening happens second (<code>run_screening = TRUE</code>, <code>screen_pct</code>) within CV folds and again for final model fit.</p>
 </div>
 <div class="section level2">
@@ -155,7 +160,7 @@
 <span>  outcome_col <span class="op">=</span> <span class="st">"Y"</span>,</span>
 <span>  subject_id_col <span class="op">=</span> <span class="st">"subjectID"</span>,</span>
 <span>  folds <span class="op">=</span> <span class="fl">5</span>,</span>
-<span>  base_learner <span class="op">=</span> <span class="st">"SL.randomForest"</span>,</span>
+<span>  base_learner <span class="op">=</span> <span class="st">"sl_bart"</span>,</span>
 <span>  meta_learner <span class="op">=</span> <span class="st">"sl_nnls_auc"</span>,</span>
 <span>  filter_method <span class="op">=</span> <span class="st">"prevalence"</span>,</span>
 <span>  filter_pct <span class="op">=</span> <span class="fl">40</span>,</span>
@@ -216,7 +221,7 @@
 <span>  outcome_col <span class="op">=</span> <span class="st">"disease_status"</span>,</span>
 <span>  subject_id_col <span class="op">=</span> <span class="st">"participant_id"</span>,</span>
 <span>  folds <span class="op">=</span> <span class="fl">5</span>,</span>
-<span>  base_learner <span class="op">=</span> <span class="st">"SL.randomForest"</span>,</span>
+<span>  base_learner <span class="op">=</span> <span class="st">"sl_bart"</span>,</span>
 <span>  meta_learner <span class="op">=</span> <span class="st">"sl_nnls_auc"</span>,</span>
 <span>  filter_method <span class="op">=</span> <span class="st">"prevalence"</span>,</span>
 <span>  filter_pct <span class="op">=</span> <span class="fl">40</span>,</span>
@@ -245,7 +250,7 @@
 <li>
 <code>seed</code>: Integer seed for reproducibility. Default is <code>1234</code>.</li>
 <li>
-<code>base_learner</code>: Binary/continuous uses <code>SL.*</code>; multiclass uses native multiclass learners; survival uses supported <code>surv.*</code> learners. Not used when <code>run_intermediate = TRUE</code>.</li>
+<code>base_learner</code>: Binary/continuous uses IntegratedLearner <code>sl_*</code> wrappers by default (standard SuperLearner <code>SL.*</code> learners are also supported); multiclass uses native multiclass learners; survival uses supported <code>surv.*</code> learners. Not used when <code>run_intermediate = TRUE</code>.</li>
 <li>
 <code>base_screener</code>: Deprecated. Kept for backward compatibility.</li>
 <li>
@@ -284,7 +289,7 @@
 <p>Automatic outcome coercion: * <code><a href="https://rdrr.io/r/stats/family.html" class="external-link">gaussian()</a></code>: outcome is coerced to numeric (errors if conversion fails). * binary <code><a href="https://rdrr.io/r/stats/family.html" class="external-link">binomial()</a></code>: two classes are mapped internally to <code>{0,1}</code>. * multiclass <code><a href="https://rdrr.io/r/stats/family.html" class="external-link">binomial()</a></code>: class labels are retained.</p>
 <p>Supported model families:</p>
 <ul>
-<li>Binary/continuous non-survival: any available <code>SuperLearner</code> <code>SL.*</code> model.</li>
+<li>Binary/continuous non-survival: IntegratedLearner <code>sl_*</code> wrappers (or any available standard SuperLearner <code>SL.*</code> model).</li>
 <li>Multiclass non-survival: <code>glmnet</code>, <code>randomforest</code>, <code>ranger</code>, <code>xgboost</code>, <code>mbart</code>, <code>multinom</code>.</li>
 <li>Survival: <code>surv.coxph</code>, <code>surv.glmnet</code>, <code>surv.ranger</code>, <code>surv.ranger.extratrees</code>, <code>surv.ranger.maxstat</code>, <code>surv.ranger.C</code>, <code>surv.rfsrc</code>, <code>surv.coxboost</code>, <code>surv.gbm</code>, <code>surv.xgboost.cox</code>, <code>surv.xgboost.aft</code>, <code>surv.mboost</code>, <code>surv.bart</code>.</li>
 <li>Direct cooperative learning: standalone <code>multiview</code> feature-level fusion for continuous, binary, and survival outcomes. Multiclass cooperative learning is not supported.</li>
