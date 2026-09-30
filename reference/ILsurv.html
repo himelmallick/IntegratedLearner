@@ -279,9 +279,15 @@ named list where each entry is keyed by learner ID.</p></dd>
 </dl></div>
     <div id="value">
     <h2>Value</h2>
-    <p>List with <code>train_out</code> and <code>valid_out</code>. Late-fusion results
+    <p>List with <code>train_out</code> and <code>valid_out</code>. Single-layer
+survival outputs include <code>train_out$single$metrics</code>,
+<code>train_out$single$train_risk</code>, and
+<code>train_out$single$feature_importance_signed_by_layer</code>, a named list of
+unweighted signed feature-importance scores by layer. Late-fusion results
 are returned under <code>train_out$late$IBS</code>, <code>train_out$late$COX</code>,
-and the analogous validation entries.</p>
+and the analogous validation entries. When <code>run_intermediate = TRUE</code>,
+<code>train_out$cooperative</code> includes coefficient-based cooperative
+feature-importance scores from the selected <span class="pkg">multiview</span> Cox model.</p>
     </div>
 
     <div id="ref-examples">

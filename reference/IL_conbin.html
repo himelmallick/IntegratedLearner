@@ -252,7 +252,13 @@ IL_survival().</p></dd>
     <h2>Value</h2>
     <p>A list-like IntegratedLearner object containing fitted layer-specific,
 stacked, and concatenated models, cross-validated performance (AUC or R\302\262),
-and predictions for training and validation sets.</p>
+and predictions for training and validation sets. When
+<code>run_intermediate = TRUE</code>, coefficient-based cooperative
+feature-importance scores from the selected <span class="pkg">multiview</span> model are
+returned in <code>cooperative_feature_importance</code>,
+<code>cooperative_feature_importance_by_layer</code>,
+<code>cooperative_feature_importance_signed</code>, and
+<code>cooperative_feature_importance_signed_by_layer</code>.</p>
     </div>
     <div id="details">
     <h2>Details</h2>

@@ -1200,9 +1200,10 @@ feature matrices</td>
 <code>fit$yhat.train[, "cooperative"]</code>,
 <code>fit$yhat.test[, "cooperative"]</code>,
 <code>fit$model_fits$model_cooperative</code>,
-<code>fit$cooperative_rho</code>, and
-<code>fit$cooperative_rho_scores</code>. No base learner, early-fusion,
-or late-fusion objects are returned in this mode.</td>
+<code>fit$cooperative_rho</code>,
+<code>fit$cooperative_rho_scores</code>, and coefficient-based
+cooperative importance fields. No base learner, early-fusion, or
+late-fusion objects are returned in this mode.</td>
 </tr>
 <tr class="odd">
 <td>Layer weights (stacked)</td>
@@ -1353,8 +1354,8 @@ metrics</td>
 <tr class="even">
 <td>Cooperative/intermediate fusion</td>
 <td>Standalone <code>fit$train_out$cooperative</code>, containing the
-selected <code>multiview</code> model, C-index, time-dependent AUC, and
-risk scores</td>
+selected <code>multiview</code> model, C-index, time-dependent AUC, risk
+scores, and coefficient-based feature-importance scores</td>
 <td>
 <code>fit$valid_out$cooperative</code>, with analogous validation
 metrics and risk scores. <code>single</code>, <code>early</code>, and
@@ -1395,6 +1396,24 @@ by effect magnitude/sign.</td>
 <td>List split by <code>featureType</code>.</td>
 </tr>
 <tr class="odd">
+<td>Cooperative absolute importance</td>
+<td>
+<code>fit$cooperative_feature_importance</code> and
+<code>fit$cooperative_feature_importance_by_layer</code>
+</td>
+<td>Absolute selected-model <code>multiview</code> coefficients;
+available when <code>run_intermediate = TRUE</code>.</td>
+</tr>
+<tr class="even">
+<td>Cooperative signed importance</td>
+<td>
+<code>fit$cooperative_feature_importance_signed</code> and
+<code>fit$cooperative_feature_importance_signed_by_layer</code>
+</td>
+<td>Signed selected-model <code>multiview</code> coefficients; available
+when <code>run_intermediate = TRUE</code>.</td>
+</tr>
+<tr class="odd">
 <td>Multiclass signed global feature importance</td>
 <td><code>fit$feature_importance_global</code></td>
 <td>Global score aggregated across multiclass contrasts.</td>
@@ -1410,11 +1429,35 @@ by effect magnitude/sign.</td>
 <td>Nested list by layer then class.</td>
 </tr>
 <tr class="even">
+<td>Survival signed per-layer importance</td>
+<td><code>fit$train_out$single$feature_importance_signed_by_layer</code></td>
+<td>List of unweighted signed feature-importance scores from each
+single-layer survival base model.</td>
+</tr>
+<tr class="odd">
+<td>Cooperative survival importance</td>
+<td>
+<code>fit$train_out$cooperative$feature_importance</code> and
+<code>fit$train_out$cooperative$feature_importance_by_layer</code>
+</td>
+<td>Absolute selected-model <code>multiview</code> Cox coefficients;
+available when <code>run_intermediate = TRUE</code>.</td>
+</tr>
+<tr class="even">
+<td>Cooperative survival signed importance</td>
+<td>
+<code>fit$train_out$cooperative$feature_importance_signed</code> and
+<code>fit$train_out$cooperative$feature_importance_signed_by_layer</code>
+</td>
+<td>Signed selected-model <code>multiview</code> Cox coefficients;
+available when <code>run_intermediate = TRUE</code>.</td>
+</tr>
+<tr class="odd">
 <td>Survival early-fusion combined importance</td>
 <td><code>fit$train_out$early$combined_importance</code></td>
 <td>Available when <code>do_early_fusion = TRUE</code>.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Survival late-fusion combined importance</td>
 <td>
 <code>fit$train_out$late$IBS$combined_importance</code> or
@@ -1423,7 +1466,7 @@ by effect magnitude/sign.</td>
 <td>Weighted signed importance; names are prefixed like
 <code>layer::feature</code>.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>BART-specific layer importance (optional)</td>
 <td><code>bartMachine::investigate_var_importance(fit$model_fits$model_layers[[layer]], plot = FALSE)</code></td>
 <td>Only for BART-based conbin fits
@@ -1441,6 +1484,8 @@ by effect magnitude/sign.</td>
 <span><span class="va">fit</span><span class="op">$</span><span class="va">cooperative_rho</span></span>
 <span><span class="va">fit</span><span class="op">$</span><span class="va">cooperative_rho_scores</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">yhat.train</span><span class="op">[</span>, <span class="st">"cooperative"</span><span class="op">]</span>, <span class="fl">10</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">cooperative_feature_importance</span>, <span class="fl">20</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">cooperative_feature_importance_by_layer</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span>, <span class="fl">20</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">feature_importance_signed</span>, <span class="fl">20</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">feature_importance_signed_by_layer</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">feature_importance_signed_by_layer</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span>, <span class="fl">20</span><span class="op">)</span></span>
@@ -1459,6 +1504,10 @@ by effect magnitude/sign.</td>
 <span><span class="va">fit_surv</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">COX</span><span class="op">$</span><span class="va">weights</span></span>
 <span><span class="va">fit_surv</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">cooperative</span><span class="op">$</span><span class="va">train_cindex</span></span>
 <span><span class="va">fit_surv</span><span class="op">$</span><span class="va">cooperative_rho</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit_surv</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">cooperative</span><span class="op">$</span><span class="va">feature_importance</span>, <span class="fl">20</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit_surv</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">cooperative</span><span class="op">$</span><span class="va">feature_importance_by_layer</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span>, <span class="fl">20</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fit_surv</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">single</span><span class="op">$</span><span class="va">feature_importance_signed_by_layer</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit_surv</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">single</span><span class="op">$</span><span class="va">feature_importance_signed_by_layer</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span>, <span class="fl">20</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit_surv</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">IBS</span><span class="op">$</span><span class="va">combined_importance</span>, <span class="fl">20</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit_surv</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">COX</span><span class="op">$</span><span class="va">combined_importance</span>, <span class="fl">20</span><span class="op">)</span></span>
 <span></span>
@@ -1563,7 +1612,7 @@ with a meta-learner (<code>meta_learner</code>).</p>
 <span><span class="co">#&gt; CV SL.randomForest_screen.il.glmnet</span></span>
 <span><span class="co">#&gt; Non-Negative least squares convergence: TRUE</span></span>
 <span><span class="co">#&gt; full SL.randomForest_screen.il.glmnet</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.08 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.086 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Model fit for individual layers: SL.randomForest </span></span>
 <span><span class="co">#&gt; Model fit for stacked layer: sl_nnls_auc </span></span>
@@ -1685,7 +1734,9 @@ can be run directly in an analysis session.</p>
 <span><span class="va">fit_coop</span><span class="op">$</span><span class="va">cooperative_rho_scores</span></span>
 <span><span class="va">fit_coop</span><span class="op">$</span><span class="va">metrics.train</span></span>
 <span><span class="va">fit_coop</span><span class="op">$</span><span class="va">metrics.test</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit_coop</span><span class="op">$</span><span class="va">yhat.test</span><span class="op">[</span>, <span class="st">"cooperative"</span><span class="op">]</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit_coop</span><span class="op">$</span><span class="va">yhat.test</span><span class="op">[</span>, <span class="st">"cooperative"</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit_coop</span><span class="op">$</span><span class="va">cooperative_feature_importance</span>, <span class="fl">20</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit_coop</span><span class="op">$</span><span class="va">cooperative_feature_importance_by_layer</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span>, <span class="fl">20</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>
 <div class="section level2">
@@ -1745,7 +1796,7 @@ bytecode). In that case, either:</p>
 <span>  screen_pct <span class="op">=</span> <span class="fl">30</span>,</span>
 <span>  family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">gaussian</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.509 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.531 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Model fit for individual layers: sl_bart </span></span>
 <span><span class="co">#&gt; Model fit for stacked layer: sl_nnls_auc </span></span>
@@ -2024,7 +2075,7 @@ and pass them through <code>outcome_col</code> and
 <span><span class="co">#&gt; Running multiclass base model for layer 2...</span></span>
 <span><span class="co">#&gt; Running multiclass stacked model...</span></span>
 <span><span class="co">#&gt; Running multiclass concatenated model...</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.155 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.147 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Multiclass model fit with 3 classes</span></span>
 <span><span class="co">#&gt; Base learner: glmnet </span></span>
@@ -2552,7 +2603,9 @@ best fused survival model.</li>
 <span><span class="co"># fit_surv_coop$cooperative_rho</span></span>
 <span><span class="co"># fit_surv_coop$cooperative_rho_scores</span></span>
 <span><span class="co"># fit_surv_coop$train_out$cooperative$train_cindex</span></span>
-<span><span class="co"># fit_surv_coop$valid_out$cooperative$valid_cindex</span></span></code></pre></div>
+<span><span class="co"># fit_surv_coop$valid_out$cooperative$valid_cindex</span></span>
+<span><span class="co"># head(fit_surv_coop$train_out$cooperative$feature_importance, 20)</span></span>
+<span><span class="co"># head(fit_surv_coop$train_out$cooperative$feature_importance_by_layer[[1]], 20)</span></span></code></pre></div>
 <p>The <code>train_auc</code> and <code>valid_auc</code> objects for
 both <code>IBS</code> and <code>COX</code> are data frames with
 <code>time</code> and <code>AUC</code> columns, so they can be plotted

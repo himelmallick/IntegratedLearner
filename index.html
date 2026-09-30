@@ -325,6 +325,8 @@
 <li>
 <code>model_fits$model_cooperative</code>, <code>yhat.train[, "cooperative"]</code>, and <code>yhat.test[, "cooperative"]</code>: standalone cooperative <code>multiview</code> model and predictions when <code>run_intermediate = TRUE</code>.</li>
 <li>
+<code>cooperative_feature_importance</code>, <code>cooperative_feature_importance_by_layer</code>, <code>cooperative_feature_importance_signed</code>, and <code>cooperative_feature_importance_signed_by_layer</code>: coefficient-based feature-importance scores from the selected cooperative <code>multiview</code> model when <code>run_intermediate = TRUE</code>.</li>
+<li>
 <code>AUC.train</code>/<code>AUC.test</code> (binomial) or <code>R2.train</code>/<code>R2.test</code> (gaussian).</li>
 <li>
 <code>feature_importance_signed</code>: Global signed feature importance.</li>
@@ -355,11 +357,15 @@
 <li>
 <code>train_out$late$IBS</code> and <code>train_out$late$COX</code>: Late-fusion metrics and learned layer weights for both survival fusion strategies in standard IL survival mode.</li>
 <li>
+<code>train_out$single$feature_importance_signed_by_layer</code>: Per-layer signed survival feature-importance scores from the single-layer survival base models.</li>
+<li>
 <code>train_out$cooperative</code> / <code>valid_out$cooperative</code>: standalone cooperative <code>multiview</code> Cox model metrics and risk scores when <code>run_intermediate = TRUE</code>.</li>
+<li>
+<code>train_out$cooperative$feature_importance</code>, <code>train_out$cooperative$feature_importance_by_layer</code>, <code>train_out$cooperative$feature_importance_signed</code>, and <code>train_out$cooperative$feature_importance_signed_by_layer</code>: coefficient-based survival feature-importance scores from the selected cooperative <code>multiview</code> Cox model when <code>run_intermediate = TRUE</code>.</li>
 <li>
 <code>valid_out$...</code>: Validation analogs of single/early/late outputs (if validation provided).</li>
 <li>
-<code>train_out$late$combined_importance</code> and (if available) <code>train_out$early$combined_importance</code>: survival feature-importance outputs.</li>
+<code>train_out$late$IBS$combined_importance</code>, <code>train_out$late$COX$combined_importance</code>, and (if available) <code>train_out$early$combined_importance</code>: survival feature-importance outputs.</li>
 </ul>
 </div>
 </div>
