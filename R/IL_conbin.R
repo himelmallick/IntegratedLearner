@@ -96,7 +96,13 @@
 #'
 #' @return A list-like IntegratedLearner object containing fitted layer-specific,
 #'   stacked, and concatenated models, cross-validated performance (AUC or R\302\262),
-#'   and predictions for training and validation sets.
+#'   and predictions for training and validation sets. When
+#'   \code{run_intermediate = TRUE}, coefficient-based cooperative
+#'   feature-importance scores from the selected \pkg{multiview} model are
+#'   returned in \code{cooperative_feature_importance},
+#'   \code{cooperative_feature_importance_by_layer},
+#'   \code{cooperative_feature_importance_signed}, and
+#'   \code{cooperative_feature_importance_signed_by_layer}.
 #'
 #' @examples
 #' set.seed(1)
@@ -576,6 +582,11 @@ IL_conbin <- function(
     res$model_fits$model_cooperative <- cooperative_fit
     res$yhat.train <- cbind(res$yhat.train, cooperative_prediction_train)
     colnames(res$yhat.train)[ncol(res$yhat.train)] <- "cooperative"
+    cooperative_importance <- extract_cooperative_feature_importance(cooperative_fit)
+    res$cooperative_feature_importance <- cooperative_importance$importance
+    res$cooperative_feature_importance_by_layer <- cooperative_importance$importance_by_layer
+    res$cooperative_feature_importance_signed <- cooperative_importance$signed
+    res$cooperative_feature_importance_signed_by_layer <- cooperative_importance$signed_by_layer
     if (!is.null(feature_table_valid)) {
       res$yhat.test <- cbind(res$yhat.test, cooperative_prediction_valid)
       colnames(res$yhat.test)[ncol(res$yhat.test)] <- "cooperative"

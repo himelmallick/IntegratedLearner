@@ -12,6 +12,9 @@
   `cooperative_type_measure`. `rho` is selected across repeated
   `cv.multiview()` fits with shared folds, while lambda selection is handled by
   `cv.multiview()`.
+- Added coefficient-based cooperative feature-importance outputs, including
+  absolute and signed global scores plus per-layer score lists for
+  continuous/binary and survival cooperative fits.
 - Updated the README, vignette, and Rd files to document standalone
   intermediate/cooperative mode and its output structure.
 - Added tests for gaussian, binomial, survival, and multiclass

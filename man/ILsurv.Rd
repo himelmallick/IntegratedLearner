@@ -161,9 +161,15 @@ cooperative model. Defaults to \code{"lambda.min"}.}
 named list where each entry is keyed by learner ID.}
 }
 \value{
-List with \code{train_out} and \code{valid_out}. Late-fusion results
+List with \code{train_out} and \code{valid_out}. Single-layer
+survival outputs include \code{train_out$single$metrics},
+\code{train_out$single$train_risk}, and
+\code{train_out$single$feature_importance_signed_by_layer}, a named list of
+unweighted signed feature-importance scores by layer. Late-fusion results
 are returned under \code{train_out$late$IBS}, \code{train_out$late$COX},
-and the analogous validation entries.
+and the analogous validation entries. When \code{run_intermediate = TRUE},
+\code{train_out$cooperative} includes coefficient-based cooperative
+feature-importance scores from the selected \pkg{multiview} Cox model.
 }
 \description{
 BioC-friendly survival backend used by \code{IntegratedLearner()} for

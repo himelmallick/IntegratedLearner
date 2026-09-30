@@ -1523,6 +1523,14 @@ ILsurv_bioc_core <- function(
     vmsg("Skipping early fusion (do_early_fusion = FALSE)")
   }
 
+  feature_importance_signed_by_layer <- lapply(names(importance_list), function(lay) {
+    imp <- importance_list[[lay]]
+    sgn <- sign_list[[lay]]
+    out <- imp * sgn[names(imp)]
+    sort(out, decreasing = TRUE, na.last = TRUE)
+  })
+  names(feature_importance_signed_by_layer) <- names(importance_list)
+
   vmsg("Preparing survival-matrix weighting inputs from layer risks")
   ibs_time_grid <- ibs_time_grid(times, n_grid = as.integer(ibs_grid_n))
   layer_surv_train <- list()
@@ -1603,6 +1611,7 @@ ILsurv_bioc_core <- function(
     )
     cooperative_train_risk <- prevalidated_cooperative_vector(cooperative_fit)
     cooperative_met <- compute_auc_cindex(times, events, cooperative_train_risk)
+    cooperative_importance <- extract_cooperative_feature_importance(cooperative_fit)
     cooperative_train <- list(
       model = cooperative_fit,
       train_cindex = cooperative_met$cindex,
@@ -1610,7 +1619,11 @@ ILsurv_bioc_core <- function(
       train_auc_mean = cooperative_met$auc_mean,
       train_brier = cooperative_met$brier,
       train_ibs = cooperative_met$ibs,
-      train_risk = cooperative_train_risk
+      train_risk = cooperative_train_risk,
+      feature_importance = cooperative_importance$importance,
+      feature_importance_by_layer = cooperative_importance$importance_by_layer,
+      feature_importance_signed = cooperative_importance$signed,
+      feature_importance_signed_by_layer = cooperative_importance$signed_by_layer
     )
     vmsg("  [cooperative] cindex=", fmt(cooperative_train$train_cindex))
   }
@@ -1742,7 +1755,11 @@ ILsurv_bioc_core <- function(
   }
 
   train_out <- list(
-    single = list(metrics = single_layer_metrics, train_risk = preds_list), early = if (is.null(early_fusion_out)) {
+    single = list(
+      metrics = single_layer_metrics,
+      train_risk = preds_list,
+      feature_importance_signed_by_layer = feature_importance_signed_by_layer
+    ), early = if (is.null(early_fusion_out)) {
       NULL
     } else {
       list(
@@ -1825,9 +1842,15 @@ ILsurv_bioc_core <- function(
 #'   \code{base_learner}. You may also pass \code{model_args = list(...)} as a
 #'   named list where each entry is keyed by learner ID.
 #'
-#' @return List with \code{train_out} and \code{valid_out}. Late-fusion results
+#' @return List with \code{train_out} and \code{valid_out}. Single-layer
+#'   survival outputs include \code{train_out$single$metrics},
+#'   \code{train_out$single$train_risk}, and
+#'   \code{train_out$single$feature_importance_signed_by_layer}, a named list of
+#'   unweighted signed feature-importance scores by layer. Late-fusion results
 #'   are returned under \code{train_out$late$IBS}, \code{train_out$late$COX},
-#'   and the analogous validation entries.
+#'   and the analogous validation entries. When \code{run_intermediate = TRUE},
+#'   \code{train_out$cooperative} includes coefficient-based cooperative
+#'   feature-importance scores from the selected \pkg{multiview} Cox model.
 #'
 #' @examples
 #' set.seed(1)

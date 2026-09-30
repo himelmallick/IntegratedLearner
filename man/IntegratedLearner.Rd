@@ -160,7 +160,9 @@ for time-to-event outcomes. Determines whether \code{IL_conbin} or
 A list-like IntegratedLearner object containing the trained model fits
 (layer-specific, stacked, and/or concatenated models), cross-validated
 performance estimates, and predicted values for training and, if supplied,
-validation data.
+validation data. When \code{run_intermediate = TRUE}, the object also
+includes coefficient-based cooperative feature-importance scores from the
+selected \pkg{multiview} model.
 }
 \description{
 Performs integrated machine learning to predict a binary, continuous, or

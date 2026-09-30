@@ -118,7 +118,9 @@
 #' A list-like IntegratedLearner object containing the trained model fits
 #' (layer-specific, stacked, and/or concatenated models), cross-validated
 #' performance estimates, and predicted values for training and, if supplied,
-#' validation data.
+#' validation data. When \code{run_intermediate = TRUE}, the object also
+#' includes coefficient-based cooperative feature-importance scores from the
+#' selected \pkg{multiview} model.
 #'
 #' @examples
 #' data("PRISM_MAE", package = "IntegratedLearner")

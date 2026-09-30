@@ -61,6 +61,14 @@ test_that("IntegratedLearner adds cooperative predictions for gaussian outcomes"
   expect_null(fit$meta_learner)
   expect_true(is.finite(fit$R2.train[["cooperative"]]))
   expect_true(fit$cooperative_rho %in% fit$cooperative_rho_grid)
+  expect_true(is.numeric(fit$cooperative_feature_importance))
+  expect_true(is.numeric(fit$cooperative_feature_importance_signed))
+  expect_equal(length(fit$cooperative_feature_importance), nrow(pcl$feature_table))
+  expect_equal(length(fit$cooperative_feature_importance_signed), nrow(pcl$feature_table))
+  expect_setequal(names(fit$cooperative_feature_importance_by_layer), unique(pcl$feature_metadata$featureType))
+  expect_setequal(names(fit$cooperative_feature_importance_signed_by_layer), unique(pcl$feature_metadata$featureType))
+  expect_identical(fit$feature_importance_signed, fit$cooperative_feature_importance_signed)
+  expect_identical(fit$feature_importance_signed_by_layer, fit$cooperative_feature_importance_signed_by_layer)
 })
 
 test_that("IntegratedLearner adds cooperative predictions for binary outcomes", {
@@ -89,6 +97,12 @@ test_that("IntegratedLearner adds cooperative predictions for binary outcomes", 
   expect_true(is.finite(fit$AUC.train[["cooperative"]]))
   expect_true(fit$AUC.train[["cooperative"]] >= 0)
   expect_true(fit$AUC.train[["cooperative"]] <= 1)
+  expect_true(is.numeric(fit$cooperative_feature_importance))
+  expect_true(is.numeric(fit$cooperative_feature_importance_signed))
+  expect_equal(length(fit$cooperative_feature_importance), nrow(pcl$feature_table))
+  expect_equal(length(fit$cooperative_feature_importance_signed), nrow(pcl$feature_table))
+  expect_setequal(names(fit$cooperative_feature_importance_by_layer), unique(pcl$feature_metadata$featureType))
+  expect_setequal(names(fit$cooperative_feature_importance_signed_by_layer), unique(pcl$feature_metadata$featureType))
 })
 
 test_that("IntegratedLearner ignores cooperative learning for multiclass outcomes", {
@@ -153,4 +167,17 @@ test_that("ILsurv adds cooperative survival risk output", {
   expect_null(fit$valid_out$late)
   expect_true(is.list(fit$valid_out$cooperative))
   expect_equal(length(fit$valid_out$cooperative$valid_risk), nrow(tcga$valid$sample_metadata))
+  expect_true(is.numeric(fit$train_out$cooperative$feature_importance))
+  expect_true(is.numeric(fit$train_out$cooperative$feature_importance_signed))
+  expect_equal(length(fit$train_out$cooperative$feature_importance), nrow(tcga$train$feature_table))
+  expect_equal(length(fit$train_out$cooperative$feature_importance_signed), nrow(tcga$train$feature_table))
+  expect_setequal(
+    names(fit$train_out$cooperative$feature_importance_by_layer),
+    unique(tcga$train$feature_metadata$featureType)
+  )
+  expect_identical(fit$cooperative_feature_importance, fit$train_out$cooperative$feature_importance)
+  expect_identical(
+    fit$cooperative_feature_importance_signed_by_layer,
+    fit$train_out$cooperative$feature_importance_signed_by_layer
+  )
 })

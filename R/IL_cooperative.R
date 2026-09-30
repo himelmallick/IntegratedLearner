@@ -111,7 +111,86 @@ fit_cooperative_multiview <- function(
     type_measure = type_measure,
     s = s,
     family = safe_family_name(family_name),
-    layer_names = names(x_list)
+    layer_names = names(x_list),
+    feature_names_by_layer = lapply(x_list, colnames)
+  )
+}
+
+parse_cooperative_coef_name <- function(coef_name, feature_names_by_layer) {
+  layer_names <- names(feature_names_by_layer)
+  for (lay in layer_names) {
+    prefix <- paste0(lay, ":")
+    if (startsWith(coef_name, prefix)) {
+      return(list(layer = lay, feature = substring(coef_name, nchar(prefix) + 1L)))
+    }
+  }
+
+  matching_layers <- layer_names[vapply(feature_names_by_layer, function(features) {
+    coef_name %in% features
+  }, logical(1))]
+  if (length(matching_layers) == 1L) {
+    return(list(layer = matching_layers, feature = coef_name))
+  }
+  list(layer = NA_character_, feature = coef_name)
+}
+
+extract_cooperative_feature_importance <- function(fit_obj) {
+  coef_mat <- tryCatch(
+    stats::coef(fit_obj$model, s = fit_obj$s),
+    error = function(e) NULL
+  )
+  feature_names_by_layer <- fit_obj$feature_names_by_layer
+  if (is.null(coef_mat) || is.null(feature_names_by_layer)) {
+    return(list(
+      importance = numeric(),
+      importance_by_layer = stats::setNames(vector("list", length(fit_obj$layer_names)), fit_obj$layer_names),
+      signed = numeric(),
+      signed_by_layer = stats::setNames(vector("list", length(fit_obj$layer_names)), fit_obj$layer_names)
+    ))
+  }
+
+  coef_vec <- as.numeric(as.matrix(coef_mat)[, 1])
+  coef_names <- rownames(coef_mat)
+  keep <- !is.na(coef_names) & coef_names != "(Intercept)"
+  coef_vec <- coef_vec[keep]
+  coef_names <- coef_names[keep]
+
+  parsed <- lapply(coef_names, parse_cooperative_coef_name,
+    feature_names_by_layer = feature_names_by_layer
+  )
+  layers <- vapply(parsed, `[[`, character(1), "layer")
+  features <- vapply(parsed, `[[`, character(1), "feature")
+
+  signed <- coef_vec
+  names(signed) <- ifelse(is.na(layers), features, paste(layers, features, sep = "::"))
+  signed <- sort(signed, decreasing = TRUE, na.last = TRUE)
+
+  importance <- abs(coef_vec)
+  names(importance) <- ifelse(is.na(layers), features, paste(layers, features, sep = "::"))
+  importance <- sort(importance, decreasing = TRUE, na.last = TRUE)
+
+  layer_names <- names(feature_names_by_layer)
+  signed_by_layer <- lapply(layer_names, function(lay) {
+    idx <- which(layers == lay)
+    out <- coef_vec[idx]
+    names(out) <- features[idx]
+    sort(out, decreasing = TRUE, na.last = TRUE)
+  })
+  names(signed_by_layer) <- layer_names
+
+  importance_by_layer <- lapply(layer_names, function(lay) {
+    idx <- which(layers == lay)
+    out <- abs(coef_vec[idx])
+    names(out) <- features[idx]
+    sort(out, decreasing = TRUE, na.last = TRUE)
+  })
+  names(importance_by_layer) <- layer_names
+
+  list(
+    importance = importance,
+    importance_by_layer = importance_by_layer,
+    signed = signed,
+    signed_by_layer = signed_by_layer
   )
 }
 
@@ -268,14 +347,15 @@ fit_intermediate_conbin <- function(
     y_test = if (isTRUE(res$test)) res$Y_test else NULL
   )
 
-  imp_signed <- compute_signed_univariate_importance(
-    feature_table = feature_table,
-    sample_metadata = sample_metadata,
-    feature_metadata = feature_metadata,
-    family = family
-  )
-  res$feature_importance_signed <- imp_signed$all
-  res$feature_importance_signed_by_layer <- imp_signed$by_layer
+  cooperative_importance <- extract_cooperative_feature_importance(cooperative_fit)
+  res$feature_importance <- cooperative_importance$importance
+  res$feature_importance_by_layer <- cooperative_importance$importance_by_layer
+  res$feature_importance_signed <- cooperative_importance$signed
+  res$feature_importance_signed_by_layer <- cooperative_importance$signed_by_layer
+  res$cooperative_feature_importance <- cooperative_importance$importance
+  res$cooperative_feature_importance_by_layer <- cooperative_importance$importance_by_layer
+  res$cooperative_feature_importance_signed <- cooperative_importance$signed
+  res$cooperative_feature_importance_signed_by_layer <- cooperative_importance$signed_by_layer
 
   stop.time <- Sys.time()
   res$time <- as.numeric(round(difftime(stop.time, start.time, units = "min"), 3),
@@ -315,6 +395,7 @@ fit_intermediate_survival <- function(
   )
   train_risk <- prevalidated_cooperative_vector(cooperative_fit)
   train_met <- compute_auc_cindex(times, events, train_risk)
+  cooperative_importance <- extract_cooperative_feature_importance(cooperative_fit)
   train_cooperative <- list(
     model = cooperative_fit,
     train_cindex = train_met$cindex,
@@ -322,7 +403,11 @@ fit_intermediate_survival <- function(
     train_auc_mean = train_met$auc_mean,
     train_brier = train_met$brier,
     train_ibs = train_met$ibs,
-    train_risk = train_risk
+    train_risk = train_risk,
+    feature_importance = cooperative_importance$importance,
+    feature_importance_by_layer = cooperative_importance$importance_by_layer,
+    feature_importance_signed = cooperative_importance$signed,
+    feature_importance_signed_by_layer = cooperative_importance$signed_by_layer
   )
 
   valid_cooperative <- NULL
@@ -383,6 +468,10 @@ fit_intermediate_survival <- function(
     fusion_layer_metric = NULL,
     fusion_layer_threshold = NULL,
     family = "survival",
+    cooperative_feature_importance = cooperative_importance$importance,
+    cooperative_feature_importance_by_layer = cooperative_importance$importance_by_layer,
+    cooperative_feature_importance_signed = cooperative_importance$signed,
+    cooperative_feature_importance_signed_by_layer = cooperative_importance$signed_by_layer,
     feature.names = rownames(feature_table),
     time = as.numeric(round(difftime(stop.time, start.time, units = "min"), 3),
       units = "mins"

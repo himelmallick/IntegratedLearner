@@ -37,6 +37,15 @@ test_that("IntegratedLearner survival mode works with TCGA fixture and validatio
 
   expect_true(is.list(fit$train_out$single$metrics))
   expect_equal(length(fit$train_out$single$metrics), 2)
+  expect_true(is.list(fit$train_out$single$feature_importance_signed_by_layer))
+  expect_setequal(names(fit$train_out$single$feature_importance_signed_by_layer), expected_layers)
+  for (lay in expected_layers) {
+    expect_true(is.numeric(fit$train_out$single$feature_importance_signed_by_layer[[lay]]))
+    expect_true(all(
+      names(fit$train_out$single$feature_importance_signed_by_layer[[lay]]) %in%
+        rownames(tcga$train$feature_metadata)[tcga$train$feature_metadata$featureType == lay]
+    ))
+  }
   expect_true(is.list(fit$valid_out$single$valid_auc))
   expect_equal(length(fit$valid_out$single$valid_auc), 2)
 })

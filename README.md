@@ -235,6 +235,7 @@ For continuous/binary fits (`IL_conbin` path):
 * `X_test_layers`, `Y_test`, `yhat.test`: validation inputs and predictions (if validation provided).
 * `weights`: Layer weights in stacked model (`meta_learner = "sl_nnls_auc"` and `run_stacked = TRUE`).
 * `model_fits$model_cooperative`, `yhat.train[, "cooperative"]`, and `yhat.test[, "cooperative"]`: standalone cooperative `multiview` model and predictions when `run_intermediate = TRUE`.
+* `cooperative_feature_importance`, `cooperative_feature_importance_by_layer`, `cooperative_feature_importance_signed`, and `cooperative_feature_importance_signed_by_layer`: coefficient-based feature-importance scores from the selected cooperative `multiview` model when `run_intermediate = TRUE`.
 * `AUC.train`/`AUC.test` (binomial) or `R2.train`/`R2.test` (gaussian).
 * `feature_importance_signed`: Global signed feature importance.
 * `feature_importance_signed_by_layer`: Per-layer signed feature importance.
@@ -253,9 +254,11 @@ For survival fits (`ILsurv` path):
 * `train_out$single`: Single-layer metrics in standard IL survival mode.
 * `train_out$early`: Early-fusion metrics in standard IL survival mode (if enabled).
 * `train_out$late$IBS` and `train_out$late$COX`: Late-fusion metrics and learned layer weights for both survival fusion strategies in standard IL survival mode.
+* `train_out$single$feature_importance_signed_by_layer`: Per-layer signed survival feature-importance scores from the single-layer survival base models.
 * `train_out$cooperative` / `valid_out$cooperative`: standalone cooperative `multiview` Cox model metrics and risk scores when `run_intermediate = TRUE`.
+* `train_out$cooperative$feature_importance`, `train_out$cooperative$feature_importance_by_layer`, `train_out$cooperative$feature_importance_signed`, and `train_out$cooperative$feature_importance_signed_by_layer`: coefficient-based survival feature-importance scores from the selected cooperative `multiview` Cox model when `run_intermediate = TRUE`.
 * `valid_out$...`: Validation analogs of single/early/late outputs (if validation provided).
-* `train_out$late$combined_importance` and (if available) `train_out$early$combined_importance`: survival feature-importance outputs.
+* `train_out$late$IBS$combined_importance`, `train_out$late$COX$combined_importance`, and (if available) `train_out$early$combined_importance`: survival feature-importance outputs.
 
 Citation
 --------

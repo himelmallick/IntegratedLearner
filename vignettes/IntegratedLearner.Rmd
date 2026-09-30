@@ -348,7 +348,7 @@ This section summarizes the outputs produced by each integration method and wher
 | Single-layer (per omics layer) | Layer-specific predictions and metrics | `fit$yhat.train[, layer_name]`, `fit$yhat.test[, layer_name]` (if validation), `fit$AUC.train` / `fit$AUC.test`, `fit$accuracy.train` / `fit$accuracy.test`, `fit$balanced_accuracy.train` / `fit$balanced_accuracy.test` (binomial), `fit$R2.train` / `fit$R2.test` (gaussian) |
 | Early fusion (concatenated) | One model on all features concatenated | Enable with `run_concat = TRUE`; outputs in `fit$yhat.train[, "concatenated"]`, `fit$model_fits$model_concat`, `fit$SL_fits$SL_fit_concat` |
 | Late fusion (stacked) | Meta-model over layer-level predictions | Enable with `run_stacked = TRUE`; outputs in `fit$yhat.train[, "stacked"]`, `fit$model_fits$model_stacked`, `fit$SL_fits$SL_fit_stacked` |
-| Cooperative/intermediate fusion | Standalone cooperative `multiview` model trained on layer feature matrices | Enable with `run_intermediate = TRUE`; outputs in `fit$yhat.train[, "cooperative"]`, `fit$yhat.test[, "cooperative"]`, `fit$model_fits$model_cooperative`, `fit$cooperative_rho`, and `fit$cooperative_rho_scores`. No base learner, early-fusion, or late-fusion objects are returned in this mode. |
+| Cooperative/intermediate fusion | Standalone cooperative `multiview` model trained on layer feature matrices | Enable with `run_intermediate = TRUE`; outputs in `fit$yhat.train[, "cooperative"]`, `fit$yhat.test[, "cooperative"]`, `fit$model_fits$model_cooperative`, `fit$cooperative_rho`, `fit$cooperative_rho_scores`, and coefficient-based cooperative importance fields. No base learner, early-fusion, or late-fusion objects are returned in this mode. |
 | Layer weights (stacked) | Relative contribution of each layer in late fusion | `fit$weights` (available when `meta_learner = "sl_nnls_auc"` and `run_stacked = TRUE`) |
 | Binary metric table | Per-model AUC, accuracy, and balanced accuracy | `fit$metrics.train` and `fit$metrics.test` (if validation provided) |
 
@@ -371,7 +371,7 @@ This section summarizes the outputs produced by each integration method and wher
 | Single-layer | `fit$train_out$single$metrics`, `fit$train_out$single$train_risk` | `fit$valid_out$single$valid_cindex`, `fit$valid_out$single$valid_auc`, `fit$valid_out$single$valid_risk` |
 | Early fusion | `fit$train_out$early$train_cindex`, `fit$train_out$early$train_auc`, `fit$train_out$early$train_risk` | `fit$valid_out$early$valid_cindex`, `fit$valid_out$early$valid_auc`, `fit$valid_out$early$valid_risk` |
 | Late fusion | `fit$train_out$late$IBS` and `fit$train_out$late$COX`, each containing weights, C-index, time-dependent AUC, and risks | `fit$valid_out$late$IBS` and `fit$valid_out$late$COX`, with the analogous validation metrics |
-| Cooperative/intermediate fusion | Standalone `fit$train_out$cooperative`, containing the selected `multiview` model, C-index, time-dependent AUC, and risk scores | `fit$valid_out$cooperative`, with analogous validation metrics and risk scores. `single`, `early`, and `late` outputs are `NULL` in this mode. |
+| Cooperative/intermediate fusion | Standalone `fit$train_out$cooperative`, containing the selected `multiview` model, C-index, time-dependent AUC, risk scores, and coefficient-based feature-importance scores | `fit$valid_out$cooperative`, with analogous validation metrics and risk scores. `single`, `early`, and `late` outputs are `NULL` in this mode. |
 | Survival plotting payload | `fit$surv_plot_data$train` | `fit$surv_plot_data$valid` |
 
 ### Importance Outputs (Conbin, Multiclass, and Survival)
@@ -380,9 +380,14 @@ This section summarizes the outputs produced by each integration method and wher
 |---|---|---|
 | Conbin signed global feature importance | `fit$feature_importance_signed` | Always returned for non-survival fits; named numeric vector sorted by effect magnitude/sign. |
 | Conbin signed per-layer importance | `fit$feature_importance_signed_by_layer` | List split by `featureType`. |
+| Cooperative absolute importance | `fit$cooperative_feature_importance` and `fit$cooperative_feature_importance_by_layer` | Absolute selected-model `multiview` coefficients; available when `run_intermediate = TRUE`. |
+| Cooperative signed importance | `fit$cooperative_feature_importance_signed` and `fit$cooperative_feature_importance_signed_by_layer` | Signed selected-model `multiview` coefficients; available when `run_intermediate = TRUE`. |
 | Multiclass signed global feature importance | `fit$feature_importance_global` | Global score aggregated across multiclass contrasts. |
 | Multiclass signed importance by class | `fit$feature_importance_signed_by_class` | List with one signed vector per class. |
 | Multiclass signed importance by layer and class | `fit$feature_importance_signed_by_layer_by_class` | Nested list by layer then class. |
+| Survival signed per-layer importance | `fit$train_out$single$feature_importance_signed_by_layer` | List of unweighted signed feature-importance scores from each single-layer survival base model. |
+| Cooperative survival importance | `fit$train_out$cooperative$feature_importance` and `fit$train_out$cooperative$feature_importance_by_layer` | Absolute selected-model `multiview` Cox coefficients; available when `run_intermediate = TRUE`. |
+| Cooperative survival signed importance | `fit$train_out$cooperative$feature_importance_signed` and `fit$train_out$cooperative$feature_importance_signed_by_layer` | Signed selected-model `multiview` Cox coefficients; available when `run_intermediate = TRUE`. |
 | Survival early-fusion combined importance | `fit$train_out$early$combined_importance` | Available when `do_early_fusion = TRUE`. |
 | Survival late-fusion combined importance | `fit$train_out$late$IBS$combined_importance` or `fit$train_out$late$COX$combined_importance` | Weighted signed importance; names are prefixed like `layer::feature`. |
 | BART-specific layer importance (optional) | `bartMachine::investigate_var_importance(fit$model_fits$model_layers[[layer]], plot = FALSE)` | Only for BART-based conbin fits (`base_learner = "sl_bart"`). |
@@ -395,6 +400,8 @@ fit$weights
 fit$cooperative_rho
 fit$cooperative_rho_scores
 head(fit$yhat.train[, "cooperative"], 10)
+head(fit$cooperative_feature_importance, 20)
+head(fit$cooperative_feature_importance_by_layer[[1]], 20)
 head(fit$feature_importance_signed, 20)
 names(fit$feature_importance_signed_by_layer)
 head(fit$feature_importance_signed_by_layer[[1]], 20)
@@ -413,6 +420,10 @@ fit_surv$train_out$late$IBS$weights
 fit_surv$train_out$late$COX$weights
 fit_surv$train_out$cooperative$train_cindex
 fit_surv$cooperative_rho
+head(fit_surv$train_out$cooperative$feature_importance, 20)
+head(fit_surv$train_out$cooperative$feature_importance_by_layer[[1]], 20)
+names(fit_surv$train_out$single$feature_importance_signed_by_layer)
+head(fit_surv$train_out$single$feature_importance_signed_by_layer[[1]], 20)
 head(fit_surv$train_out$late$IBS$combined_importance, 20)
 head(fit_surv$train_out$late$COX$combined_importance, 20)
 
@@ -525,6 +536,8 @@ fit_coop$cooperative_rho_scores
 fit_coop$metrics.train
 fit_coop$metrics.test
 head(fit_coop$yhat.test[, "cooperative"])
+head(fit_coop$cooperative_feature_importance, 20)
+head(fit_coop$cooperative_feature_importance_by_layer[[1]], 20)
 ```
 
 ## Example 2: Continuous Outcome (Gestational Age)
@@ -896,6 +909,8 @@ fit_surv_mae$valid_out$single$valid_cindex
 # fit_surv_coop$cooperative_rho_scores
 # fit_surv_coop$train_out$cooperative$train_cindex
 # fit_surv_coop$valid_out$cooperative$valid_cindex
+# head(fit_surv_coop$train_out$cooperative$feature_importance, 20)
+# head(fit_surv_coop$train_out$cooperative$feature_importance_by_layer[[1]], 20)
 ```
 
 The `train_auc` and `valid_auc` objects for both `IBS` and `COX` are data frames with `time` and `AUC` columns, so they can be plotted as true time-dependent discrimination curves. In practice, these two late-fusion outputs provide complementary summaries over the same single-layer and early-fusion backbone, making side-by-side comparison possible within one fit object.

@@ -137,7 +137,13 @@ IL_survival().}
 \value{
 A list-like IntegratedLearner object containing fitted layer-specific,
 stacked, and concatenated models, cross-validated performance (AUC or R\302\262),
-and predictions for training and validation sets.
+and predictions for training and validation sets. When
+\code{run_intermediate = TRUE}, coefficient-based cooperative
+feature-importance scores from the selected \pkg{multiview} model are
+returned in \code{cooperative_feature_importance},
+\code{cooperative_feature_importance_by_layer},
+\code{cooperative_feature_importance_signed}, and
+\code{cooperative_feature_importance_signed_by_layer}.
 }
 \description{
 Performs integrated machine learning to predict a \strong{binary or continuous}
