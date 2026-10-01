@@ -1612,7 +1612,7 @@ with a meta-learner (<code>meta_learner</code>).</p>
 <span><span class="co">#&gt; CV SL.randomForest_screen.il.glmnet</span></span>
 <span><span class="co">#&gt; Non-Negative least squares convergence: TRUE</span></span>
 <span><span class="co">#&gt; full SL.randomForest_screen.il.glmnet</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.084 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.073 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Model fit for individual layers: SL.randomForest </span></span>
 <span><span class="co">#&gt; Model fit for stacked layer: sl_nnls_auc </span></span>
@@ -1796,7 +1796,7 @@ bytecode). In that case, either:</p>
 <span>  screen_pct <span class="op">=</span> <span class="fl">30</span>,</span>
 <span>  family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">gaussian</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.498 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.462 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Model fit for individual layers: sl_bart </span></span>
 <span><span class="co">#&gt; Model fit for stacked layer: sl_nnls_auc </span></span>
@@ -2075,7 +2075,7 @@ and pass them through <code>outcome_col</code> and
 <span><span class="co">#&gt; Running multiclass base model for layer 2...</span></span>
 <span><span class="co">#&gt; Running multiclass stacked model...</span></span>
 <span><span class="co">#&gt; Running multiclass concatenated model...</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.146 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.099 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Multiclass model fit with 3 classes</span></span>
 <span><span class="co">#&gt; Base learner: glmnet </span></span>
@@ -2231,7 +2231,7 @@ best fused survival model.</li>
 <span><span class="co"># Late fusion (two weighted integration summaries)</span></span>
 <span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">IBS</span><span class="op">$</span><span class="va">weights</span></span>
 <span><span class="co">#&gt;         gene        mirna </span></span>
-<span><span class="co">#&gt; 9.999989e-01 1.143657e-06</span></span>
+<span><span class="co">#&gt; 9.999989e-01 1.143658e-06</span></span>
 <span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">IBS</span><span class="op">$</span><span class="va">train_cindex</span></span>
 <span><span class="co">#&gt; [1] 0.5155855</span></span>
 <span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">IBS</span><span class="op">$</span><span class="va">train_auc</span></span>
