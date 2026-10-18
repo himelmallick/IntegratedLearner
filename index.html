@@ -33,7 +33,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.3</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.4</span>
       </span>
     </div>
 
@@ -72,26 +72,24 @@
 <div class="page-header"><h1 id="integratedlearner---integrated-machine-learning-for-multi-omics-prediction-and-classification">IntegratedLearner - Integrated machine learning for multi-omics prediction and classification<a class="anchor" aria-label="anchor" href="#integratedlearner---integrated-machine-learning-for-multi-omics-prediction-and-classification"></a>
 </h1></div>
 <p>The repository houses the <strong><code>IntegratedLearner</code></strong> R package for multi-omics prediction and classification. Binary, multiclass, continuous, and survival outcomes are supported through a single high-level interface.</p>
-<div class="section level2">
-<h2 id="dependencies">Dependencies<a class="anchor" aria-label="anchor" href="#dependencies"></a>
-</h2>
-<p><code>IntegratedLearner</code> requires the following <code>R</code> package: <code>devtools</code> (for installation only). Please install it before installing <code>IntegratedLearner</code>, which can be done as follows (execute from within a fresh R session):</p>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"devtools"</span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://devtools.r-lib.org/" class="external-link">devtools</a></span><span class="op">)</span></span></code></pre></div>
 <p>Optional dependency for BART workflows: - <code>sl_bart</code> and BART uncertainty utilities rely on <code>bartMachine</code> and a working Java setup. - If Java/BART are unavailable, use another continuous/binary learner (<code>SL.randomForest</code> is a standard SuperLearner alternative) or a native multiclass learner for multiclass outcomes.</p>
+<div class="section level2">
+<h2 id="code-entry-points">Code entry points<a class="anchor" aria-label="anchor" href="#code-entry-points"></a>
+</h2>
+<p>Use <code><a href="reference/IntegratedLearner.html">IntegratedLearner()</a></code> to fit models and the S3 generics <code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code>, <code><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot()</a></code>, <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code>, and <code><a href="https://rdrr.io/r/stats/update.html" class="external-link">update()</a></code> to work with fitted models. Existing low-level <code>IL_*</code>, <code>ILsurv</code>, and solver exports are retained for compatibility; package-provided SuperLearner wrappers use <code>sl_*</code> names.</p>
+<p>Seven small MAE tutorial fixtures live in <code>inst/extdata</code> and total about <strong>258 KB</strong>. Each assay has at most <strong>25 variable features</strong>; paired cohorts share feature IDs and order. All samples and outcomes are retained. Read the RDS files directly using <code>readRDS(system.file("extdata", "PRISM_MAE.rds", package = "IntegratedLearner"))</code>; see the <a href="inst/extdata/README.html">fixture inventory</a> and <a href="inst/scripts/build_mae_vignette_data.R">selection recipe</a>. The former <code><a href="https://rdrr.io/r/utils/data.html" class="external-link">data()</a></code> objects, raw tables, and duplicate PCL datasets have been removed. PCL inputs remain supported using user-supplied data.</p>
 </div>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
 <p>Once the dependencies are installed, <code>IntegratedLearner</code> can be loaded using the following command:</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"BiocManager"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"BiocManager"</span><span class="op">)</span></span>
 <span><span class="op">}</span></span>
 <span><span class="fu">BiocManager</span><span class="fu">::</span><span class="fu"><a href="https://bioconductor.github.io/BiocManager/reference/install.html" class="external-link">install</a></span><span class="op">(</span><span class="st">"IntegratedLearner"</span><span class="op">)</span></span></code></pre></div>
 <p>For the development version, use:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">BiocManager</span><span class="fu">::</span><span class="fu"><a href="https://bioconductor.github.io/BiocManager/reference/install.html" class="external-link">install</a></span><span class="op">(</span><span class="st">"himelmallick/IntegratedLearner"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
@@ -139,8 +137,12 @@
 <h2 id="basic-usage">Basic Usage<a class="anchor" aria-label="anchor" href="#basic-usage"></a>
 </h2>
 <p>Recommended MAE-first Bioconductor workflow:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"PRISM_MAE"</span>, package <span class="op">=</span> <span class="st">"IntegratedLearner"</span><span class="op">)</span></span>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/himelmallick/IntegratedLearner" class="external-link">IntegratedLearner</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">PRISM_MAE</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span></span>
+<span>  <span class="st">"extdata"</span>, <span class="st">"PRISM_MAE.rds"</span>, package <span class="op">=</span> <span class="st">"IntegratedLearner"</span>, mustWork <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">mae_train</span> <span class="op">&lt;-</span> <span class="va">PRISM_MAE</span></span>
 <span></span>
@@ -151,7 +153,7 @@
 <span><span class="va">se</span> <span class="op">&lt;-</span> <span class="fu">MultiAssayExperiment</span><span class="fu">::</span><span class="fu"><a href="https://github.com/waldronlab/MultiAssayExperiment/reference/MultiAssayExperiment-methods.html" class="external-link">experiments</a></span><span class="op">(</span><span class="va">mae_train</span><span class="op">)</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span></span>
 <span><span class="fu">SummarizedExperiment</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/SummarizedExperiment/man/SummarizedExperiment-class.html" class="external-link">assayNames</a></span><span class="op">(</span><span class="va">se</span><span class="op">)</span></span></code></pre></div>
 <p>Then fit the model directly from the MAE:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># MAE mode (binary/continuous)</span></span>
 <span><span class="fu"><a href="reference/IntegratedLearner.html">IntegratedLearner</a></span><span class="op">(</span></span>
 <span>  MAE_train <span class="op">=</span> <span class="va">mae_train</span>,</span>

@@ -17,7 +17,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.3</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.4</span>
       </span>
     </div>
 
@@ -56,7 +56,8 @@
     </div>
 
     <div id="ref-usage">
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">update.learner</span><span class="op">(</span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># S3 method for class 'learner'</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/update.html" class="external-link">update</a></span><span class="op">(</span></span>
 <span>  <span class="va">object</span>,</span>
 <span>  <span class="va">feature_table_valid</span>,</span>
 <span>  sample_metadata_valid <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -153,7 +154,7 @@ outcomes and corresponding performance summaries.</p>
 <span class="r-in"><span>  run_stacked <span class="op">=</span> <span class="cn">FALSE</span>, run_concat <span class="op">=</span> <span class="cn">FALSE</span>,</span></span>
 <span class="r-in"><span>  print_learner <span class="op">=</span> <span class="cn">FALSE</span>, family <span class="op">=</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">binomial</a></span><span class="op">(</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">upd</span> <span class="op">&lt;-</span> <span class="fu">update.learner</span><span class="op">(</span></span></span>
+<span class="r-in"><span><span class="va">upd</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/update.html" class="external-link">update</a></span><span class="op">(</span></span></span>
 <span class="r-in"><span>  object <span class="op">=</span> <span class="va">fit</span>,</span></span>
 <span class="r-in"><span>  feature_table_valid <span class="op">=</span> <span class="va">feature_table_valid</span>,</span></span>
 <span class="r-in"><span>  sample_metadata_valid <span class="op">=</span> <span class="va">sample_metadata_valid</span>,</span></span>

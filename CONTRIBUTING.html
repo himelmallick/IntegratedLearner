@@ -17,7 +17,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.3</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.4</span>
       </span>
     </div>
 
@@ -116,7 +116,7 @@
 <li>Document all exported functions with roxygen2, including <code>@param</code>, <code>@return</code>, and a runnable <code>@examples</code> block.</li>
 <li>Use <code>MultiAssayExperiment</code> / <code>SummarizedExperiment</code> classes for multi-omics containers rather than introducing new bespoke structures — interoperability with the Bioconductor ecosystem is a core design goal.</li>
 <li>Avoid adding heavy dependencies. New packages should go in <code>Suggests</code> unless they are essential to core functionality.</li>
-<li>Do not commit large data files. Example data belongs in <code>data/</code> or <code>inst/extdata/</code> and should be small.</li>
+<li>Do not commit large data files. Tutorial data belongs in <code>inst/extdata/</code> as small MAE RDS files; do not duplicate it as raw tables or PCL objects.</li>
 </ul></div>
 <div class="section level2">
 <h2 id="adding-a-new-learner">Adding a new learner<a class="anchor" aria-label="anchor" href="#adding-a-new-learner"></a></h2>
