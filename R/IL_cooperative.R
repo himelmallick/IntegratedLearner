@@ -64,8 +64,6 @@ fit_cooperative_multiview <- function(
   x_list, y, family_name, fold_id, rho = c(0, 0.1, 0.25, 0.5, 1),
   type_measure = NULL, s = "lambda.min", seed = 1234, trace.it = 0, ...
 ) {
-  require_package("multiview")
-
   if (is.null(type_measure)) {
     type_measure <- default_multiview_type_measure(family_name)
   }
@@ -81,7 +79,7 @@ fit_cooperative_multiview <- function(
     )
   }
 
-  set_seed_internal(seed)
+  withr::local_seed(as.integer(seed[1]))
   family_arg <- multiview_family_arg(family_name)
   fits <- lapply(rho, function(r) {
     multiview::cv.multiview(
@@ -237,6 +235,52 @@ predict_cooperative_vector <- function(fit_obj, x_list) {
   as.numeric(drop(pred))
 }
 
+# Outcome-specific callers supply the response and fold IDs. Matrix construction,
+# cooperative tuning, and result metadata stay shared across outcome families.
+fit_intermediate_model <- function(
+  feature_table, feature_metadata, y, family_name, fold_id, seed,
+  cooperative_rho, cooperative_s, cooperative_type_measure, verbose
+) {
+  layers <- extract_layer_names(feature_metadata)
+  x_train <- build_multiview_x_list(feature_table, feature_metadata, layers)
+  if (isTRUE(verbose)) {
+    message("Running standalone cooperative multiview model (", family_name, ")...")
+  }
+  model <- fit_cooperative_multiview(
+    x_list = x_train, y = y, family_name = family_name, fold_id = fold_id,
+    rho = cooperative_rho, type_measure = cooperative_type_measure,
+    s = cooperative_s, seed = cooperative_seed(seed),
+    trace.it = as.integer(isTRUE(verbose))
+  )
+  list(model = model, x_train = x_train, layers = layers)
+}
+
+intermediate_result_metadata <- function(model, layers, feature_names, importance) {
+  list(
+    base_learner = NULL,
+    screening_used = FALSE,
+    screen_method = NULL,
+    screen_pct = NULL,
+    run_intermediate = TRUE,
+    cooperative_rho = model$rho,
+    cooperative_rho_grid = model$rho_grid,
+    cooperative_rho_scores = model$rho_scores,
+    cooperative_s = model$s,
+    cooperative_type_measure = model$type_measure,
+    drop_poor_performing_layers = FALSE,
+    fusion_layers_retained = layers,
+    fusion_layers_removed = character(),
+    fusion_layer_scores = NULL,
+    fusion_layer_metric = NULL,
+    fusion_layer_threshold = NULL,
+    cooperative_feature_importance = importance$importance,
+    cooperative_feature_importance_by_layer = importance$importance_by_layer,
+    cooperative_feature_importance_signed = importance$signed,
+    cooperative_feature_importance_signed_by_layer = importance$signed_by_layer,
+    feature.names = feature_names
+  )
+}
+
 fit_intermediate_conbin <- function(
   feature_table, sample_metadata, feature_metadata, feature_table_valid = NULL,
   sample_metadata_valid = NULL, folds = 5, seed = 1234, family = stats::gaussian(),
@@ -261,23 +305,14 @@ fit_intermediate_conbin <- function(
     folds = folds,
     seed = seed
   )
-  layer_names <- extract_layer_names(feature_metadata)
-  x_train <- build_multiview_x_list(
-    feature_table = feature_table,
-    feature_metadata = feature_metadata,
-    layers = layer_names
-  )
   y_train <- sample_metadata$Y
-
-  if (isTRUE(verbose)) {
-    message("Running standalone cooperative multiview model...")
-  }
-  cooperative_fit <- fit_cooperative_multiview(
-    x_list = x_train, y = y_train, family_name = family_name,
-    fold_id = cv_partition$fold_id, rho = cooperative_rho,
-    type_measure = cooperative_type_measure, s = cooperative_s,
-    seed = seed + 13000, trace.it = as.integer(isTRUE(verbose))
+  shared <- fit_intermediate_model(
+    feature_table, feature_metadata, y_train, family_name, cv_partition$fold_id,
+    seed, cooperative_rho, cooperative_s, cooperative_type_measure, verbose
   )
+  x_train <- shared$x_train
+  layer_names <- shared$layers
+  cooperative_fit <- shared$model
   yhat_train <- data.frame(
     cooperative = prevalidated_cooperative_vector(cooperative_fit),
     row.names = rownames(sample_metadata),
@@ -309,32 +344,15 @@ fit_intermediate_conbin <- function(
     res$Y_test <- sample_metadata_valid$Y
   }
 
-  res$base_learner <- NULL
   res$meta_learner <- NULL
   res$base_screener <- NULL
   res$base_screener_used <- "none"
-  res$screening_used <- FALSE
-  res$screen_method <- NULL
-  res$screen_pct <- NULL
   res$filter_method <- filtered$filter_method
   res$filter_pct <- filtered$filter_pct
   res$prevalence_pct <- filtered$prevalence_pct
   res$run_concat <- FALSE
   res$run_stacked <- FALSE
-  res$run_intermediate <- TRUE
-  res$cooperative_rho <- cooperative_fit$rho
-  res$cooperative_rho_grid <- cooperative_fit$rho_grid
-  res$cooperative_rho_scores <- cooperative_fit$rho_scores
-  res$cooperative_s <- cooperative_s
-  res$cooperative_type_measure <- cooperative_fit$type_measure
-  res$drop_poor_performing_layers <- FALSE
-  res$fusion_layers_retained <- layer_names
-  res$fusion_layers_removed <- character()
-  res$fusion_layer_scores <- NULL
-  res$fusion_layer_metric <- NULL
-  res$fusion_layer_threshold <- NULL
   res$family <- family_name
-  res$feature.names <- rownames(feature_table)
   res$test <- !is.null(sample_metadata_valid)
   res$folds <- folds
   res$fold_id <- cv_partition$fold_id
@@ -352,15 +370,15 @@ fit_intermediate_conbin <- function(
   res$feature_importance_by_layer <- cooperative_importance$importance_by_layer
   res$feature_importance_signed <- cooperative_importance$signed
   res$feature_importance_signed_by_layer <- cooperative_importance$signed_by_layer
-  res$cooperative_feature_importance <- cooperative_importance$importance
-  res$cooperative_feature_importance_by_layer <- cooperative_importance$importance_by_layer
-  res$cooperative_feature_importance_signed <- cooperative_importance$signed
-  res$cooperative_feature_importance_signed_by_layer <- cooperative_importance$signed_by_layer
 
   stop.time <- Sys.time()
   res$time <- as.numeric(round(difftime(stop.time, start.time, units = "min"), 3),
     units = "mins"
   )
+  metadata <- intermediate_result_metadata(
+    cooperative_fit, shared$layers, rownames(feature_table), cooperative_importance
+  )
+  res[names(metadata)] <- metadata
   class(res) <- unique(c("cooperative_learner", "learner", class(res)))
   if (isTRUE(print_learner)) {
     print(res)
@@ -378,21 +396,12 @@ fit_intermediate_survival <- function(
   times <- as.numeric(sample_metadata$time)
   events <- as.numeric(sample_metadata$event)
   fold_id <- make_stratified_folds(times, events, folds = folds, seed = seed)
-  layers <- extract_layer_names(feature_metadata)
-
-  if (isTRUE(verbose)) {
-    message("Running standalone cooperative multiview survival model...")
-  }
-  x_train <- build_multiview_x_list(
-    feature_table = feature_table,
-    feature_metadata = feature_metadata,
-    layers = layers
+  shared <- fit_intermediate_model(
+    feature_table, feature_metadata, survival::Surv(times, events), "survival",
+    fold_id, seed, cooperative_rho, cooperative_s, cooperative_type_measure, verbose
   )
-  cooperative_fit <- fit_cooperative_multiview(
-    x_list = x_train, y = survival::Surv(times, events), family_name = "survival",
-    fold_id = fold_id, rho = cooperative_rho, type_measure = cooperative_type_measure,
-    s = cooperative_s, seed = seed + 13000, trace.it = as.integer(isTRUE(verbose))
-  )
+  layers <- shared$layers
+  cooperative_fit <- shared$model
   train_risk <- prevalidated_cooperative_vector(cooperative_fit)
   train_met <- compute_auc_cindex(times, events, train_risk)
   cooperative_importance <- extract_cooperative_feature_importance(cooperative_fit)
@@ -440,12 +449,8 @@ fit_intermediate_survival <- function(
       NULL
     },
     backend = "cooperative_multiview",
-    base_learner = NULL,
     supported_learners = "multiview",
     fold_id = fold_id,
-    screening_used = FALSE,
-    screen_method = NULL,
-    screen_pct = NULL,
     surv_plot_data = list(
       train = list(time = times, event = events),
       valid = if (!is.null(valid_sample_metadata)) {
@@ -454,29 +459,16 @@ fit_intermediate_survival <- function(
         NULL
       }
     ),
-    drop_poor_performing_layers = FALSE,
     late_methods = character(),
-    run_intermediate = TRUE,
-    cooperative_rho = cooperative_fit$rho,
-    cooperative_rho_grid = cooperative_fit$rho_grid,
-    cooperative_rho_scores = cooperative_fit$rho_scores,
-    cooperative_s = cooperative_s,
-    cooperative_type_measure = cooperative_fit$type_measure,
-    fusion_layers_retained = layers,
-    fusion_layers_removed = character(),
-    fusion_layer_scores = NULL,
-    fusion_layer_metric = NULL,
-    fusion_layer_threshold = NULL,
     family = "survival",
-    cooperative_feature_importance = cooperative_importance$importance,
-    cooperative_feature_importance_by_layer = cooperative_importance$importance_by_layer,
-    cooperative_feature_importance_signed = cooperative_importance$signed,
-    cooperative_feature_importance_signed_by_layer = cooperative_importance$signed_by_layer,
-    feature.names = rownames(feature_table),
     time = as.numeric(round(difftime(stop.time, start.time, units = "min"), 3),
       units = "mins"
     )
   )
+  metadata <- intermediate_result_metadata(
+    cooperative_fit, shared$layers, rownames(feature_table), cooperative_importance
+  )
+  res[names(metadata)] <- metadata
   class(res) <- unique(c("cooperative_learner", "learner", class(res)))
   res
 }

@@ -1,14 +1,6 @@
-# This is a basic utility function to plot the top 20 feasture importance
-# scores based on BART posterior samples.  Depends on the library bartMachine.
+# Plot feature importance from BART posterior samples.
 VarImp.learner <- function(fit, num.var = 20, layer.names = NULL) {
-  # required optional packages
-  require_package("bartMachine")
-  require_package("ggplot2")
-  require_package("dplyr")
-  require_package("tibble")
-
-  ################################################ Extract required elements
-  ################################################ from the IL object #
+  # Extract stacking weights from the fitted model.
 
   if (fit$meta_learner == "sl_nnls_auc") {
     VIMP_stack <- cbind.data.frame(fit$weights)
@@ -19,45 +11,39 @@ VarImp.learner <- function(fit, num.var = 20, layer.names = NULL) {
     VIMP_stack <- NULL
   }
 
-  if (fit$base_learner == "sl_bart") {
-    if (is.null(layer.names)) {
-      layer.names <- names(fit$model_fits$model_layers)
-    }
-
-    if (!all(layer.names %in% names(fit$model_fits$model_layers))) {
-      invalid_layers <- layer.names[!(layer.names %in% names(fit$model_fits$model_layers))]
-      invalid_layers_txt <- toString(invalid_layers)
-      stop("Invalid layer name(s): ", invalid_layers_txt, ".", call. = FALSE)
-    }
-
-    ####################################################### Extract
-    ####################################################### per-layer
-    ####################################################### feature
-    ####################################################### importance
-    ####################################################### scores (VIMPs)
-    ####################################################### #
-
-    VIMP_list <- list()
-
-    for (i in seq_along(layer.names)) {
-      qq <- bartMachine::investigate_var_importance(fit$model_fits$model_layers[[layer.names[i]]],
-        plot = FALSE
-      )
-
-      VIMP_layer <- cbind.data.frame(qq$avg_var_props, qq$sd_var_props)
-      colnames(VIMP_layer) <- c("mean", "sd")
-      VIMP_layer$type <- layer.names[i]
-
-      n_keep <- min(as.integer(num.var), nrow(VIMP_layer))
-      VIMP_list[[i]] <- VIMP_layer[seq_len(n_keep), , drop = FALSE]
-    }
-
-    VIMP <- dplyr::bind_rows(VIMP_list)
-  } else {
+  if (!identical(fit$base_learner, "sl_bart")) {
     stop("This functionality is currently available only for BART base learner")
   }
 
-  ########################### Feature importance plot #
+  if (is.null(layer.names)) {
+    layer.names <- names(fit$model_fits$model_layers)
+  }
+
+  if (!all(layer.names %in% names(fit$model_fits$model_layers))) {
+    invalid_layers <- layer.names[!(layer.names %in% names(fit$model_fits$model_layers))]
+    invalid_layers_txt <- toString(invalid_layers)
+    stop("Invalid layer name(s): ", invalid_layers_txt, ".", call. = FALSE)
+  }
+
+  # Extract per-layer feature importance and posterior standard deviations.
+  VIMP_list <- list()
+
+  for (i in seq_along(layer.names)) {
+    qq <- bartMachine::investigate_var_importance(fit$model_fits$model_layers[[layer.names[i]]],
+      plot = FALSE
+    )
+
+    VIMP_layer <- cbind.data.frame(qq$avg_var_props, qq$sd_var_props)
+    colnames(VIMP_layer) <- c("mean", "sd")
+    VIMP_layer$type <- layer.names[i]
+
+    n_keep <- min(as.integer(num.var), nrow(VIMP_layer))
+    VIMP_list[[i]] <- VIMP_layer[seq_len(n_keep), , drop = FALSE]
+  }
+
+  VIMP <- dplyr::bind_rows(VIMP_list)
+
+  # Plot feature importance by layer.
 
   if (!is.null(VIMP_stack)) {
     VIMP <- as.data.frame(rbind.data.frame(VIMP_stack, VIMP))

@@ -123,7 +123,9 @@
 #' selected \pkg{multiview} model.
 #'
 #' @examples
-#' data("PRISM_MAE", package = "IntegratedLearner")
+#' PRISM_MAE <- readRDS(system.file(
+#'   "extdata", "PRISM_MAE.rds", package = "IntegratedLearner", mustWork = TRUE
+#' ))
 #' mae <- PRISM_MAE
 #' names(MultiAssayExperiment::experiments(mae))
 #' head(as.data.frame(S4Vectors::DataFrame(MultiAssayExperiment::colData(mae)))[, 1:4])
@@ -143,6 +145,7 @@
 #' @author Himel Mallick, \email{him4004@@med.cornell.edu}
 #'
 #' @keywords microbiome metagenomics multiomics scRNASeq tweedie singlecell
+#' @importClassesFrom MultiAssayExperiment MultiAssayExperiment
 #' @importFrom stats setNames
 #' @importFrom ranger ranger
 #' @importFrom utils type.convert
@@ -220,16 +223,11 @@ IntegratedLearner <- function(
     }
   }
 
-  # Align validation feature order to training if the sets match
-  if (!is.null(feature_table_valid)) {
-    if (setequal(rownames(feature_table), rownames(feature_table_valid)) && !identical(
-      rownames(feature_table),
-      rownames(feature_table_valid)
-    )) {
-      feature_table_valid <- feature_table_valid[rownames(feature_table), ,
-        drop = FALSE
-      ]
-    }
+  # Align validation feature order to training if the sets match.
+  if (!is.null(feature_table_valid) &&
+      setequal(rownames(feature_table), rownames(feature_table_valid)) &&
+      !identical(rownames(feature_table), rownames(feature_table_valid))) {
+    feature_table_valid <- feature_table_valid[rownames(feature_table), , drop = FALSE]
   }
 
   is_multiclass <- FALSE

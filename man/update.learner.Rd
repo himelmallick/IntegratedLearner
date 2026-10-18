@@ -4,7 +4,7 @@
 \alias{update.learner}
 \title{Update IntegratedLearner fit object based on layers available in the test set}
 \usage{
-update.learner(
+\method{update}{learner}(
   object,
   feature_table_valid,
   sample_metadata_valid = NULL,
@@ -79,7 +79,7 @@ fit <- IntegratedLearner(
   run_stacked = FALSE, run_concat = FALSE,
   print_learner = FALSE, family = stats::binomial()
 )
-upd <- update.learner(
+upd <- update(
   object = fit,
   feature_table_valid = feature_table_valid,
   sample_metadata_valid = sample_metadata_valid,

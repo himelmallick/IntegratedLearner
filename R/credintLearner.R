@@ -16,13 +16,8 @@ credint.learner <- function(fit,
                             model = NULL,
                             class = NULL,
                             ...) {
-  require_package("bayesplot")
-  require_package("ggplot2")
-
   # Multiclass BART path (native mbart backend)
   if (identical(fit$family, "multinomial")) {
-    require_package("BART")
-
     if (isTRUE(test)) {
       if (!isTRUE(fit$test)) {
         stop("No test set information available as part of the fit object", call. = FALSE)
@@ -103,15 +98,14 @@ credint.learner <- function(fit,
         stop("Missing concatenated feature names in fitted model.", call. = FALSE)
       }
       if (!all(feat %in% colnames(full_dat))) {
-        if (ncol(full_dat) == length(feat)) {
-          warning(
-            "Could not align concatenated columns by name; using positional alignment for uncertainty plotting.",
-            call. = FALSE
-          )
-          colnames(full_dat) <- feat
-        } else {
+        if (ncol(full_dat) != length(feat)) {
           stop("Cannot reconstruct concatenated design matrix for uncertainty plotting.", call. = FALSE)
         }
+        warning(
+          "Could not align concatenated columns by name; using positional alignment for uncertainty plotting.",
+          call. = FALSE
+        )
+        colnames(full_dat) <- feat
       }
       newX <- full_dat[, feat, drop = FALSE]
     }
@@ -245,8 +239,6 @@ credint.learner <- function(fit,
       call. = FALSE
     )
   }
-
-  require_package("bartMachine")
 
   weights <- fit$weights
 

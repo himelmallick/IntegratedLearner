@@ -2,7 +2,7 @@
 % Please edit documentation in R/IL_Utilities.R
 \name{sl_enet}
 \alias{sl_enet}
-\title{Elastic net regression, including lasso and ridge with optimized alpha and lambda}
+\title{Elastic net regression with optimized alpha and lambda}
 \usage{
 sl_enet(
   Y,
@@ -36,8 +36,7 @@ with proportional mean and variance, 'cox'.}
 \item{id}{Optional id to group observations from the same unit (not used
 currently).}
 
-\item{alpha}{Elastic net mixing parameter, range 0 to 1. 0 = ridge regression
-and 1 = lasso.}
+\item{alpha}{Numeric grid of elastic net mixing parameters between 0 and 1.}
 
 \item{nfolds}{Number of folds for internal cross-validation to optimize lambda.}
 
@@ -58,11 +57,7 @@ A list with elements \code{pred} (predictions for \code{newX}) and
 \code{fit} (cross-validated glmnet fit metadata).
 }
 \description{
-Penalized regression using elastic net. Alpha = 0 corresponds to ridge
-regression and alpha = 1 corresponds to Lasso.
-
-See \code{vignette('glmnet_beta', package = 'glmnet')} for a nice tutorial on
-glmnet.
+Selects alpha by cross-validation, then uses the shared glmnet fitting implementation.
 }
 \examples{
 set.seed(1)

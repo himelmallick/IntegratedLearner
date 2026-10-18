@@ -52,13 +52,15 @@
 #'   run_stacked = FALSE, run_concat = FALSE,
 #'   print_learner = FALSE, family = stats::binomial()
 #' )
-#' upd <- update.learner(
+#' upd <- update(
 #'   object = fit,
 #'   feature_table_valid = feature_table_valid,
 #'   sample_metadata_valid = sample_metadata_valid,
 #'   feature_metadata_valid = feature_metadata_valid
 #' )
 #' names(upd)
+#' @importFrom stats update
+#' @method update learner
 #' @export
 update.learner <- function(
   object, feature_table_valid, sample_metadata_valid = NULL,

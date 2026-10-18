@@ -288,28 +288,10 @@ test_that("late-fusion optimization helpers are exercised", {
   csurv_btime[!is.finite(csurv_btime) | csurv_btime <= 0] <- Inf
   fit_list <- list(surv1, surv2)
 
-  ibs_val <- IntegratedLearner:::ibs_measure(
-    weights = c(0.6, 0.4),
-    fit_list = fit_list,
-    time_grid = time_grid,
-    obj_surv = obj_surv,
-    ot = ot,
-    csurv = csurv,
-    csurv_btime = csurv_btime,
-    time_sorted = time_sorted
+  objective <- IntegratedLearner:::make_ibs_objective(
+    fit_list, time_grid, time_sorted, events[ot], csurv, csurv_btime
   )
-  expect_true(is.finite(ibs_val))
-
-  ibs_opt_val <- IntegratedLearner:::ibs_optim(
-    par = 0,
-    fit_list = fit_list,
-    time_grid = time_grid,
-    obj_surv = obj_surv,
-    ot = ot,
-    csurv = csurv,
-    csurv_btime = csurv_btime,
-    time_sorted = time_sorted
-  )
+  ibs_opt_val <- objective(0)
   expect_true(is.finite(ibs_opt_val))
 
   w_uniform <- IntegratedLearner:::learn_weights(layer_risk, times, events, "UNIFORM")

@@ -159,7 +159,7 @@ test_that("predict.learner validates inputs and returns aligned predictions", {
       object = fit, feature_table_valid = bad_ft,
       sample_metadata_valid = sample_metadata_valid, feature_metadata = pcl$feature_metadata
     ),
-    "Both feature_table and feature_table_valid should have the same rownames.",
+    "Training and validation feature tables must have identical row names in the same order.",
     fixed = TRUE
   )
 })
@@ -187,7 +187,7 @@ test_that("update.learner handles full and partial layer overlap", {
   ))
 
   capture.output({
-    fit_updated_full <- suppressWarnings(IntegratedLearner:::update.learner(
+    fit_updated_full <- suppressWarnings(stats::update(
       object = fit,
       feature_table_valid = feature_table_valid, sample_metadata_valid = sample_metadata_valid,
       feature_metadata_valid = pcl$feature_metadata, verbose = FALSE
@@ -203,7 +203,7 @@ test_that("update.learner handles full and partial layer overlap", {
   fm_partial <- pcl$feature_metadata[layer_a_features, , drop = FALSE]
 
   capture.output({
-    fit_updated_partial <- suppressWarnings(IntegratedLearner:::update.learner(
+    fit_updated_partial <- suppressWarnings(stats::update(
       object = fit,
       feature_table_valid = ft_partial, sample_metadata_valid = sample_metadata_valid,
       feature_metadata_valid = fm_partial, verbose = FALSE
@@ -216,7 +216,7 @@ test_that("update.learner handles full and partial layer overlap", {
   fm_no_overlap <- fm_partial
   fm_no_overlap$featureType <- "no_overlap_layer"
   expect_error(
-    IntegratedLearner:::update.learner(
+    stats::update(
       object = fit, feature_table_valid = ft_partial,
       sample_metadata_valid = sample_metadata_valid, feature_metadata_valid = fm_no_overlap,
       verbose = FALSE
@@ -239,7 +239,7 @@ test_that("update.learner covers stacked/concat, messages, and validation branch
   ))
 
   expect_error(
-    IntegratedLearner:::update.learner(
+    stats::update(
       object = structure(list(family = "poisson"), class = "learner"),
       feature_table_valid = pcl$feature_table,
       feature_metadata_valid = pcl$feature_metadata
@@ -249,7 +249,7 @@ test_that("update.learner covers stacked/concat, messages, and validation branch
   )
 
   expect_error(
-    IntegratedLearner:::update.learner(
+    stats::update(
       object = fit,
       feature_table_valid = NULL,
       feature_metadata_valid = pcl$feature_metadata
@@ -268,7 +268,7 @@ test_that("update.learner covers stacked/concat, messages, and validation branch
 
   expect_message(
     suppressWarnings(
-      upd_partial <- IntegratedLearner:::update.learner(
+      upd_partial <- stats::update(
         object = fit,
         feature_table_valid = ft_partial,
         sample_metadata_valid = sample_metadata_valid,
@@ -285,7 +285,7 @@ test_that("update.learner covers stacked/concat, messages, and validation branch
   fit_msg <- fit
   fit_msg$fusion_layers_retained <- "omicsB"
   expect_message(
-    suppressWarnings(IntegratedLearner:::update.learner(
+    suppressWarnings(stats::update(
       object = fit_msg,
       feature_table_valid = ft_partial,
       sample_metadata_valid = NULL,
@@ -299,7 +299,7 @@ test_that("update.learner covers stacked/concat, messages, and validation branch
   bad_fm_partial <- fm_partial
   bad_fm_partial$featureID <- rev(bad_fm_partial$featureID)
   expect_error(
-    IntegratedLearner:::update.learner(
+    stats::update(
       object = fit,
       feature_table_valid = ft_partial,
       sample_metadata_valid = sample_metadata_valid,
@@ -321,7 +321,7 @@ test_that("update.learner covers stacked/concat, messages, and validation branch
   sm_valid_g <- pcl_g$sample_metadata[valid_ids_g, , drop = FALSE]
   layer_g <- rownames(pcl_g$feature_metadata)[pcl_g$feature_metadata$featureType == "omicsA"]
   upd_g <- suppressWarnings(capture.output(
-    out_g <- IntegratedLearner:::update.learner(
+    out_g <- stats::update(
       object = fit_g,
       feature_table_valid = ft_valid_g[layer_g, , drop = FALSE],
       sample_metadata_valid = sm_valid_g,

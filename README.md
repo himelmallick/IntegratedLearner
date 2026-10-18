@@ -2,18 +2,25 @@
 
 The repository houses the **`IntegratedLearner`** R package for multi-omics prediction and classification. Binary, multiclass, continuous, and survival outcomes are supported through a single high-level interface.
 
-## Dependencies
-
-`IntegratedLearner` requires the following `R` package: `devtools` (for installation only). Please install it before installing `IntegratedLearner`, which can be done as follows (execute from within a fresh R session):
-
-```r
-install.packages("devtools")
-library(devtools)
-```
-
 Optional dependency for BART workflows:
 - `sl_bart` and BART uncertainty utilities rely on `bartMachine` and a working Java setup.
 - If Java/BART are unavailable, use another continuous/binary learner (`SL.randomForest` is a standard SuperLearner alternative) or a native multiclass learner for multiclass outcomes.
+
+## Code entry points
+
+Use `IntegratedLearner()` to fit models and the S3 generics `predict()`, `plot()`,
+`print()`, and `update()` to work with fitted models. Existing low-level `IL_*`,
+`ILsurv`, and solver exports are retained for compatibility; package-provided
+SuperLearner wrappers use `sl_*` names.
+
+Seven small MAE tutorial fixtures live in `inst/extdata` and total about **258 KB**.
+Each assay has at most **25 variable features**; paired cohorts share feature IDs
+and order. All samples and outcomes are retained. Read the RDS files directly
+using `readRDS(system.file("extdata", "PRISM_MAE.rds", package = "IntegratedLearner"))`;
+see the [fixture inventory](inst/extdata/README.md) and
+[selection recipe](inst/scripts/build_mae_vignette_data.R). The former `data()`
+objects, raw tables, and duplicate PCL datasets have been removed. PCL inputs
+remain supported using user-supplied data.
 
 ## Installation
 
@@ -78,7 +85,11 @@ Feature workflow (when enabled):
 Recommended MAE-first Bioconductor workflow:
 
 ```r
-data("PRISM_MAE", package = "IntegratedLearner")
+library(IntegratedLearner)
+
+PRISM_MAE <- readRDS(system.file(
+  "extdata", "PRISM_MAE.rds", package = "IntegratedLearner", mustWork = TRUE
+))
 
 mae_train <- PRISM_MAE
 

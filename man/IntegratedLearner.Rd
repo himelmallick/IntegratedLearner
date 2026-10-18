@@ -194,7 +194,9 @@ PCL-style inputs remain available for backward compatibility, but the
 primary user-facing workflow is MAE-based.
 }
 \examples{
-data("PRISM_MAE", package = "IntegratedLearner")
+PRISM_MAE <- readRDS(system.file(
+  "extdata", "PRISM_MAE.rds", package = "IntegratedLearner", mustWork = TRUE
+))
 mae <- PRISM_MAE
 names(MultiAssayExperiment::experiments(mae))
 head(as.data.frame(S4Vectors::DataFrame(MultiAssayExperiment::colData(mae)))[, 1:4])

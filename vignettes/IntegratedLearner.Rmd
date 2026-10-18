@@ -51,12 +51,20 @@ can_run_sl_bart <- function() {
   have_bart && !is.na(jv) && jv >= 21 && has_java_vector_module()
 }
 
-use_sl_bart <- isTRUE(can_run_sl_bart())
+use_sl_bart <- isTRUE(getOption("IntegratedLearner.tutorial_bart", FALSE)) &&
+  isTRUE(can_run_sl_bart())
 ```
 
 ## Introduction
 
 This vignette is a practical tutorial for binary, multiclass, continuous, and survival outcome workflows in `IntegratedLearner`.
+
+The examples use seven small MAE RDS files in `inst/extdata`, accessed directly
+with `readRDS(system.file("extdata", filename, package = "IntegratedLearner"))`.
+Each assay retains at most 25 variable features selected
+from training data in original order; validation uses identical feature IDs.
+All original samples and outcomes are kept. These subsets demonstrate the API;
+they are not intended to reproduce full-cohort scientific results.
 
 `IntegratedLearner` is designed for multi-omics studies where each assay layer can carry complementary signal and where users want a unified interface for standard integrated learning or standalone cooperative multiview learning. This makes the package a natural fit for Bioconductor workflows built around `MultiAssayExperiment`, `SummarizedExperiment`, and curated assay containers.
 
@@ -187,7 +195,9 @@ their inputs with the usual `MultiAssayExperiment` and `SummarizedExperiment`
 accessors before modeling:
 
 ```{r chunk-bioc-accessors}
-data("PRISM_MAE", package = "IntegratedLearner")
+PRISM_MAE <- readRDS(system.file(
+  "extdata", "PRISM_MAE.rds", package = "IntegratedLearner", mustWork = TRUE
+))
 
 mae_example <- PRISM_MAE
 
@@ -224,7 +234,9 @@ The shortest end-to-end pattern starts from packaged MAE data, uses standard
 Bioconductor accessors for inspection, and then fits `IntegratedLearner()`.
 
 ```{r chunk-mae-minimal, warning=FALSE}
-data("PRISM_MAE", package = "IntegratedLearner")
+PRISM_MAE <- readRDS(system.file(
+  "extdata", "PRISM_MAE.rds", package = "IntegratedLearner", mustWork = TRUE
+))
 
 mae_min <- PRISM_MAE
 
@@ -440,8 +452,12 @@ This section uses the packaged PRISM and NLIBD `MultiAssayExperiment` fixtures f
 ### Step 1: Load and Inspect Training and Validation Data
 
 ```{r chunk-05}
-data("PRISM_MAE", package = "IntegratedLearner")
-data("NLIBD_MAE", package = "IntegratedLearner")
+PRISM_MAE <- readRDS(system.file(
+  "extdata", "PRISM_MAE.rds", package = "IntegratedLearner", mustWork = TRUE
+))
+NLIBD_MAE <- readRDS(system.file(
+  "extdata", "NLIBD_MAE.rds", package = "IntegratedLearner", mustWork = TRUE
+))
 mae_train <- PRISM_MAE
 mae_valid <- NLIBD_MAE
 
@@ -547,7 +563,9 @@ This section uses the pregnancy dataset (Ghaemi et al., 2019), converted into `M
 ### Step 1: Load and Inspect Data
 
 ```{r chunk-10}
-data("pregnancy_MAE", package = "IntegratedLearner")
+pregnancy_MAE <- readRDS(system.file(
+  "extdata", "pregnancy_MAE.rds", package = "IntegratedLearner", mustWork = TRUE
+))
 mae_train <- pregnancy_MAE
 
 head(MultiAssayExperiment::colData(mae_train))
@@ -557,7 +575,10 @@ length(unique(MultiAssayExperiment::colData(mae_train)$subjectID))
 
 ### Step 2: Fit Continuous Model
 
-For this example, we use BART base learners (`sl_bart`).
+The tutorial uses the non-Java `SL.randomForest` learner by default. To run
+optional BART and uncertainty examples, set
+`options(IntegratedLearner.tutorial_bart = TRUE)` before rendering; these require
+a compatible Java installation.
 
 If you hit:
 
@@ -767,9 +788,17 @@ Here we keep the original outcome column name (`diseaseCat`) and subject ID
 column (`sample_id`) and pass them through `outcome_col` and
 `subject_id_col`.
 
+The small multiclass example uses a ranger base model and multinomial stacking.
+Supervised screening is already demonstrated above; it is disabled here because
+the fixture has only 25 features per assay.
+
 ```{r chunk-17}
-data("Franzosa_MAE_train", package = "IntegratedLearner")
-data("Franzosa_MAE_valid", package = "IntegratedLearner")
+Franzosa_MAE_train <- readRDS(system.file(
+  "extdata", "Franzosa_MAE_train.rds", package = "IntegratedLearner", mustWork = TRUE
+))
+Franzosa_MAE_valid <- readRDS(system.file(
+  "extdata", "Franzosa_MAE_valid.rds", package = "IntegratedLearner", mustWork = TRUE
+))
 
 MAE_train <- Franzosa_MAE_train
 MAE_valid <- Franzosa_MAE_valid
@@ -782,14 +811,13 @@ fit <- IntegratedLearner::IntegratedLearner(
   outcome_col = "diseaseCat",
   subject_id_col = "sample_id",
   family = stats::binomial(),
-  base_learner = "glmnet",
-  meta_learner = "glmnet",
+  base_learner = "ranger",
+  meta_learner = "multinom",
   run_stacked = TRUE,
   run_concat = TRUE,
   filter_method = "variance",
   filter_pct = 50,
-  run_screening = TRUE,
-  screen_pct = 25,
+  run_screening = FALSE,
   folds = 2,
   verbose = TRUE
 )
@@ -833,8 +861,12 @@ For plotting, the survival backend now stores:
 This section provides a complete MAE workflow.
 
 ```{r chunk-18}
-data("TCGA_survival_MAE_train", package = "IntegratedLearner")
-data("TCGA_survival_MAE_valid", package = "IntegratedLearner")
+TCGA_survival_MAE_train <- readRDS(system.file(
+  "extdata", "TCGA_survival_MAE_train.rds", package = "IntegratedLearner", mustWork = TRUE
+))
+TCGA_survival_MAE_valid <- readRDS(system.file(
+  "extdata", "TCGA_survival_MAE_valid.rds", package = "IntegratedLearner", mustWork = TRUE
+))
 
 mae_train <- TCGA_survival_MAE_train
 mae_valid <- TCGA_survival_MAE_valid

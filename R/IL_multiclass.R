@@ -145,9 +145,7 @@ IL_multiclass <- function(
       dplyr::filter(featureType == name_layers[i])
     lay_features <- include_list$featureID
 
-    dat_slice_all <- as.data.frame(t(feature_table[lay_features, , drop = FALSE]),
-      check.names = FALSE
-    )
+    dat_slice_all <- slice_feature_table(feature_table, lay_features)
     layer_screen <- fit_multiclass_screener(
       X = dat_slice_all, y = Y, screener_id = screener_id,
       seed = seed + 250 + i, screener_args = screener_args
@@ -175,9 +173,7 @@ IL_multiclass <- function(
     )
 
     if (!is.null(feature_table_valid)) {
-      dat_slice_valid_all <- as.data.frame(t(feature_table_valid[lay_features, ,
-        drop = FALSE
-      ]), check.names = FALSE)
+      dat_slice_valid_all <- slice_feature_table(feature_table_valid, lay_features)
       dat_slice_valid <- dat_slice_valid_all[, layer_screen$feature_names,
         drop = FALSE
       ]
@@ -233,7 +229,7 @@ IL_multiclass <- function(
       message("Running multiclass concatenated model...")
     }
 
-    fulldat_all <- as.data.frame(t(feature_table), check.names = FALSE)
+    fulldat_all <- slice_feature_table(feature_table, rownames(feature_table))
     concat_screen <- fit_multiclass_screener(
       X = fulldat_all, y = Y, screener_id = screener_id,
       seed = seed + 9000, screener_args = screener_args
@@ -254,7 +250,7 @@ IL_multiclass <- function(
     )
 
     if (!is.null(feature_table_valid)) {
-      fulldat_valid_all <- as.data.frame(t(feature_table_valid), check.names = FALSE)
+      fulldat_valid_all <- slice_feature_table(feature_table_valid, rownames(feature_table_valid))
       fulldat_valid <- fulldat_valid_all[, concat_selected_features, drop = FALSE]
       concat_valid_matrix <- fulldat_valid
       concat_valid_prob <- predict_multiclass_model_impl(
@@ -546,58 +542,6 @@ map_multiclass_meta_learner <- function(meta_learner) {
   "glmnet"
 }
 
-map_multiclass_screener <- function(base_screener) {
-  key <- normalize_multiclass_learner_name(base_screener)
-  alias_map <- list(
-    all = c("all", "slall", "none", "noscreener", "noscreen", "identity"),
-    anova = c("anova", "fstat", "screenanova", "slanova"), glmnet = c(
-      "glmnet",
-      "slglmnet", "screenglmnet"
-    ), randomforest = c(
-      "randomforest", "rf", "slrandomforest",
-      "screenrandomforest"
-    ), ranger = c("ranger", "slranger", "screenranger"),
-    xgboost = c("xgboost", "xgb", "slxgboost", "screenxgboost")
-  )
-  for (nm in names(alias_map)) {
-    if (key %in% alias_map[[nm]]) {
-      return(nm)
-    }
-  }
-  warning("base_screener '", base_screener, "' is not natively supported for multiclass screening in this backend; using all features.",
-    call. = FALSE
-  )
-  "all"
-}
-
-extract_multiclass_screen_args <- function(model_args = list()) {
-  if (length(model_args) == 0L) {
-    return(list(model_args = model_args, screener_args = list()))
-  }
-
-  arg_names <- names(model_args)
-  if (is.null(arg_names)) {
-    arg_names <- rep("", length(model_args))
-  }
-  is_screen <- nzchar(arg_names) & grepl("^screen_", arg_names)
-
-  screener_args <- model_args[is_screen]
-  if (length(screener_args) > 0L) {
-    names(screener_args) <- sub("^screen_", "", names(screener_args))
-  }
-
-  list(model_args = model_args[!is_screen], screener_args = screener_args)
-}
-
-require_multiclass_pkg <- function(pkg, learner_id) {
-  if (!requireNamespace(pkg, quietly = TRUE)) {
-    stop("Package '", pkg, "' is required for multiclass learner '", learner_id,
-      "'. ", "Please install it or choose a different learner.",
-      call. = FALSE
-    )
-  }
-}
-
 multiclass_feature_scores_anova <- function(X_df, y_fac) {
   X_mat <- as.matrix(X_df)
   p <- ncol(X_mat)
@@ -658,21 +602,10 @@ select_multiclass_screened_features <- function(scores, feature_names, screener_
   }
   score_vec[!is.finite(score_vec)] <- 0
 
-  scalar_num <- function(x) {
-    if (length(x) == 0L) {
-      return(NA_real_)
-    }
-    parsed <- type.convert(as.character(x[[1]]), as.is = TRUE)
-    if (!is.numeric(parsed)) {
-      return(NA_real_)
-    }
-    as.numeric(parsed[[1]])
-  }
-
-  keep_prop <- scalar_num(screener_args$keep_prop)
-  keep_n <- scalar_num(screener_args$keep_n)
-  max_features <- scalar_num(screener_args$max_features)
-  min_features <- scalar_num(screener_args$min_features)
+  keep_prop <- parse_numeric_scalar(screener_args$keep_prop)
+  keep_n <- parse_numeric_scalar(screener_args$keep_n)
+  max_features <- parse_numeric_scalar(screener_args$max_features)
+  min_features <- parse_numeric_scalar(screener_args$min_features)
 
   if (!is.finite(min_features) || min_features < 1L) {
     min_features <- 25L
@@ -728,24 +661,13 @@ fit_multiclass_screener <- function(X, y, screener_id = "all", seed = 1234, scre
     ), feature_names), screener_id = screener_id))
   }
 
-  scalar_num <- function(x) {
-    if (length(x) == 0L) {
-      return(NA_real_)
-    }
-    parsed <- type.convert(as.character(x[[1]]), as.is = TRUE)
-    if (!is.numeric(parsed)) {
-      return(NA_real_)
-    }
-    as.numeric(parsed[[1]])
-  }
-
-  set_seed_internal(seed)
+  withr::local_seed(as.integer(seed[1]))
   scores <- tryCatch(
     {
       if (identical(screener_id, "anova")) {
         multiclass_feature_scores_anova(X_df, y_fac)
       } else if (identical(screener_id, "glmnet")) {
-        require_multiclass_pkg("glmnet", screener_id)
+
         nobs <- nrow(X_df)
         inner_folds <- min(5L, max(2L, nobs - 1L))
         fit <- glmnet::cv.glmnet(
@@ -762,8 +684,8 @@ fit_multiclass_screener <- function(X, y, screener_id = "all", seed = 1234, scre
         }
         out
       } else if (identical(screener_id, "randomforest")) {
-        require_multiclass_pkg("randomForest", screener_id)
-        ntree <- scalar_num(screener_args$ntree)
+
+        ntree <- parse_numeric_scalar(screener_args$ntree)
         if (!is.finite(ntree) || ntree < 10L) {
           ntree <- 300L
         }
@@ -785,8 +707,8 @@ fit_multiclass_screener <- function(X, y, screener_id = "all", seed = 1234, scre
         }
         out
       } else if (identical(screener_id, "ranger")) {
-        require_multiclass_pkg("ranger", screener_id)
-        num_trees <- scalar_num(screener_args$num_trees)
+
+        num_trees <- parse_numeric_scalar(screener_args$num_trees)
         if (!is.finite(num_trees) || num_trees < 10L) {
           num_trees <- 300L
         }
@@ -797,31 +719,31 @@ fit_multiclass_screener <- function(X, y, screener_id = "all", seed = 1234, scre
         )
         fit$variable.importance
       } else if (identical(screener_id, "xgboost")) {
-        require_multiclass_pkg("xgboost", screener_id)
+
         X_mat <- as.matrix(X_df)
         safe_names <- make.names(colnames(X_mat), unique = TRUE)
         colnames(X_mat) <- safe_names
         safe_to_orig <- stats::setNames(colnames(X_df), safe_names)
 
-        nrounds <- scalar_num(screener_args$nrounds)
+        nrounds <- parse_numeric_scalar(screener_args$nrounds)
         if (!is.finite(nrounds) || nrounds < 1L) {
           nrounds <- 100L
         }
         nrounds <- as.integer(nrounds)
-        eta <- scalar_num(screener_args$eta)
+        eta <- parse_numeric_scalar(screener_args$eta)
         if (!is.finite(eta) || eta <= 0) {
           eta <- 0.05
         }
-        max_depth <- scalar_num(screener_args$max_depth)
+        max_depth <- parse_numeric_scalar(screener_args$max_depth)
         if (!is.finite(max_depth) || max_depth < 1L) {
           max_depth <- 3L
         }
         max_depth <- as.integer(max_depth)
-        subsample <- scalar_num(screener_args$subsample)
+        subsample <- parse_numeric_scalar(screener_args$subsample)
         if (!is.finite(subsample) || subsample <= 0 || subsample > 1) {
           subsample <- 0.8
         }
-        colsample_bytree <- scalar_num(screener_args$colsample_bytree)
+        colsample_bytree <- parse_numeric_scalar(screener_args$colsample_bytree)
         if (!is.finite(colsample_bytree) || colsample_bytree <= 0 || colsample_bytree >
           1) {
           colsample_bytree <- 0.8
@@ -968,7 +890,7 @@ fit_multiclass_model_impl <- function(
   X, y, learner_id = "glmnet", seed = 1234,
   model_args = list()
 ) {
-  set_seed_internal(seed)
+  withr::local_seed(as.integer(seed[1]))
 
   X_df <- as.data.frame(X)
   y_fac <- if (is.factor(y)) {
@@ -996,11 +918,11 @@ fit_multiclass_model_impl <- function(
     )
     fit <- do.call(ranger::ranger, utils::modifyList(defaults, model_args))
   } else if (identical(learner_id, "randomforest")) {
-    require_multiclass_pkg("randomForest", learner_id)
+
     defaults <- list(x = X_df, y = y_fac, ntree = 500)
     fit <- do.call(randomForest::randomForest, utils::modifyList(defaults, model_args))
   } else if (identical(learner_id, "xgboost")) {
-    require_multiclass_pkg("xgboost", learner_id)
+
     y_num <- as.integer(y_fac) - 1L
     dtrain <- xgboost::xgb.DMatrix(data = as.matrix(X_df), label = y_num)
     defaults <- list(data = dtrain, nrounds = 200L, params = list(
@@ -1010,7 +932,7 @@ fit_multiclass_model_impl <- function(
     ), verbose = 0)
     fit <- do.call(xgboost::xgb.train, utils::modifyList(defaults, model_args))
   } else if (identical(learner_id, "mbart")) {
-    require_multiclass_pkg("BART", learner_id)
+
     y_num <- as.integer(y_fac)
     ntype_pbart <- as.integer(factor("pbart", levels = c("wbart", "pbart", "lbart")))
     defaults <- list(
@@ -1021,7 +943,7 @@ fit_multiclass_model_impl <- function(
     )
     fit <- do.call(BART::mbart, utils::modifyList(defaults, model_args))
   } else if (identical(learner_id, "multinom")) {
-    require_multiclass_pkg("nnet", learner_id)
+
     train_df <- data.frame(.y = y_fac, X_df, check.names = FALSE)
     defaults <- list(formula = .y ~ ., data = train_df, trace = FALSE)
     fit <- do.call(nnet::multinom, utils::modifyList(defaults, model_args))
@@ -1252,7 +1174,7 @@ predict_multiclass.learner <- function(
         call. = FALSE
       )
     }
-    dat_valid <- as.data.frame(t(feature_table_valid[feat_ids, , drop = FALSE]))
+    dat_valid <- slice_feature_table(feature_table_valid, feat_ids)
     pred_layer_probs[[lay]] <- predict_multiclass_model_impl(
       fit_obj = layer_models[[lay]],
       newX = dat_valid, class_levels = class_levels, eps = eps
@@ -1271,7 +1193,7 @@ predict_multiclass.learner <- function(
 
   if (isTRUE(fit$run_concat) && !is.null(fit$model_fits$model_concat)) {
     full_feat <- fit$model_fits$model_concat$feature_names
-    fulldat_valid <- as.data.frame(t(feature_table_valid[full_feat, , drop = FALSE]))
+    fulldat_valid <- slice_feature_table(feature_table_valid, full_feat)
     out_prob$concatenated <- predict_multiclass_model_impl(
       fit_obj = fit$model_fits$model_concat,
       newX = fulldat_valid, class_levels = class_levels, eps = eps

@@ -426,7 +426,7 @@ IL_conbin <- function(
     cooperative_fit <- fit_cooperative_multiview(
       x_list = cooperative_x_train, y = Y, family_name = family_name,
       fold_id = fold_id, rho = cooperative_rho, type_measure = cooperative_type_measure,
-      s = cooperative_s, seed = seed + 13000, trace.it = as.integer(isTRUE(verbose))
+      s = cooperative_s, seed = cooperative_seed(seed), trace.it = as.integer(isTRUE(verbose))
     )
     cooperative_prediction_train <- prevalidated_cooperative_vector(cooperative_fit)
     if (!is.null(feature_table_valid)) {

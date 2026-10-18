@@ -2,7 +2,7 @@
 % Please edit documentation in R/IL_Utilities.R
 \name{sl_lasso}
 \alias{sl_lasso}
-\title{Elastic net regression, including lasso and ridge with a fixed alpha}
+\title{Lasso regression with a fixed alpha}
 \usage{
 sl_lasso(
   Y,
@@ -58,11 +58,7 @@ A list with elements \code{pred} (predictions for \code{newX}) and
 \code{fit} (cross-validated glmnet fit metadata).
 }
 \description{
-Penalized regression using elastic net. Alpha = 0 corresponds to ridge
-regression and alpha = 1 corresponds to Lasso.
-
-See \code{vignette('glmnet_beta', package = 'glmnet')} for a nice tutorial on
-glmnet.
+Uses the shared glmnet fitting implementation with \code{alpha = 1} by default.
 }
 \examples{
 set.seed(1)

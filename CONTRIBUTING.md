@@ -89,8 +89,8 @@ promptly, and we may ask for changes before merging.
   with the Bioconductor ecosystem is a core design goal.
 * Avoid adding heavy dependencies. New packages should go in `Suggests` unless
   they are essential to core functionality.
-* Do not commit large data files. Example data belongs in `data/` or
-  `inst/extdata/` and should be small.
+* Do not commit large data files. Tutorial data belongs in `inst/extdata/` as small MAE RDS files;
+  do not duplicate it as raw tables or PCL objects.
 
 ## Adding a new learner
 

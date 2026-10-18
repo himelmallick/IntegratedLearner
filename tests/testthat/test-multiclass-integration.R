@@ -120,7 +120,7 @@ test_that("update.learner is blocked with explicit message for multiclass fits",
   ))
 
   expect_error(
-    IntegratedLearner:::update.learner(
+    stats::update(
       object = fit, feature_table_valid = pcl$feature_table,
       sample_metadata_valid = pcl$sample_metadata, feature_metadata_valid = pcl$feature_metadata
     ),
@@ -341,7 +341,7 @@ test_that("multiclass screening keeps top X% features", {
   expect_true(isTRUE(fit$screening_used))
   expect_identical(fit$base_screener_used, "glmnet")
   expect_identical(fit$screen_method, "glmnet")
-  expect_identical(fit$screen_pct, 25)
+  expect_equal(fit$screen_pct, 25)
   expect_true(is.list(fit$selected_features_by_layer))
   expect_true(all(names(fit$selected_features_by_layer) %in% names(full_by_layer)))
 
@@ -369,7 +369,7 @@ test_that("multiclass prevalence_pct keeps top X% features by prevalence", {
     prevalence_pct = 20
   ))
 
-  expect_identical(fit$prevalence_pct, 20)
+  expect_equal(fit$prevalence_pct, 20)
   expect_true(!("F001" %in% fit$feature.names))
   expect_true(!("F002" %in% fit$feature.names))
   expect_true(!("F003" %in% fit$feature.names))
@@ -398,8 +398,8 @@ test_that("multiclass filter_method='prevalence' with filter_pct keeps top X% fe
   ))
 
   expect_identical(fit$filter_method, "prevalence")
-  expect_identical(fit$filter_pct, 20)
-  expect_identical(fit$prevalence_pct, 20)
+  expect_equal(fit$filter_pct, 20)
+  expect_equal(fit$prevalence_pct, 20)
   expect_true(!("F001" %in% fit$feature.names))
   expect_true(!("F002" %in% fit$feature.names))
   expect_true(!("F003" %in% fit$feature.names))
@@ -427,7 +427,7 @@ test_that("multiclass filter_method='variance' keeps top X% features by caret va
   ))
 
   expect_identical(fit$filter_method, "variance")
-  expect_identical(fit$filter_pct, 20)
+  expect_equal(fit$filter_pct, 20)
   expect_null(fit$prevalence_pct)
   expect_true(!("F001" %in% fit$feature.names))
   expect_true(!("F002" %in% fit$feature.names))

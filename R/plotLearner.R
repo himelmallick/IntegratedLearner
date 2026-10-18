@@ -473,7 +473,9 @@ survival_km_plot <- function(tbl, title) {
 #'   the plot.
 #'
 #' @examples
-#' data("PRISM_MAE", package = "IntegratedLearner")
+#' PRISM_MAE <- readRDS(system.file(
+#'   "extdata", "PRISM_MAE.rds", package = "IntegratedLearner", mustWork = TRUE
+#' ))
 #' mae <- PRISM_MAE
 #' se <- MultiAssayExperiment::experiments(mae)[[1]]
 #' head(SummarizedExperiment::assay(se, SummarizedExperiment::assayNames(se)[1]))
@@ -492,8 +494,6 @@ plot.learner <- function(
   x, y = NULL, label_size = 8, label_x = 0.3, vjust = 0.1,
   rowwise_plot = TRUE, ...
 ) {
-  require_package("ggplot2")
-  require_package("cowplot")
   fit <- x
   method <- clean_plot_method_label(fit)
 
@@ -663,8 +663,6 @@ plot.learner <- function(
   }
 
   if (fit$family == "survival") {
-    require_package("survival")
-
     auc_train_tbl <- survival_auc_table(fit, dataset = "train")
     p_auc_train <- survival_auc_plot(auc_train_tbl, title = paste0(fit$folds, "-fold CV AUC"))
 

@@ -48,7 +48,9 @@ include ROC curves, R-squared bar plots, multiclass one-vs-rest ROC
 curves, or survival AUC / Kaplan-Meier panels.
 }
 \examples{
-data("PRISM_MAE", package = "IntegratedLearner")
+PRISM_MAE <- readRDS(system.file(
+  "extdata", "PRISM_MAE.rds", package = "IntegratedLearner", mustWork = TRUE
+))
 mae <- PRISM_MAE
 se <- MultiAssayExperiment::experiments(mae)[[1]]
 head(SummarizedExperiment::assay(se, SummarizedExperiment::assayNames(se)[1]))

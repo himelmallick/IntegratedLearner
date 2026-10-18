@@ -1,15 +1,19 @@
-############################# Imports
-############################# ##########################################
-
-NULL
-utils::globalVariables(c(
-  ".", ".N", ".BY", "featureID", "featureType", "id", "layer",
-  "type", "ID", "displayItem", "sd", "specificity", "sensitivity", "e", "obs",
-  "truth", "model", "accuracy", "balanced_accuracy", "dataset"
-))
-NULL
+# Parse a screener option that may arrive as a number or a numeric string.
+parse_numeric_scalar <- function(x) {
+  if (length(x) == 0L) {
+    return(NA_real_)
+  }
+  parsed <- type.convert(as.character(x[[1]]), as.is = TRUE)
+  if (!is.numeric(parsed)) {
+    return(NA_real_)
+  }
+  parsed[[1]]
+}
 
 make_sl_env <- function() {
+  # SuperLearner evaluates learner names inside its own namespace. This child
+  # environment makes package-local sl_* wrappers visible without attaching the
+  # package or mutating SuperLearner's namespace.
   sl_ns <- asNamespace("SuperLearner")
   il_ns <- asNamespace("IntegratedLearner")
   env <- new.env(parent = sl_ns)
@@ -60,12 +64,10 @@ normalize_il_learner_id <- function(x, role = c("base_learner", "meta_learner"))
   normalized
 }
 
-set_seed_internal <- function(seed) {
-  if (length(seed) == 0L || is.null(seed) || !is.finite(seed[1])) {
-    return(invisible(NULL))
-  }
-  withr::local_seed(as.integer(seed[1]), .local_envir = parent.frame())
-  invisible(NULL)
+# Use a separate, reproducible RNG stream for cooperative model fitting.
+# Keep the historical offset so refactoring does not change fitted results.
+cooperative_seed <- function(seed) {
+  as.integer(seed[1]) + 13000L
 }
 
 coerce_binary_truth <- function(y) {
@@ -369,7 +371,7 @@ predict_layer_validation_set <- function(
 }
 
 build_subject_cv_partition <- function(sample_metadata, folds, seed, subject_ids = NULL, fill_unassigned = FALSE) {
-  set_seed_internal(seed)
+  withr::local_seed(as.integer(seed[1]))
   if (is.null(subject_ids)) {
     subject_ids <- unique(sample_metadata$subjectID)
   }
@@ -549,7 +551,6 @@ compute_named_r2 <- function(pred_mat, y_true) {
 }
 
 #' @export
-#' @export
 print.learner <- function(x, ...) {
   res <- x
   num_layers <- length(res$X_train_layers)
@@ -692,14 +693,8 @@ print.learner <- function(x, ...) {
 expit <- function(x) {
   1 / (1 + exp(-x))
 }
-##################################################################### adding
-##################################################################### serialize
-##################################################################### = TRUE in
-##################################################################### bartMachine2
-##################################################################### (from
-##################################################################### ck37r) #
-
-# Temporary wrapper that needs to be fixed in SuperLearner
+# BART wrapper with serialized fits (adapted from ck37r).
+# Keep prediction compatible with the SuperLearner learner interface.
 #' Wrapper for bartMachine learner
 #'
 #' Support bayesian additive regression trees via the bartMachine package.
@@ -767,7 +762,6 @@ sl_bart <- function(
   verbose = FALSE, alpha = 0.95, beta = 2, k = 2, q = 0.9, nu = 3, num_iterations_after_burn_in = 1000,
   serialize = TRUE, seed = 5678, ...
 ) {
-  require_package("bartMachine")
   warn_if_java_bart_machine_mismatch()
 
   if (family$family == "binomial") {
@@ -832,14 +826,37 @@ sl_bart <- function(
 #' }
 #' @export
 predict.sl_bart <- function(object, newdata, family, X = NULL, Y = NULL, ...) {
-  require_package("bartMachine")
   pred <- stats::predict(object$object, newdata)
   return(pred)
 }
 
 
-########################################## Elastic net wrapper with a fixed
-########################################## alpha #
+# Elastic net wrapper with a fixed alpha
+
+fit_glmnet_wrapper <- function(
+  Y, X, newX, family, obsWeights, alpha, nfolds, nlambda, useMin, loss, ...
+) {
+  # glmnet expects a numeric matrix design.
+  if (!is.matrix(X)) {
+    X <- stats::model.matrix(~ -1 + ., X)
+    newX <- stats::model.matrix(~ -1 + ., newX)
+  }
+
+  fitCV <- glmnet::cv.glmnet(
+    x = X, y = Y, weights = obsWeights, lambda = NULL,
+    type.measure = loss, nfolds = nfolds, family = family$family, alpha = alpha,
+    nlambda = nlambda, intercept = FALSE, ...
+  )
+
+  pred <- stats::predict(
+    fitCV, newx = newX, type = "response",
+    s = ifelse(useMin, "lambda.min", "lambda.1se")
+  )
+
+  fit <- list(object = fitCV, useMin = useMin)
+  class(fit) <- "SL.glmnet"
+  list(pred = pred, fit = fit)
+}
 
 #' @title Elastic net regression, including lasso and ridge with a fixed alpha
 #'
@@ -910,66 +927,18 @@ sl_glmnet2 <- function(
   Y, X, newX, family, obsWeights, id, alpha = 0.5, nfolds = 10,
   nlambda = 100, useMin = TRUE, loss = "deviance", ...
 ) {
-  # glmnet expects a numeric matrix design.
-  if (!is.matrix(X)) {
-    X <- stats::model.matrix(~ -1 + ., X)
-    newX <- stats::model.matrix(~ -1 + ., newX)
-  }
-
-  fitCV <- glmnet::cv.glmnet(
-    x = X, y = Y, weights = obsWeights, lambda = NULL,
-    type.measure = loss, nfolds = nfolds, family = family$family, alpha = alpha,
-    nlambda = nlambda, intercept = FALSE, ...
+  fit_glmnet_wrapper(
+    Y = Y, X = X, newX = newX, family = family, obsWeights = obsWeights,
+    alpha = alpha, nfolds = nfolds, nlambda = nlambda, useMin = useMin,
+    loss = loss, ...
   )
-
-  # If we predict with the cv.glmnet object we can specify lambda using a
-  # string.
-  pred <- stats::predict(fitCV, newx = newX, type = "response", s = ifelse(useMin,
-    "lambda.min", "lambda.1se"
-  ))
-
-  fit <- list(object = fitCV, useMin = useMin)
-  class(fit) <- "SL.glmnet"
-
-  out <- list(pred = pred, fit = fit)
-  return(out)
 }
 
-######################################## LASSO wrapper with intercept = FALSE #
+# LASSO wrapper with intercept = FALSE
 
-#' @title Elastic net regression, including lasso and ridge with a fixed alpha
-#'
-#' @description
-#' Penalized regression using elastic net. Alpha = 0 corresponds to ridge
-#' regression and alpha = 1 corresponds to Lasso.
-#'
-#' See \code{vignette('glmnet_beta', package = 'glmnet')} for a nice tutorial on
-#' glmnet.
-#'
-#' @param Y Outcome variable
-#' @param X Covariate dataframe
-#' @param newX Dataframe to predict the outcome
-#' @param obsWeights Optional observation-level weights
-#' @param id Optional id to group observations from the same unit (not used
-#'   currently).
-#' @param family 'gaussian' for regression, 'binomial' for binary
-#'   classification. Untested options: 'multinomial' for multiple classification
-#'   or 'mgaussian' for multiple response, 'poisson' for non-negative outcome
-#'   with proportional mean and variance, 'cox'.
-#' @param alpha Elastic net mixing parameter, range 0 to 1. 0 = ridge regression
-#'   and 1 = lasso.
-#' @param nfolds Number of folds for internal cross-validation to optimize lambda.
-#' @param nlambda Number of lambda values to check, recommended to be 100 or more.
-#' @param loss Loss function, can be 'deviance', 'mse', or 'mae'. If family =
-#'   binomial can also be 'auc' or 'class' (misclassification error).
-#' @param useMin If TRUE use lambda that minimizes risk, otherwise use 1
-#'   standard-error rule which chooses a higher penalty with performance within
-#'   one standard error of the minimum (see Breiman et al. 1984 on CART for
-#'   background).
-#' @param ... Any additional arguments are passed through to cv.glmnet.
-#'
-#' @return A list with elements \code{pred} (predictions for \code{newX}) and
-#'   \code{fit} (cross-validated glmnet fit metadata).
+#' @title Lasso regression with a fixed alpha
+#' @description Uses the shared glmnet fitting implementation with \code{alpha = 1} by default.
+#' @inherit sl_glmnet2 params return references seealso
 #'
 #' @examples
 #' set.seed(1)
@@ -983,94 +952,27 @@ sl_glmnet2 <- function(
 #' )
 #' head(fit$pred)
 #'
-#' @references
-#'
-#' Friedman, J., Hastie, T., & Tibshirani, R. (2010). Regularization paths for
-#' generalized linear models via coordinate descent. Journal of statistical
-#' software, 33(1), 1.
-#'
-#' Hoerl, A. E., & Kennard, R. W. (1970). Ridge regression: Biased estimation
-#' for nonorthogonal problems. Technometrics, 12(1), 55-67.
-#'
-#' Tibshirani, R. (1996). Regression shrinkage and selection via the lasso.
-#' Journal of the Royal Statistical Society. Series B (Methodological), 267-288.
-#'
-#' Zou, H., & Hastie, T. (2005). Regularization and variable selection via the
-#' elastic net. Journal of the Royal Statistical Society: Series B (Statistical
-#' Methodology), 67(2), 301-320.
-#'
-#' @seealso \code{predict.SL.glmnet} \code{\link[glmnet]{cv.glmnet}}
-#'   \code{\link[glmnet]{glmnet}}
-#'
 #' @export
 sl_lasso <- function(
   Y, X, newX, family, obsWeights, id, alpha = 1, nfolds = 10,
   nlambda = 100, useMin = TRUE, loss = "deviance", ...
 ) {
-  # glmnet expects a numeric matrix design.
-  if (!is.matrix(X)) {
-    X <- stats::model.matrix(~ -1 + ., X)
-    newX <- stats::model.matrix(~ -1 + ., newX)
-  }
-
-  fitCV <- glmnet::cv.glmnet(
-    x = X, y = Y, weights = obsWeights, lambda = NULL,
-    type.measure = loss, nfolds = nfolds, family = family$family, alpha = alpha,
-    nlambda = nlambda, intercept = FALSE, ...
+  fit_glmnet_wrapper(
+    Y = Y, X = X, newX = newX, family = family, obsWeights = obsWeights,
+    alpha = alpha, nfolds = nfolds, nlambda = nlambda, useMin = useMin,
+    loss = loss, ...
   )
-
-  # If we predict with the cv.glmnet object we can specify lambda using a
-  # string.
-  pred <- stats::predict(fitCV, newx = newX, type = "response", s = ifelse(useMin,
-    "lambda.min", "lambda.1se"
-  ))
-
-  fit <- list(object = fitCV, useMin = useMin)
-  class(fit) <- "SL.glmnet"
-
-  out <- list(pred = pred, fit = fit)
-  return(out)
 }
 
 
-############################################ Elastic net wrapper with optimized
-############################################ alpha #
+# Elastic net wrapper with optimized alpha
 
 # NOTE: COMPUTATIONALLY INTENSIVE
 
-#' @title Elastic net regression, including lasso and ridge with optimized alpha and lambda
-#'
-#' @description
-#' Penalized regression using elastic net. Alpha = 0 corresponds to ridge
-#' regression and alpha = 1 corresponds to Lasso.
-#'
-#' See \code{vignette('glmnet_beta', package = 'glmnet')} for a nice tutorial on
-#' glmnet.
-#'
-#' @param Y Outcome variable
-#' @param X Covariate dataframe
-#' @param newX Dataframe to predict the outcome
-#' @param obsWeights Optional observation-level weights
-#' @param id Optional id to group observations from the same unit (not used
-#'   currently).
-#' @param family 'gaussian' for regression, 'binomial' for binary
-#'   classification. Untested options: 'multinomial' for multiple classification
-#'   or 'mgaussian' for multiple response, 'poisson' for non-negative outcome
-#'   with proportional mean and variance, 'cox'.
-#' @param alpha Elastic net mixing parameter, range 0 to 1. 0 = ridge regression
-#'   and 1 = lasso.
-#' @param nfolds Number of folds for internal cross-validation to optimize lambda.
-#' @param nlambda Number of lambda values to check, recommended to be 100 or more.
-#' @param loss Loss function, can be 'deviance', 'mse', or 'mae'. If family =
-#'   binomial can also be 'auc' or 'class' (misclassification error).
-#' @param useMin If TRUE use lambda that minimizes risk, otherwise use 1
-#'   standard-error rule which chooses a higher penalty with performance within
-#'   one standard error of the minimum (see Breiman et al. 1984 on CART for
-#'   background).
-#' @param ... Any additional arguments are passed through to cv.glmnet.
-#'
-#' @return A list with elements \code{pred} (predictions for \code{newX}) and
-#'   \code{fit} (cross-validated glmnet fit metadata).
+#' @title Elastic net regression with optimized alpha and lambda
+#' @description Selects alpha by cross-validation, then uses the shared glmnet fitting implementation.
+#' @inherit sl_glmnet2 params return references seealso
+#' @param alpha Numeric grid of elastic net mixing parameters between 0 and 1.
 #'
 #' @examples
 #' set.seed(1)
@@ -1082,25 +984,6 @@ sl_lasso <- function(
 #'   alpha = c(0, 0.5, 1), nfolds = 3, nlambda = 10
 #' )
 #' head(fit$pred)
-#'
-#' @references
-#'
-#' Friedman, J., Hastie, T., & Tibshirani, R. (2010). Regularization paths for
-#' generalized linear models via coordinate descent. Journal of statistical
-#' software, 33(1), 1.
-#'
-#' Hoerl, A. E., & Kennard, R. W. (1970). Ridge regression: Biased estimation
-#' for nonorthogonal problems. Technometrics, 12(1), 55-67.
-#'
-#' Tibshirani, R. (1996). Regression shrinkage and selection via the lasso.
-#' Journal of the Royal Statistical Society. Series B (Methodological), 267-288.
-#'
-#' Zou, H., & Hastie, T. (2005). Regularization and variable selection via the
-#' elastic net. Journal of the Royal Statistical Society: Series B (Statistical
-#' Methodology), 67(2), 301-320.
-#'
-#' @seealso \code{predict.SL.glmnet} \code{\link[glmnet]{cv.glmnet}}
-#'   \code{\link[glmnet]{glmnet}}
 #'
 #' @export
 sl_enet <- function(
@@ -1125,23 +1008,13 @@ sl_enet <- function(
   minix <- which.min(enet_performance$cvm)
   best_alpha <- fit0$alpha[minix]
 
-  fitCV <- glmnet::cv.glmnet(
-    x = X, y = Y, weights = obsWeights, lambda = NULL,
-    type.measure = loss, nfolds = nfolds, family = family$family, alpha = best_alpha,
-    nlambda = nlambda, intercept = FALSE, ...
+  out <- fit_glmnet_wrapper(
+    Y = Y, X = X, newX = newX, family = family, obsWeights = obsWeights,
+    alpha = best_alpha, nfolds = nfolds, nlambda = nlambda, useMin = useMin,
+    loss = loss, ...
   )
-  fitCV$alpha <- best_alpha
-  # If we predict with the cv.glmnet object we can specify lambda using a
-  # string.
-  pred <- stats::predict(fitCV, newx = newX, type = "response", s = ifelse(useMin,
-    "lambda.min", "lambda.1se"
-  ))
-
-  fit <- list(object = fitCV, useMin = useMin)
-  class(fit) <- "SL.glmnet"
-
-  out <- list(pred = pred, fit = fit)
-  return(out)
+  out$fit$object$alpha <- best_alpha
+  out
 }
 
 # Helper function for extracting best alpha from cva.glmnet
@@ -1185,14 +1058,10 @@ get_cvm <- function(model) {
 #'   fit$pred
 #' }
 #' @export
-#' @export
 sl_horseshoe <- function(
   Y, X, newX, family, prior = "horseshoe", N = 20000L, burnin = 1000L,
   thinning = 1L, ...
 ) {
-  if (!requireNamespace("bayesreg", quietly = TRUE)) {
-    stop("Package 'bayesreg' is required for sl_horseshoe.", call. = FALSE)
-  }
   if (family$family == "binomial") {
     # bayesreg expects the positive class as the second factor level.
     Y <- factor(Y, levels = c("0", "1"))
@@ -1231,9 +1100,7 @@ predict.sl_horseshoe <- function(object, newdata, family, X = NULL, Y = NULL, ..
 }
 
 
-######################################################## Non-negative least
-######################################################## squares or rank loss
-######################################################## minimization #
+# Non-negative least squares or rank loss minimization
 
 #' Title Meta level Objective function: NNLS for gaussian; Rank loss for binary observations
 #'
@@ -1274,8 +1141,8 @@ NNLS <- function(x, y, wt) {
   wX <- sqrt(wt) * x
   wY <- sqrt(wt) * y
   # Z'Z = n * cov(Z)
-  D <- t(wX) %*% wX
-  d <- t(t(wY) %*% wX)
+  D <- crossprod(wX)
+  d <- crossprod(wX, wY)
   A <- rbind(rep(1, ncol(wX)), diag(ncol(wX)))
   b <- c(1, rep(0, ncol(wX)))
   # solve.QP requires a full-rank Gram matrix.
@@ -1387,16 +1254,6 @@ predict.sl_nnls_auc <- function(object, newdata, ...) {
   return(pred)
 }
 
-# Borrowed from mia package
-require_package <- function(pkg) {
-  if (!requireNamespace(pkg, quietly = TRUE)) {
-    stop("'", pkg, "' package not found. Please install the '", pkg, "' package to use this function.",
-      call. = FALSE
-    )
-  }
-  return(NULL)
-}
-
 java_major_version <- function() {
   out <- tryCatch(system2("java", "-version", stdout = TRUE, stderr = TRUE), error = function(e) character())
   if (!length(out) || is.na(out[1])) {
@@ -1421,7 +1278,7 @@ warn_if_java_bart_machine_mismatch <- function() {
 }
 
 
-######################## MAE Helper Utilities #
+# MAE Helper Utilities
 
 is_integer <- function(x) {
   is.numeric(x) && all(!is.na(x)) && all(abs(x - round(x)) < .Machine$double.eps^0.5)
@@ -1451,9 +1308,6 @@ infer_mae_defaults <- function(
   mae_train, mae_test = NULL, experiment = NULL, assay.type = NULL,
   verbose = FALSE
 ) {
-  require_package("MultiAssayExperiment")
-  require_package("SummarizedExperiment")
-
   expts_train <- MultiAssayExperiment::experiments(mae_train)
 
   ## 1. Default experiment = all experiments in mae_train
@@ -1464,21 +1318,17 @@ infer_mae_defaults <- function(
         collapse = ", "
       ))
     }
-  } else {
-    if (is_integer(experiment)) {
-      if (any(experiment < 1L | experiment > length(expts_train))) {
-        stop("'experiment' indices are out of range for mae_train.", call. = FALSE)
-      }
-      experiment <- names(expts_train)[experiment]
-    } else if (is.character(experiment)) {
-      if (!all(experiment %in% names(expts_train))) {
-        stop("Some 'experiment' entries are not found in mae_train.", call. = FALSE)
-      }
-    } else {
-      stop("'experiment' must be NULL, numeric indices, or character names.",
-        call. = FALSE
-      )
+  } else if (is_integer(experiment)) {
+    if (any(experiment < 1L | experiment > length(expts_train))) {
+      stop("'experiment' indices are out of range for mae_train.", call. = FALSE)
     }
+    experiment <- names(expts_train)[experiment]
+  } else if (is.character(experiment)) {
+    if (!all(experiment %in% names(expts_train))) {
+      stop("Some 'experiment' entries are not found in mae_train.", call. = FALSE)
+    }
+  } else {
+    stop("'experiment' must be NULL, numeric indices, or character names.", call. = FALSE)
   }
 
   ## 2. Default assay.type ONLY when each experiment has a single assay
@@ -1488,12 +1338,8 @@ infer_mae_defaults <- function(
       msg <- paste(sprintf("%s -> %s", experiment, assay.type), collapse = ", ")
       message("IntegratedLearner: default assay.type per experiment: ", msg)
     }
-  } else {
-    if (!is.character(assay.type) || length(assay.type) != length(experiment)) {
-      stop("'assay.type' must be a character vector of the same length as 'experiment'.",
-        call. = FALSE
-      )
-    }
+  } else if (!is.character(assay.type) || length(assay.type) != length(experiment)) {
+    stop("'assay.type' must be a character vector of the same length as 'experiment'.", call. = FALSE)
   }
 
   list(experiment = experiment, assay.type = assay.type)
@@ -1634,10 +1480,6 @@ get_data_from_MAE <- function(
   outcome.col = "Y",
   subject_id_col = "subjectID"
 ) {
-  require_package("MultiAssayExperiment")
-  require_package("SummarizedExperiment")
-  require_package("tidyr")
-
   expts <- MultiAssayExperiment::experiments(mae)
 
   if (length(experiment) != length(assay.type)) {
@@ -1685,11 +1527,10 @@ get_data_from_MAE <- function(
     if (!outcome.col %in% colnames(cd)) {
       # Survival-friendly fallback: if time+event exist, construct Y =
       # Surv(time, event)
-      if (all(c("time", "event") %in% colnames(cd))) {
-        cd[[outcome.col]] <- survival::Surv(as.numeric(cd$time), as.numeric(cd$event))
-      } else {
+      if (!all(c("time", "event") %in% colnames(cd))) {
         stop("Outcome column '", outcome.col, "' not found in colData.")
       }
+      cd[[outcome.col]] <- survival::Surv(as.numeric(cd$time), as.numeric(cd$event))
     }
 
     extra_surv_cols <- intersect(c("time", "event"), colnames(cd))
@@ -1722,8 +1563,6 @@ wrangle_data <- function(
   subject_id_col = "subjectID",
   na.rm = FALSE
 ) {
-  require_package("tidyr")
-
   if (nrow(long_data) == 0) {
     stop("wrangle_data(): long_data is empty - nothing to reshape.")
   }
@@ -1783,10 +1622,6 @@ prepare_from_MAE <- function(
   mae_train, mae_valid = NULL, experiment = NULL, assay.type = NULL,
   na.rm = FALSE, verbose = FALSE, outcome_col = "Y", subject_id_col = "subjectID"
 ) {
-  require_package("MultiAssayExperiment")
-  require_package("SummarizedExperiment")
-  require_package("tidyr")
-
   defaults <- infer_mae_defaults(
     mae_train = mae_train, mae_test = mae_valid,
     experiment = experiment, assay.type = assay.type, verbose = verbose
@@ -1812,7 +1647,7 @@ prepare_from_MAE <- function(
   sample_metadata <- wr_train$sample_metadata
   feature_metadata <- wr_train$feature_metadata
 
-  # ---- NEW: Verify non-empty structures ----
+  # Verify that training structures are non-empty.
   if (nrow(feature_table) == 0) {
     stop("prepare_from_MAE(): training feature_table is empty.")
   }
@@ -1835,7 +1670,7 @@ prepare_from_MAE <- function(
   # VALIDATION --------
   feature_table_valid <- NULL
   sample_metadata_valid <- NULL
-  # Need to check how mae_valid is being run, MAE_Valid should be NULL
+  # Prepare validation data only when a validation MAE is provided.
   if (!is.null(mae_valid)) {
     mae_valid_sub <- mae_valid[, , experiment, drop = FALSE]
 
@@ -1871,7 +1706,7 @@ prepare_from_MAE <- function(
     feature_table_valid <- wr_valid$feature_table
     sample_metadata_valid <- wr_valid$sample_metadata
 
-    # ---- NEW: validation emptiness check ----
+    # Verify that validation features and samples are non-empty.
     if (nrow(feature_table_valid) == 0) {
       stop("prepare_from_MAE(): validation feature_table is empty.")
     }
@@ -2027,7 +1862,7 @@ resolve_screening_args <- function(
 
   p_parsed <- type.convert(as.character(screen_pct[1]), as.is = TRUE)
   p <- if (is.numeric(p_parsed)) {
-    as.numeric(p_parsed[[1]])
+    p_parsed[[1]]
   } else {
     NA_real_
   }
@@ -2083,7 +1918,7 @@ make_glmnet_screen_screener <- function(keep_pct = 20, seed = 1234) {
         vars[!is.finite(vars)] <- 0
         score <- vars
       } else {
-        set_seed_internal(seed)
+        withr::local_seed(as.integer(seed[1]))
         fit <- tryCatch(
           {
             nobs <- nrow(X_mat)
@@ -2115,7 +1950,7 @@ make_glmnet_screen_screener <- function(keep_pct = 20, seed = 1234) {
         y[!is.finite(y)] <- 0
       }
 
-      set_seed_internal(seed)
+      withr::local_seed(as.integer(seed[1]))
       fit <- tryCatch(
         {
           nobs <- nrow(X_mat)
@@ -2183,7 +2018,7 @@ resolve_feature_filter_args <- function(
 
   p_parsed <- type.convert(as.character(pct[1]), as.is = TRUE)
   p <- if (is.numeric(p_parsed)) {
-    as.numeric(p_parsed[[1]])
+    p_parsed[[1]]
   } else {
     NA_real_
   }

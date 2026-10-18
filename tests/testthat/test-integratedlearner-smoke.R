@@ -22,7 +22,7 @@ test_that("IntegratedLearner runs on a PRISM subset with validation set", {
   skip_if_not_installed("SuperLearner")
   suppressPackageStartupMessages(library(SuperLearner))
 
-  pcl <- load_fixture_dataset("PRISM")
+  pcl <- fixture_to_pcl("PRISM_MAE")
 
   y_raw <- as.character(pcl$sample_metadata$Y)
   class_map <- split(rownames(pcl$sample_metadata), y_raw)

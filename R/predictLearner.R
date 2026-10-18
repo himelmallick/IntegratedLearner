@@ -89,18 +89,19 @@ predict.learner <- function(
     ))
   }
 
+  if (is.null(feature_table_valid)) {
+    stop("Feature table for validation set cannot be empty", call. = FALSE)
+  }
+  if (!identical(fit$feature.names, rownames(feature_metadata))) {
+    stop("Training features and feature_metadata must have identical row names in the same order.", call. = FALSE)
+  }
+  if (!identical(fit$feature.names, rownames(feature_table_valid))) {
+    stop("Training and validation feature tables must have identical row names in the same order.", call. = FALSE)
+  }
+
   if (isTRUE(fit$run_intermediate) &&
     is.null(fit$SL_fits$SL_fit_layers) &&
     !is.null(fit$model_fits$model_cooperative)) {
-    if (is.null(feature_table_valid)) {
-      stop("Feature table for validation set cannot be empty")
-    }
-    if (!all(fit$feature.names == rownames(feature_metadata))) {
-      stop("Both training feature_table and feature_metadata should have the same rownames.")
-    }
-    if (!all(fit$feature.names == rownames(feature_table_valid))) {
-      stop("Both feature_table and feature_table_valid should have the same rownames.")
-    }
     if (!is.null(sample_metadata_valid)) {
       if (is.null(outcome_col)) {
         outcome_col <- fit$column_map$outcome_col %||% "Y"
@@ -138,25 +139,8 @@ predict.learner <- function(
     return(add_prediction_metrics(
       result = res,
       family_name = fit$family,
-      y_test = res$Y_test %||% NULL
+      y_test = res$Y_test
     ))
-  }
-
-  # Needed because this function uses dplyr at runtime
-  require_package("dplyr")
-
-  if (!all(fit$feature.names == rownames(feature_metadata))) {
-    stop("Both training feature_table and feature_metadata should have the same rownames.")
-  }
-
-  if (is.null(feature_table_valid)) {
-    stop("Feature table for validation set cannot be empty")
-  }
-
-  if (!is.null(feature_table_valid)) {
-    if (!all(fit$feature.names == rownames(feature_table_valid))) {
-      stop("Both feature_table and feature_table_valid should have the same rownames.")
-    }
   }
 
   if (!is.null(sample_metadata_valid)) {
@@ -268,7 +252,7 @@ predict.learner <- function(
   res <- add_prediction_metrics(
     result = res,
     family_name = fit$family,
-    y_test = res$Y_test %||% NULL
+    y_test = res$Y_test
   )
 
   return(res)

@@ -115,8 +115,6 @@ test_that("metadata and screening utility helpers validate inputs", {
     "Survival mode requires"
   )
 
-  expect_true(is.null(IntegratedLearner:::require_package("stats")))
-  expect_error(IntegratedLearner:::require_package("definitelyNotAPackage"), "package not found")
   jv <- IntegratedLearner:::java_major_version()
   expect_true(is.na(jv) || (is.numeric(jv) && length(jv) == 1L))
 
