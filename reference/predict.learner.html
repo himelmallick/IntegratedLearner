@@ -17,7 +17,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.4</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.5</span>
       </span>
     </div>
 
@@ -128,7 +128,22 @@ gaussian fits.</p></dd>
 
 </dl><p>For multiclass fits, returns the output of
 <code>predict_multiclass.learner()</code>, which contains class
-probabilities, predicted classes, and optional validation metrics.</p>
+probabilities, predicted classes, and optional validation metrics.
+The flat outputs are <code>prob.test</code>, <code>class.test</code>, and
+<code>yhat.test</code>, with <code>metrics.test</code> when outcomes are available.
+Grouped results are returned in <code>valid_out$single</code>,
+<code>valid_out$early</code>, and <code>valid_out$late</code>. The latter includes all
+methods enabled during fitting: <code>stacked</code>, <code>majority</code>, and
+<code>weighted_average</code>, as listed in <code>late_methods</code>. Each fusion
+method includes <code>valid_prob</code>, <code>valid_class</code>, and a <code>metrics</code>
+table, plus <code>valid_accuracy</code>, <code>valid_balanced_accuracy</code>,
+<code>valid_auc</code>, and <code>valid_logloss</code> when labels are available.
+Without labels, <code>metrics</code> is <code>NULL</code> and scalar metrics are absent.
+Learned averaging also includes the training-derived layer <code>weights</code>;
+prediction does not refit them. Majority outputs are vote fractions;
+ties use training class order, and the fractions are not calibrated
+probabilities. Disabled early fusion returns <code>early = NULL</code>, and
+disabled late methods are omitted from <code>late</code>.</p>
     </div>
 
     <div id="ref-examples">

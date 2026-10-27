@@ -17,7 +17,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.4</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.5</span>
       </span>
     </div>
 
@@ -50,6 +50,17 @@
       <small>Source: <a href="https://github.com/himelmallick/IntegratedLearner/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="page-header" data-toc-text="0.99.5" id="integratedlearner-0995">IntegratedLearner 0.99.5<a class="anchor" aria-label="anchor" href="#integratedlearner-0995"></a></h2>
+<div class="section level3">
+<h3 id="multiclass-stacking-0-99-5">Multiclass stacking<a class="anchor" aria-label="anchor" href="#multiclass-stacking-0-99-5"></a></h3>
+<ul><li>Grouped multiclass results under survival-style <code>train_out</code> and <code>valid_out</code> entries for <code>single</code>, <code>early</code>, and all enabled <code>late</code> methods. Each method includes probabilities, classes, and metrics, with final and fold-specific weights for learned averaging. Prediction returns the same validation layout; existing flat outputs are preserved. Added <code>late_methods</code> to enumerate outputs.</li>
+<li>Added majority voting (<code>majority</code>) and an out-of-fold log-loss-weighted probability average (<code>weighted_average</code>) to multiclass fitting, prediction, and metrics. Both default to enabled and can be disabled independently with <code>run_majority</code> and <code>run_weighted</code>. Majority voting returns vote fractions and resolves ties by training class order. Final averaging weights are stored in <code>model_fits$model_weighted$weights</code>; training predictions cross-fit these weights across the existing folds.</li>
+<li>Fit the final multiclass meta-model on out-of-fold layer probabilities, matching the inputs used to train the cross-validated stack and reducing overfitting from in-sample base predictions.</li>
+<li>Updated the README, vignette, and fitting, prediction, and plotting help for all multiclass fusion methods, grouped results, and evaluation caveats.</li>
+<li>Clarified the existing multiclass class-association importance calculation and per-layer grouping. Corrected documentation to describe feature-by-class matrices and an unsigned global ranking; the calculation is unchanged.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="page-header" data-toc-text="0.99.4" id="integratedlearner-0994">IntegratedLearner 0.99.4<a class="anchor" aria-label="anchor" href="#integratedlearner-0994"></a></h2>
 <div class="section level3">

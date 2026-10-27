@@ -32,7 +32,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.4</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.5</span>
       </span>
     </div>
 
@@ -72,7 +72,7 @@
                         <h4 data-toc-skip class="author">Nalin Arora,
 Anupreet Porwal and Himel Mallick</h4>
             
-            <h4 data-toc-skip class="date">2026-03-10</h4>
+            <h4 data-toc-skip class="date">2026-10-27</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/himelmallick/IntegratedLearner/blob/master/vignettes/IntegratedLearner.Rmd" class="external-link"><code>vignettes/IntegratedLearner.Rmd</code></a></small>
       <div class="hidden name"><code>IntegratedLearner.Rmd</code></div>
@@ -957,6 +957,19 @@ Supported: <code>glmnet</code>, <code>randomforest</code>,
 <td>Enables late-fusion stacked multiclass model.</td>
 </tr>
 <tr class="odd">
+<td><code>run_majority</code></td>
+<td><code>TRUE</code></td>
+<td>Returns hard voting across layers, independently of
+<code>run_stacked</code>. Ties use the first training class.</td>
+</tr>
+<tr class="even">
+<td><code>run_weighted</code></td>
+<td><code>TRUE</code></td>
+<td>Returns learned probability averaging, independently of
+<code>run_stacked</code>. Nonnegative layer weights sum to one and
+minimize OOF multiclass log loss.</td>
+</tr>
+<tr class="odd">
 <td><code>run_concat</code></td>
 <td><code>TRUE</code></td>
 <td>Enables early-fusion concatenated multiclass model.</td>
@@ -1134,10 +1147,8 @@ standard IL mode</td>
 <td>Multiclass</td>
 <td>Yes</td>
 <td><code>run_concat = TRUE</code></td>
-<td>
-<code>run_stacked = TRUE</code> with native multiclass
-<code>meta_learner</code>
-</td>
+<td>Stacking, majority voting, and learned probability averaging, all
+enabled by default with independent flags</td>
 <td>Not supported; prints a message and is ignored</td>
 </tr>
 <tr class="odd">
@@ -1279,6 +1290,41 @@ validation provided)</td>
 </td>
 </tr>
 <tr class="even">
+<td>Late fusion (majority)</td>
+<td>Per-class vote fractions and the class with the most votes</td>
+<td>Enable with <code>run_majority = TRUE</code>;
+<code>fit$prob.train$majority</code>,
+<code>fit$class.train$majority</code>,
+<code>fit$train_out$late$majority</code>
+</td>
+</tr>
+<tr class="odd">
+<td>Late fusion (learned average)</td>
+<td>Probability average with nonnegative layer weights summing to
+one</td>
+<td>Enable with <code>run_weighted = TRUE</code>;
+<code>fit$prob.train$weighted_average</code>,
+<code>fit$class.train$weighted_average</code>,
+<code>fit$train_out$late$weighted_average</code>
+</td>
+</tr>
+<tr class="even">
+<td>Grouped results</td>
+<td>Survival-style <code>single</code>, <code>early</code>, and
+<code>late</code> entries for all enabled methods</td>
+<td>
+<code>fit$train_out</code>, <code>fit$valid_out</code>;
+<code>fit$late_methods</code> lists the late-fusion methods</td>
+</tr>
+<tr class="odd">
+<td>Learned layer weights</td>
+<td>Final weights and weights fitted outside each training fold</td>
+<td>
+<code>fit$model_fits$model_weighted$weights</code>,
+<code>fit$train_out$late$weighted_average$weights_by_fold</code>
+</td>
+</tr>
+<tr class="even">
 <td>Cooperative/intermediate fusion</td>
 <td>Not supported for multiclass outcomes</td>
 <td>
@@ -1311,6 +1357,28 @@ validation provided)</td>
 </tr>
 </tbody>
 </table>
+<p>Every grouped fusion entry contains <code>train_prob</code> and
+<code>train_class</code> (or <code>valid_prob</code> and
+<code>valid_class</code>) and a <code>metrics</code> table. Scalar
+metrics are also available as <code>train_accuracy</code>,
+<code>train_balanced_accuracy</code>, <code>train_auc</code>, and
+<code>train_logloss</code>, with analogous <code>valid_</code> names for
+validation. Single-layer entries hold probability lists and class data
+frames covering all layers. Prediction returns the same
+<code>valid_out</code> structure; without outcome labels, predictions
+remain available, <code>metrics</code> is <code>NULL</code>, and scalar
+metrics are absent. Without validation data, <code>fit$valid_out</code>
+is <code>NULL</code>. Disabled early fusion gives
+<code>early = NULL</code>; disabled late methods are omitted from
+<code>late</code>. Flat outputs remain available for compatibility.</p>
+<p>Both the final stack and the final learned average train on OOF layer
+probabilities. Training predictions for the average fit weights outside
+each held-out fold. These procedures do not replace fully nested
+evaluation of the complete pipeline; use an untouched validation set or
+outer CV for assessment. Majority vote fractions are not calibrated
+probabilities, so its log loss should be interpreted accordingly. Both
+layer-level and final voting ties use the first class in
+<code>fit$class_levels</code>.</p>
 </div>
 <div class="section level3">
 <h3 id="survival-outputs-singleearlylate">Survival Outputs (Single/Early/Late)<a class="anchor" aria-label="anchor" href="#survival-outputs-singleearlylate"></a>
@@ -1399,8 +1467,8 @@ metrics and risk scores. <code>single</code>, <code>early</code>, and
 <tr class="odd">
 <td>Conbin signed global feature importance</td>
 <td><code>fit$feature_importance_signed</code></td>
-<td>Always returned for non-survival fits; named numeric vector sorted
-by effect magnitude/sign.</td>
+<td>Returned for standard continuous/binary fits; named numeric vector
+sorted by effect magnitude/sign.</td>
 </tr>
 <tr class="even">
 <td>Conbin signed per-layer importance</td>
@@ -1426,19 +1494,21 @@ available when <code>run_intermediate = TRUE</code>.</td>
 when <code>run_intermediate = TRUE</code>.</td>
 </tr>
 <tr class="odd">
-<td>Multiclass signed global feature importance</td>
+<td>Multiclass global feature importance (unsigned)</td>
 <td><code>fit$feature_importance_global</code></td>
-<td>Global score aggregated across multiclass contrasts.</td>
+<td>Named vector of mean absolute class-association scores, ranked
+highest first.</td>
 </tr>
 <tr class="even">
 <td>Multiclass signed importance by class</td>
 <td><code>fit$feature_importance_signed_by_class</code></td>
-<td>List with one signed vector per class.</td>
+<td>Feature-by-class matrix of signed class-association scores.</td>
 </tr>
 <tr class="odd">
 <td>Multiclass signed importance by layer and class</td>
 <td><code>fit$feature_importance_signed_by_layer_by_class</code></td>
-<td>Nested list by layer then class.</td>
+<td>List of feature-by-class matrices, one per omics layer; features
+ranked by mean absolute score across classes.</td>
 </tr>
 <tr class="even">
 <td>Survival signed per-layer importance</td>
@@ -1509,7 +1579,8 @@ available when <code>run_intermediate = TRUE</code>.</td>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit_mc</span><span class="op">$</span><span class="va">class.test</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit_mc</span><span class="op">$</span><span class="va">prob.train</span><span class="op">$</span><span class="va">stacked</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit_mc</span><span class="op">$</span><span class="va">feature_importance_global</span>, <span class="fl">20</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit_mc</span><span class="op">$</span><span class="va">feature_importance_signed_by_class</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span>, <span class="fl">20</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit_mc</span><span class="op">$</span><span class="va">feature_importance_signed_by_class</span><span class="op">[</span>, <span class="fl">1</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span>, <span class="fl">20</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit_mc</span><span class="op">$</span><span class="va">feature_importance_signed_by_layer_by_class</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span>, <span class="fl">20</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># ---- Survival: late-fusion weights + top combined features ----</span></span>
 <span><span class="va">fit_surv</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">IBS</span><span class="op">$</span><span class="va">weights</span></span>
@@ -1629,7 +1700,7 @@ with a meta-learner (<code>meta_learner</code>).</p>
 <span><span class="co">#&gt; CV SL.randomForest_screen.il.glmnet</span></span>
 <span><span class="co">#&gt; Non-Negative least squares convergence: TRUE</span></span>
 <span><span class="co">#&gt; full SL.randomForest_screen.il.glmnet</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.026 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.017 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Model fit for individual layers: SL.randomForest </span></span>
 <span><span class="co">#&gt; Model fit for stacked layer: sl_nnls_auc </span></span>
@@ -1830,7 +1901,7 @@ bytecode). In that case, either:</p>
 <span>  screen_pct <span class="op">=</span> <span class="fl">30</span>,</span>
 <span>  family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">gaussian</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.021 minutes </span></span>
+<span><span class="co">#&gt; Time for model fit : 0.023 minutes </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Model fit for individual layers: SL.randomForest </span></span>
 <span><span class="co">#&gt; Model fit for stacked layer: sl_nnls_auc </span></span>
@@ -2021,8 +2092,9 @@ local fixtures. Here we keep the original outcome column name
 (<code>diseaseCat</code>) and subject ID column (<code>sample_id</code>)
 and pass them through <code>outcome_col</code> and
 <code>subject_id_col</code>.</p>
-<p>The small multiclass example uses a ranger base model and multinomial
-stacking. Supervised screening is already demonstrated above; it is
+<p>The small multiclass example uses a ranger base model and returns
+multinomial stacking, majority voting, and learned probability averaging
+together. Supervised screening is already demonstrated above; it is
 disabled here because the fixture has only 25 features per assay.</p>
 <div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">Franzosa_MAE_train</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span></span>
@@ -2047,6 +2119,8 @@ disabled here because the fixture has only 25 features per assay.</p>
 <span>  meta_learner <span class="op">=</span> <span class="st">"multinom"</span>,</span>
 <span>  run_stacked <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  run_concat <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  run_majority <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  run_weighted <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  filter_method <span class="op">=</span> <span class="st">"variance"</span>,</span>
 <span>  filter_pct <span class="op">=</span> <span class="fl">50</span>,</span>
 <span>  run_screening <span class="op">=</span> <span class="cn">FALSE</span>,</span>
@@ -2066,21 +2140,34 @@ disabled here because the fixture has only 25 features per assay.</p>
 <span><span class="co">#&gt; Concatenated learner: ranger </span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Multiclass metrics for training data:</span></span>
-<span><span class="co">#&gt;          model  accuracy balanced_accuracy       auc   logloss</span></span>
-<span><span class="co">#&gt; 1   metabolome 0.4774194         0.4766926 0.6243295 1.0029164</span></span>
-<span><span class="co">#&gt; 2      species 0.5354839         0.5305216 0.7408962 0.8860159</span></span>
-<span><span class="co">#&gt; 3      stacked 0.5354839         0.5145209 0.7353418 0.9418464</span></span>
-<span><span class="co">#&gt; 4 concatenated 0.4774194         0.4872364 0.6920283 0.9165502</span></span>
+<span><span class="co">#&gt;              model  accuracy balanced_accuracy       auc   logloss</span></span>
+<span><span class="co">#&gt; 1       metabolome 0.4774194         0.4766926 0.6243295 1.0029164</span></span>
+<span><span class="co">#&gt; 2          species 0.5354839         0.5305216 0.7408962 0.8860159</span></span>
+<span><span class="co">#&gt; 3         majority 0.5032258         0.4859415 0.6764073 9.4535696</span></span>
+<span><span class="co">#&gt; 4 weighted_average 0.5161290         0.5102664 0.7402640 0.8880100</span></span>
+<span><span class="co">#&gt; 5          stacked 0.5354839         0.5145209 0.7353418 0.9418464</span></span>
+<span><span class="co">#&gt; 6     concatenated 0.4774194         0.4872364 0.6920283 0.9165502</span></span>
 <span><span class="co">#&gt; ========================================</span></span>
 <span><span class="co">#&gt; Multiclass metrics for test data:</span></span>
-<span><span class="co">#&gt;          model  accuracy balanced_accuracy       auc   logloss</span></span>
-<span><span class="co">#&gt; 1   metabolome 0.4615385         0.4744401 0.6427817 1.0076090</span></span>
-<span><span class="co">#&gt; 2      species 0.5230769         0.5143610 0.7099021 0.9985027</span></span>
-<span><span class="co">#&gt; 3      stacked 0.4307692         0.4343874 0.6423857 8.4281590</span></span>
-<span><span class="co">#&gt; 4 concatenated 0.4923077         0.4912385 0.7219948 0.9364180</span></span>
+<span><span class="co">#&gt;              model  accuracy balanced_accuracy       auc   logloss</span></span>
+<span><span class="co">#&gt; 1       metabolome 0.4615385         0.4744401 0.6427817 1.0076090</span></span>
+<span><span class="co">#&gt; 2          species 0.5230769         0.5143610 0.7099021 0.9985027</span></span>
+<span><span class="co">#&gt; 3         majority 0.4615385         0.4774704 0.6749088 9.3744601</span></span>
+<span><span class="co">#&gt; 4 weighted_average 0.5230769         0.5143610 0.7185067 0.9465800</span></span>
+<span><span class="co">#&gt; 5          stacked 0.6461538         0.6418314 0.8074481 0.8628265</span></span>
+<span><span class="co">#&gt; 6     concatenated 0.4923077         0.4912385 0.7219948 0.9364180</span></span>
 <span><span class="co">#&gt; ========================================</span></span></code></pre></div>
 <p>Useful multiclass outputs:</p>
 <ul>
+<li>
+<code>fit$train_out$single</code>, <code>fit$train_out$early</code>,
+<code>fit$train_out$late</code>
+</li>
+<li>
+<code>fit$valid_out$single</code>, <code>fit$valid_out$early</code>,
+<code>fit$valid_out$late</code>
+</li>
+<li><code>fit$late_methods</code></li>
 <li><code>fit$metrics.train</code></li>
 <li><code>fit$metrics.test</code></li>
 <li><code>fit$class.train</code></li>
@@ -2088,6 +2175,8 @@ disabled here because the fixture has only 25 features per assay.</p>
 <li><code>fit$prob.train</code></li>
 <li><code>fit$prob.test</code></li>
 <li><code>fit$feature_importance_signed_by_class</code></li>
+<li><code>fit$feature_importance_signed_by_layer_by_class</code></li>
+<li><code>fit$feature_importance_global</code></li>
 <li>
 <code>fit$filter_method</code>, <code>fit$filter_pct</code>
 </li>
@@ -2099,7 +2188,77 @@ disabled here because the fixture has only 25 features per assay.</p>
 one-vs-rest AUC, and log-loss. The plotting helper also returns a single
 one-vs-rest ROC figure with all class curves overlaid for each fitted
 model.</p>
+<p>Multiclass feature importance retains the existing univariate
+calculation: for each feature and class, subtract the mean in the other
+classes from the mean in that class, then divide by the feature’s
+standard deviation across all training samples (with a small numerical
+stabilizer). Positive scores indicate higher values in the class;
+negative scores indicate lower values. The global ranking averages the
+absolute scores across classes and is therefore unsigned. The per-layer
+output groups the same signed feature-by-class matrices by omics layer;
+it does not compute a single importance value for an entire layer. These
+scores use features remaining after optional filtering, including
+features excluded by supervised screening. They are shared across the
+fitted models and describe class associations rather than model-specific
+prediction attribution.</p>
 <div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">fit</span><span class="op">$</span><span class="va">late_methods</span></span>
+<span><span class="co">#&gt; [1] "stacked"          "majority"         "weighted_average"</span></span>
+<span><span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">valid_out</span><span class="op">$</span><span class="va">late</span>, <span class="kw">function</span><span class="op">(</span><span class="va">result</span><span class="op">)</span> <span class="va">result</span><span class="op">$</span><span class="va">metrics</span><span class="op">)</span></span>
+<span><span class="co">#&gt; $stacked</span></span>
+<span><span class="co">#&gt;     model  accuracy balanced_accuracy       auc   logloss</span></span>
+<span><span class="co">#&gt; 5 stacked 0.6461538         0.6418314 0.8074481 0.8628265</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; $majority</span></span>
+<span><span class="co">#&gt;      model  accuracy balanced_accuracy       auc logloss</span></span>
+<span><span class="co">#&gt; 3 majority 0.4615385         0.4774704 0.6749088 9.37446</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; $weighted_average</span></span>
+<span><span class="co">#&gt;              model  accuracy balanced_accuracy       auc logloss</span></span>
+<span><span class="co">#&gt; 4 weighted_average 0.5230769          0.514361 0.7185067 0.94658</span></span>
+<span><span class="va">fit</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">weighted_average</span><span class="op">$</span><span class="va">weights</span></span>
+<span><span class="co">#&gt; metabolome    species </span></span>
+<span><span class="co">#&gt;  0.1442797  0.8557203</span></span>
+<span><span class="va">fit</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">weighted_average</span><span class="op">$</span><span class="va">weights_by_fold</span></span>
+<span><span class="co">#&gt; $`1`</span></span>
+<span><span class="co">#&gt; metabolome    species </span></span>
+<span><span class="co">#&gt; 0.01953706 0.98046294 </span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; $`2`</span></span>
+<span><span class="co">#&gt; metabolome    species </span></span>
+<span><span class="co">#&gt;  0.2283534  0.7716466</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">valid_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">majority</span><span class="op">$</span><span class="va">valid_class</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] "Control" "Control" "CD"      "CD"      "Control" "Control"</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">valid_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">weighted_average</span><span class="op">$</span><span class="va">valid_prob</span><span class="op">)</span></span>
+<span><span class="co">#&gt;             CD    Control        UC</span></span>
+<span><span class="co">#&gt; [1,] 0.0982275 0.64301798 0.2587545</span></span>
+<span><span class="co">#&gt; [2,] 0.3079379 0.06007768 0.6319844</span></span>
+<span><span class="co">#&gt; [3,] 0.4643264 0.21736748 0.3183061</span></span>
+<span><span class="co">#&gt; [4,] 0.1362191 0.40847204 0.4553089</span></span>
+<span><span class="co">#&gt; [5,] 0.2096880 0.56133808 0.2289739</span></span>
+<span><span class="co">#&gt; [6,] 0.1211003 0.52590903 0.3529907</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">feature_importance_signed_by_class</span><span class="op">[</span>, <span class="fl">1</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="co">#&gt;                                 CD</span></span>
+<span><span class="co">#&gt; oleic.acid              -0.3912816</span></span>
+<span><span class="co">#&gt; linoleic.acid           -0.2310488</span></span>
+<span><span class="co">#&gt; phenyllactate            0.1931461</span></span>
+<span><span class="co">#&gt; X2.hydroxyhexadecanoate -0.4610016</span></span>
+<span><span class="co">#&gt; arachidonic.acid         0.1097637</span></span>
+<span><span class="co">#&gt; alpha.linolenic.acid    -0.2897504</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">feature_importance_signed_by_layer_by_class</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="co">#&gt;                                 CD   Control          UC</span></span>
+<span><span class="co">#&gt; azelate                 -0.5884802 0.6174619  0.17410474</span></span>
+<span><span class="co">#&gt; sebacate                -0.5314131 0.5251485  0.18190510</span></span>
+<span><span class="co">#&gt; X2.hydroxyhexadecanoate -0.4610016 0.5351429  0.09724516</span></span>
+<span><span class="co">#&gt; linoleic.acid           -0.2310488 0.5941575 -0.19931170</span></span>
+<span><span class="co">#&gt; alpha.linolenic.acid    -0.2897504 0.5581883 -0.10769951</span></span>
+<span><span class="co">#&gt; oleic.acid              -0.3912816 0.4823654  0.06111188</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">feature_importance_global</span><span class="op">)</span></span>
+<span><span class="co">#&gt;                 azelate         Alistipes_obesi                sebacate </span></span>
+<span><span class="co">#&gt;               0.4600156               0.4440633               0.4128222 </span></span>
+<span><span class="co">#&gt; X2.hydroxyhexadecanoate           linoleic.acid    alpha.linolenic.acid </span></span>
+<span><span class="co">#&gt;               0.3644632               0.3415060               0.3185461</span></span></code></pre></div>
+<div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plot.obj.mc</span> <span class="op">&lt;-</span> <span class="fu">IntegratedLearner</span><span class="fu">:::</span><span class="fu"><a href="../reference/plot.learner.html">plot.learner</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
 <span><span class="va">plot.obj.mc</span><span class="op">$</span><span class="va">plot</span></span></code></pre></div>
 <p><img src="IntegratedLearner_files/figure-html/chunk-17b-1.png" class="r-plt" alt="" width="768"></p>
@@ -2128,7 +2287,7 @@ column.</li>
 best fused survival model.</li>
 </ul>
 <p>This section provides a complete MAE workflow.</p>
-<div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">TCGA_survival_MAE_train</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span></span>
 <span>  <span class="st">"extdata"</span>, <span class="st">"TCGA_survival_MAE_train.rds"</span>, package <span class="op">=</span> <span class="st">"IntegratedLearner"</span>, mustWork <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span><span class="op">)</span></span>
@@ -2186,7 +2345,7 @@ best fused survival model.</li>
 <span><span class="co">#&gt; ILsurv completed</span></span></code></pre></div>
 <p>To run standalone direct cooperative survival modeling, use at least
 3 folds and set the cooperative options:</p>
-<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_surv_coop</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/IntegratedLearner.html">IntegratedLearner</a></span><span class="op">(</span></span>
 <span>  MAE_train <span class="op">=</span> <span class="va">mae_train</span>,</span>
 <span>  MAE_valid <span class="op">=</span> <span class="va">mae_valid</span>,</span>
@@ -2207,7 +2366,7 @@ best fused survival model.</li>
 <div class="section level3">
 <h3 id="interpret-survival-outputs">Interpret Survival Outputs<a class="anchor" aria-label="anchor" href="#interpret-survival-outputs"></a>
 </h3>
-<div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Single-layer training metrics</span></span>
 <span><span class="co"># fit_surv_mae$train_out$single$metrics</span></span>
 <span></span>
@@ -2596,7 +2755,7 @@ as true time-dependent discrimination curves. In practice, these two
 late-fusion outputs provide complementary summaries over the same
 single-layer and early-fusion backbone, making side-by-side comparison
 possible within one fit object.</p>
-<div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb30"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plot.obj.surv</span> <span class="op">&lt;-</span> <span class="fu">IntegratedLearner</span><span class="fu">:::</span><span class="fu"><a href="../reference/plot.learner.html">plot.learner</a></span><span class="op">(</span><span class="va">fit_surv_mae</span><span class="op">)</span></span>
 <span><span class="va">plot.obj.surv</span><span class="op">$</span><span class="va">plot</span></span></code></pre></div>
 <p><img src="IntegratedLearner_files/figure-html/chunk-19b-1.png" class="r-plt" alt="" width="768"></p>
@@ -2605,7 +2764,7 @@ possible within one fit object.</p>
 <div class="section level2">
 <h2 id="session-information">Session Information<a class="anchor" aria-label="anchor" href="#session-information"></a>
 </h2>
-<div class="sourceCode" id="cb30"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb31"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="co">#&gt; R version 4.6.1 (2026-06-24)</span></span>
 <span><span class="co">#&gt; Platform: x86_64-pc-linux-gnu</span></span>
@@ -2642,7 +2801,7 @@ possible within one fit object.</p>
 <span><span class="co">#&gt; [17] lattice_0.23-1              SuperLearner_2.0-42        </span></span>
 <span><span class="co">#&gt; [19] nnls_1.6                    gam_1.22-7                 </span></span>
 <span><span class="co">#&gt; [21] foreach_1.5.2               ggplot2_4.0.3              </span></span>
-<span><span class="co">#&gt; [23] dplyr_1.2.1                 IntegratedLearner_0.99.4   </span></span>
+<span><span class="co">#&gt; [23] dplyr_1.2.1                 IntegratedLearner_0.99.5   </span></span>
 <span><span class="co">#&gt; [25] BiocStyle_2.41.0           </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; loaded via a namespace (and not attached):</span></span>
@@ -2673,7 +2832,7 @@ possible within one fit object.</p>
 <span><span class="co">#&gt; [73] mvtnorm_1.4-2        fs_2.1.0             grid_4.6.1          </span></span>
 <span><span class="co">#&gt; [76] pec_2025.06.24       tidyr_1.3.2          ipred_0.9-16        </span></span>
 <span><span class="co">#&gt; [79] nlme_3.1-171         cli_3.6.6            textshaping_1.0.5   </span></span>
-<span><span class="co">#&gt; [82] S4Arrays_1.13.2      lava_1.9.3           gtable_0.3.6        </span></span>
+<span><span class="co">#&gt; [82] S4Arrays_1.13.2      lava_1.10            gtable_0.3.6        </span></span>
 <span><span class="co">#&gt; [85] sass_0.4.10          digest_0.6.39        SparseArray_1.13.4  </span></span>
 <span><span class="co">#&gt; [88] htmlwidgets_1.6.4    farver_2.1.2         htmltools_0.5.9     </span></span>
 <span><span class="co">#&gt; [91] pkgdown_2.2.1        lifecycle_1.0.5      hardhat_1.4.3       </span></span>

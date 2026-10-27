@@ -30,7 +30,7 @@ framework."><!-- mathjax --><script src="https://cdnjs.cloudflare.com/ajax/libs/
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.4</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.5</span>
       </span>
     </div>
 
@@ -113,6 +113,8 @@ framework.</p>
 <span>  print_learner <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  refit.stack <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  family <span class="op">=</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">gaussian</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  run_majority <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  run_weighted <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -228,6 +230,8 @@ of <code>filter_pct</code> with <code>filter_method = 'prevalence'</code>.</p></
 <dt id="arg-meta-learner">meta_learner<a class="anchor" aria-label="anchor" href="#arg-meta-learner"></a></dt>
 <dd><p>Meta-learner for late fusion (stacked generalization).
 Defaults to <code>`sl_nnls_auc`</code>.
+For multiclass outcomes this legacy default maps to multinomial
+<code>glmnet</code>; use <code>run_weighted</code> for learned scalar layer weights.
 Check out the
 <a href="https://CRAN.R-project.org/package=SuperLearner" class="external-link">SuperLearner package page</a>
 for all available options.</p></dd>
@@ -296,6 +300,17 @@ for time-to-event outcomes. Determines whether <code>IL_conbin</code> or
 <code>IL_survival</code> is used internally.</p></dd>
 
 
+<dt id="arg-run-majority">run_majority<a class="anchor" aria-label="anchor" href="#arg-run-majority"></a></dt>
+<dd><p>Logical; return multiclass majority voting. Default TRUE;
+ignored for other outcomes. Ties use the first class in training class order.</p></dd>
+
+
+<dt id="arg-run-weighted">run_weighted<a class="anchor" aria-label="anchor" href="#arg-run-weighted"></a></dt>
+<dd><p>Logical; return multiclass probability averaging with
+nonnegative layer weights summing to one, learned by minimizing out-of-fold
+multiclass log loss. Default TRUE; ignored for other outcomes.</p></dd>
+
+
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
 <dd><p>Additional arguments passed to the underlying engines.</p></dd>
 
@@ -307,7 +322,12 @@ for time-to-event outcomes. Determines whether <code>IL_conbin</code> or
 performance estimates, and predicted values for training and, if supplied,
 validation data. When <code>run_intermediate = TRUE</code>, the object also
 includes coefficient-based cooperative feature-importance scores from the
-selected <span class="pkg">multiview</span> model.</p>
+selected <span class="pkg">multiview</span> model.
+Multiclass fits also provide <code>train_out</code> and <code>valid_out</code> grouped
+into <code>single</code>, <code>early</code>, and <code>late</code> results. All enabled late
+methods (<code>stacked</code>, <code>majority</code>, <code>weighted_average</code>) include
+probabilities, predicted classes, and metrics; learned averaging also reports
+layer weights. Existing flat multiclass outputs remain available.</p>
     </div>
     <div id="details">
     <h2>Details</h2>

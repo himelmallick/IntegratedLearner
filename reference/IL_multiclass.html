@@ -20,7 +20,7 @@ probability modeling and multiclass stacking."><!-- mathjax --><script src="http
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.4</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.5</span>
       </span>
     </div>
 
@@ -88,6 +88,8 @@ probability modeling and multiclass stacking.</p>
 <span>  print_learner <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  family <span class="op">=</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">binomial</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  eps <span class="op">=</span> <span class="fl">1e-15</span>,</span>
+<span>  run_majority <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  run_weighted <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -135,8 +137,8 @@ validation set when available. Must have the exact same structure as
 
 
 <dt id="arg-folds">folds<a class="anchor" aria-label="anchor" href="#arg-folds"></a></dt>
-<dd><p>How many folds in the V-fold nested cross-validation? Default
-is 5.</p></dd>
+<dd><p>Number of subject-level folds for out-of-fold predictions.
+Default 5. Fully nested evaluation of the fusion pipeline is separate.</p></dd>
 
 
 <dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
@@ -144,8 +146,7 @@ is 5.</p></dd>
 
 
 <dt id="arg-base-learner">base_learner<a class="anchor" aria-label="anchor" href="#arg-base-learner"></a></dt>
-<dd><p>Base learner for late fusion and early fusion. Default:
-<code>sl_bart</code>.</p></dd>
+<dd><p>Native multiclass base learner. Default <code>"glmnet"</code>.</p></dd>
 
 
 <dt id="arg-base-screener">base_screener<a class="anchor" aria-label="anchor" href="#arg-base-screener"></a></dt>
@@ -184,8 +185,9 @@ prevalence-based filtering before model fitting. Deprecated alias of
 
 
 <dt id="arg-meta-learner">meta_learner<a class="anchor" aria-label="anchor" href="#arg-meta-learner"></a></dt>
-<dd><p>Meta-learner for late fusion (stacked generalization).
-Defaults to <code>sl_nnls_auc</code>.</p></dd>
+<dd><p>Native multiclass stacking learner. Default
+<code>"glmnet"</code>. Legacy <code>sl_nnls_auc</code> and <code>SL.nnls</code> aliases
+map to multinomial glmnet, not scalar layer-weight optimization.</p></dd>
 
 
 <dt id="arg-run-concat">run_concat<a class="anchor" aria-label="anchor" href="#arg-run-concat"></a></dt>
@@ -235,8 +237,20 @@ IL_survival().</p></dd>
 <dd><p>Small positive constant used to stabilize probabilities.</p></dd>
 
 
+<dt id="arg-run-majority">run_majority<a class="anchor" aria-label="anchor" href="#arg-run-majority"></a></dt>
+<dd><p>Logical; return multiclass majority voting. Default TRUE;
+ignored for other outcomes. Ties use the first class in training class order.</p></dd>
+
+
+<dt id="arg-run-weighted">run_weighted<a class="anchor" aria-label="anchor" href="#arg-run-weighted"></a></dt>
+<dd><p>Logical; return multiclass probability averaging with
+nonnegative layer weights summing to one, learned by minimizing out-of-fold
+multiclass log loss. Default TRUE; ignored for other outcomes.</p></dd>
+
+
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
-<dd><p>Additional arguments (currently unused).</p></dd>
+<dd><p>Additional arguments passed to native base-model fitting;
+these are not passed to the stacked meta-model or fusion-weight optimizer.</p></dd>
 
 </dl></div>
     <div id="value">
@@ -244,6 +258,43 @@ IL_survival().</p></dd>
     <p>A fitted multiclass IntegratedLearner object containing class
 probabilities, predicted classes, fitted single-layer and fusion models,
 and training/validation multiclass performance summaries when available.</p>
+    </div>
+    <div id="details">
+    <h2>Details</h2>
+    <p>Majority voting returns vote fractions under <code>majority</code>; these
+are not calibrated class probabilities. Ties use the first class in training
+class order. Learned averaging returns probabilities under
+<code>weighted_average</code> and stores final layer weights under
+<code>model_fits$model_weighted$weights</code>. Weights minimize multiclass log
+loss on out-of-fold layer probabilities. Training outputs cross-fit the
+weights across the existing folds. As with stacking, fully nested evaluation
+is needed for an unbiased assessment of the entire fitted pipeline.
+Results are also grouped under <code>train_out</code> and <code>valid_out</code>, each
+with <code>single</code>, <code>early</code>, and <code>late</code> entries. The <code>late</code>
+list contains all enabled methods: <code>stacked</code>, <code>majority</code>, and
+<code>weighted_average</code>. Each method includes split-specific probabilities,
+classes, and metrics; learned averaging also includes final weights and,
+for training, the weights fitted outside each fold. Existing flat outputs
+remain available. <code>late_methods</code> lists the returned late-fusion methods.
+Fusion entries contain <code>train_prob</code>, <code>train_class</code>, a
+<code>metrics</code> table, and scalar <code>train_accuracy</code>,
+<code>train_balanced_accuracy</code>, <code>train_auc</code>, and <code>train_logloss</code>;
+validation entries use the corresponding <code>valid_</code> names. AUC is the
+macro average of available one-vs-rest class AUCs. Single-layer entries
+contain probability lists and class data frames. Without validation data,
+<code>valid_out</code> is <code>NULL</code>. Disabled early fusion gives
+<code>early = NULL</code>, and disabled late methods are omitted from <code>late</code>.</p>
+<p>Feature importance retains a univariate class-association calculation:
+for each feature and class, the mean in the remaining classes is subtracted
+from the mean in that class and divided by the feature's overall training
+standard deviation plus <code>1e-8</code>. The signed scores form a
+feature-by-class matrix in <code>feature_importance_signed_by_class</code>.
+<code>feature_importance_signed_by_layer_by_class</code> groups these matrices
+by omics layer and ranks features by mean absolute score across classes.
+<code>feature_importance_global</code> is the unsigned mean absolute score
+across classes, ranked highest first. These associations use the training
+features after optional filtering, including features excluded by screening;
+they are shared across fusion methods and are not model-specific attributions.</p>
     </div>
 
     <div id="ref-examples">
@@ -274,6 +325,16 @@ and training/validation multiclass performance summaries when available.</p>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">fit</span><span class="op">$</span><span class="va">family</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] "multinomial"</span>
+<span class="r-in"><span><span class="va">fit</span><span class="op">$</span><span class="va">late_methods</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "majority"         "weighted_average"</span>
+<span class="r-in"><span><span class="va">fit</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">weighted_average</span><span class="op">$</span><span class="va">weights</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    Layer1    Layer2 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 0.4482485 0.5517515 </span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">feature_importance_signed_by_layer_by_class</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>                A          B          C</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> L1_F1 -0.5194429 -0.1502983  0.6697412</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> L1_F3  0.5698738 -0.3140530 -0.2558207</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> L1_F2  0.3711250 -0.1626989 -0.2084261</span>
 </code></pre></div>
     </div>
   </div>

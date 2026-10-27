@@ -33,7 +33,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.4</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.5</span>
       </span>
     </div>
 
@@ -124,6 +124,7 @@
 <p>Within a Bioconductor workflow, the intended pattern is: assemble aligned assays in <code>MultiAssayExperiment</code>, inspect the object with <code>experiments()</code>, <code>assay()</code>, <code>colData()</code>, and <code>sampleMap()</code>, fit <code><a href="reference/IntegratedLearner.html">IntegratedLearner()</a></code>, and then pass predictions, layer weights, and feature summaries into downstream interpretation or visualization steps. IntegratedLearner focuses on supervised multi-omics prediction/integration rather than general container management or unsupervised integration.</p>
 <p>For binary/continuous outcomes, late fusion proceeds by 1) fitting a machine learning algorithm (<code>base_learner</code>) per layer and 2) combining layer-wise cross-validated predictions using a meta model (<code>meta_learner</code>). A common default is <a href="https://arxiv.org/abs/0806.3286" class="external-link">BART</a> as base learner (<code>base_learner = "sl_bart"</code>) with <code>sl_nnls_auc</code> as the meta-learner.</p>
 <p>For multiclass outcomes (<code>family = binomial()</code> with more than two outcome classes), <code>IntegratedLearner</code> dispatches to a native multiclass backend that performs multiclass probability modeling at layer, stacked, and concatenated levels. Optional filtering and screening are supported via <code>filter_method</code>/<code>filter_pct</code> and <code>run_screening</code>/<code>screen_pct</code>.</p>
+<p>Multiclass fits also return two late-fusion methods by default, independently of <code>run_stacked</code>: <code>majority</code> counts each layer’s predicted class, and <code>weighted_average</code> combines class probabilities using nonnegative layer weights that sum to one. Weights minimize multiclass log loss on out-of-fold layer predictions; training outputs fit weights separately outside each held-out fold. Set <code>run_majority = FALSE</code> or <code>run_weighted = FALSE</code> to disable either method. Majority ties use the first class in <code>fit$class_levels</code>. Its <code>prob.*$majority</code> matrices contain vote fractions, which are not calibrated probabilities, so their log loss should be interpreted accordingly. Fully nested evaluation or an untouched validation set is needed to assess the complete learned fusion pipeline.</p>
 <p>For survival outcomes, <code>IntegratedLearner</code> dispatches to the native survival engine (<code>ILsurv</code>) with configurable late-fusion weighting (<code>COX</code>/<code>IBS</code>). Supported survival learners include Cox, penalized Cox, tree ensembles, boosting, and XGBoost-based survival variants (see full list below).</p>
 <p>Naming conventions:</p>
 <ul>
@@ -268,6 +269,8 @@
 <li>
 <code>meta_learner</code>: Meta learner for non-survival late fusion. Defaults to <code>"sl_nnls_auc"</code> in binary/continuous; multiclass supports native learners (for example <code>glmnet</code>, <code>randomforest</code>, <code>xgboost</code>). Not used when <code>run_intermediate = TRUE</code>.</li>
 <li>
+<code>run_majority</code>, <code>run_weighted</code>: Multiclass-only flags, both <code>TRUE</code> by default. Return majority voting and learned probability averaging independently of <code>run_stacked</code>.</li>
+<li>
 <code>run_concat</code>: Logical; include early-fusion (concatenated) model for non-survival.</li>
 <li>
 <code>run_stacked</code>: Logical; include late-fusion stacked model for non-survival.</li>
@@ -338,18 +341,43 @@
 <p>For multiclass fits (<code>IL_multiclass</code> path):</p>
 <ul>
 <li>
-<code>model_fits</code>: Layer-wise, stacked, and concatenated multiclass model objects.</li>
+<code>model_fits</code>: Layer-wise, stacked, concatenated, and weighted-average multiclass fits.</li>
 <li>
-<code>prob.train</code> / <code>prob.test</code>: Per-model class-probability matrices.</li>
+<code>model_fits$model_weighted$weights</code>: Named weights for the learned probability average.</li>
+<li>
+<code>prob.train</code> / <code>prob.test</code>: Per-model class-probability matrices; <code>majority</code> contains vote fractions.</li>
 <li>
 <code>class.train</code> / <code>class.test</code>: Predicted class labels.</li>
 <li>
-<code>metrics.train</code> / <code>metrics.test</code>: Accuracy, balanced accuracy, and multiclass log-loss.</li>
+<code>metrics.train</code> / <code>metrics.test</code>: Accuracy, balanced accuracy, macro one-vs-rest AUC, and multiclass log-loss.</li>
 <li>
 <code>selected_features_by_layer</code>, <code>selected_features_concat</code>: Features retained by screening (when used).</li>
 <li>
-<code>feature_importance_signed_by_class</code>: Signed importance by class.</li>
+<code>feature_importance_signed_by_class</code>: Feature-by-class matrix of signed class-association scores.</li>
+<li>
+<code>feature_importance_signed_by_layer_by_class</code>: The same feature-by-class matrices grouped by omics layer, with features ranked by mean absolute score across classes.</li>
+<li>
+<code>feature_importance_global</code>: Unsigned mean absolute class-association score per feature, ranked highest first.</li>
 </ul>
+<p>The current multiclass importance calculation compares each feature’s mean in one class against its mean in all other classes, divided by the feature’s standard deviation across training samples. Positive scores indicate higher values in that class; negative scores indicate lower values. These are univariate associations calculated after optional feature filtering, including features that supervised screening may exclude. They are shared across fusion methods and do not attribute predictions to the fitted models. Grouping by omics layer is already available:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">feature_importance_signed_by_class</span><span class="op">[</span>, <span class="fl">1</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">feature_importance_signed_by_layer_by_class</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">feature_importance_global</span><span class="op">)</span></span></code></pre></div>
+<p>Multiclass results also follow the survival-style organization, with all enabled methods returned together. <code>fit$late_methods</code> lists the available late-fusion methods. By default these are <code>stacked</code>, <code>majority</code>, and <code>weighted_average</code>.</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">fit</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">single</span>                   <span class="co"># Per-layer predictions and metrics</span></span>
+<span><span class="va">fit</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">early</span>                    <span class="co"># Concatenated model</span></span>
+<span><span class="va">fit</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">stacked</span></span>
+<span><span class="va">fit</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">majority</span></span>
+<span><span class="va">fit</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">weighted_average</span></span>
+<span></span>
+<span><span class="va">fit</span><span class="op">$</span><span class="va">valid_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">weighted_average</span><span class="op">$</span><span class="va">valid_prob</span></span>
+<span><span class="va">fit</span><span class="op">$</span><span class="va">valid_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">weighted_average</span><span class="op">$</span><span class="va">valid_class</span></span>
+<span><span class="va">fit</span><span class="op">$</span><span class="va">valid_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">weighted_average</span><span class="op">$</span><span class="va">valid_logloss</span></span>
+<span><span class="va">fit</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">weighted_average</span><span class="op">$</span><span class="va">weights</span></span>
+<span><span class="va">fit</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">weighted_average</span><span class="op">$</span><span class="va">weights_by_fold</span></span></code></pre></div>
+<p>Each method includes a <code>metrics</code> table plus split-specific scalar metrics: <code>train_accuracy</code>, <code>train_balanced_accuracy</code>, <code>train_auc</code>, <code>train_logloss</code>, or their <code>valid_</code> equivalents. Prediction results provide the same <code>valid_out</code> structure, including probabilities and classes when outcome labels are absent; metrics then remain <code>NULL</code>. Without validation data, <code>fit$valid_out</code> is <code>NULL</code>. Disabled early fusion gives <code>early = NULL</code>; disabled late methods are omitted from <code>late</code>. The existing flat multiclass outputs remain available.</p>
 <p>For survival fits (<code>ILsurv</code> path):</p>
 <ul>
 <li>
