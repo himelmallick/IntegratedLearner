@@ -54,6 +54,35 @@ test_that("IntegratedLearner multiclass path runs with native multiclass backend
   expect_true(all(abs(rowSums(as.matrix(p)) - 1) < 1e-06))
 })
 
+test_that("final multiclass stack trains on out-of-fold layer probabilities", {
+  skip_if_not_installed("glmnet")
+
+  seed <- 2041L
+  pcl <- make_toy_multiclass_pcl(n_samples = 60, seed = seed)
+  fit_impl <- IntegratedLearner:::fit_multiclass_model_impl
+  meta_training_X <- NULL
+  testthat::local_mocked_bindings(
+    fit_multiclass_model_impl = function(X, y, learner_id = "glmnet",
+                                         seed = 1234, model_args = list()) {
+      if (seed == 2041L + 7000L) meta_training_X <<- X
+      fit_impl(X, y, learner_id, seed, model_args)
+    },
+    .package = "IntegratedLearner"
+  )
+
+  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl, folds = 3, seed = seed,
+    base_learner = "glmnet", meta_learner = "glmnet",
+    run_stacked = TRUE, run_concat = FALSE, print_learner = FALSE,
+    family = stats::binomial()
+  ))
+
+  expected <- IntegratedLearner:::stack_prob_features(
+    fit$prob.train[names(fit$model_fits$model_layers)]
+  )
+  expect_identical(meta_training_X, expected)
+})
+
 test_that("predict.learner returns multiclass probabilities and metrics", {
   skip_if_not_installed("glmnet")
 

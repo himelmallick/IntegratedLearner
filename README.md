@@ -68,6 +68,17 @@ For binary/continuous outcomes, late fusion proceeds by 1) fitting a machine lea
 
 For multiclass outcomes (`family = binomial()` with more than two outcome classes), `IntegratedLearner` dispatches to a native multiclass backend that performs multiclass probability modeling at layer, stacked, and concatenated levels. Optional filtering and screening are supported via `filter_method`/`filter_pct` and `run_screening`/`screen_pct`.
 
+Multiclass fits also return two late-fusion methods by default, independently of
+`run_stacked`: `majority` counts each layer's predicted class, and
+`weighted_average` combines class probabilities using nonnegative layer weights
+that sum to one. Weights minimize multiclass log loss on out-of-fold layer
+predictions; training outputs fit weights separately outside each held-out fold.
+Set `run_majority = FALSE` or `run_weighted = FALSE` to disable either method.
+Majority ties use the first class in `fit$class_levels`. Its `prob.*$majority`
+matrices contain vote fractions, which are not calibrated probabilities, so their
+log loss should be interpreted accordingly. Fully nested evaluation or an untouched
+validation set is needed to assess the complete learned fusion pipeline.
+
 For survival outcomes, `IntegratedLearner` dispatches to the native survival engine (`ILsurv`) with configurable late-fusion weighting (`COX`/`IBS`). Supported survival learners include Cox, penalized Cox, tree ensembles, boosting, and XGBoost-based survival variants (see full list below).
 
 Naming conventions:
@@ -203,6 +214,7 @@ Custom metadata names are optional. If omitted, defaults remain `outcome_col = "
 * `screen_pct`: Retention percentage in `(0,100]` for screening.
 * `prevalence_pct`: Deprecated alias of `filter_pct` when `filter_method = "prevalence"`.
 * `meta_learner`: Meta learner for non-survival late fusion. Defaults to `"sl_nnls_auc"` in binary/continuous; multiclass supports native learners (for example `glmnet`, `randomforest`, `xgboost`). Not used when `run_intermediate = TRUE`.
+* `run_majority`, `run_weighted`: Multiclass-only flags, both `TRUE` by default. Return majority voting and learned probability averaging independently of `run_stacked`.
 * `run_concat`: Logical; include early-fusion (concatenated) model for non-survival.
 * `run_stacked`: Logical; include late-fusion stacked model for non-survival.
 * `run_intermediate`: Logical; run standalone direct cooperative learning via the `multiview` package. Default is `FALSE`. When `TRUE`, early fusion, late fusion, single-layer base learners, and supervised screening are skipped.
@@ -253,12 +265,56 @@ For continuous/binary fits (`IL_conbin` path):
 
 For multiclass fits (`IL_multiclass` path):
 
-* `model_fits`: Layer-wise, stacked, and concatenated multiclass model objects.
-* `prob.train` / `prob.test`: Per-model class-probability matrices.
+* `model_fits`: Layer-wise, stacked, concatenated, and weighted-average multiclass fits.
+* `model_fits$model_weighted$weights`: Named weights for the learned probability average.
+* `prob.train` / `prob.test`: Per-model class-probability matrices; `majority` contains vote fractions.
 * `class.train` / `class.test`: Predicted class labels.
-* `metrics.train` / `metrics.test`: Accuracy, balanced accuracy, and multiclass log-loss.
+* `metrics.train` / `metrics.test`: Accuracy, balanced accuracy, macro one-vs-rest AUC, and multiclass log-loss.
 * `selected_features_by_layer`, `selected_features_concat`: Features retained by screening (when used).
-* `feature_importance_signed_by_class`: Signed importance by class.
+* `feature_importance_signed_by_class`: Feature-by-class matrix of signed class-association scores.
+* `feature_importance_signed_by_layer_by_class`: The same feature-by-class matrices grouped by omics layer, with features ranked by mean absolute score across classes.
+* `feature_importance_global`: Unsigned mean absolute class-association score per feature, ranked highest first.
+
+The current multiclass importance calculation compares each feature's mean in
+one class against its mean in all other classes, divided by the feature's
+standard deviation across training samples. Positive scores indicate higher
+values in that class; negative scores indicate lower values. These are
+univariate associations calculated after optional feature filtering, including
+features that supervised screening may exclude. They are shared across fusion
+methods and do not attribute predictions to the fitted models. Grouping by
+omics layer is already available:
+
+```r
+head(fit$feature_importance_signed_by_class[, 1, drop = FALSE])
+head(fit$feature_importance_signed_by_layer_by_class[[1]])
+head(fit$feature_importance_global)
+```
+
+Multiclass results also follow the survival-style organization, with all enabled
+methods returned together. `fit$late_methods` lists the available late-fusion
+methods. By default these are `stacked`, `majority`, and `weighted_average`.
+
+```r
+fit$train_out$single                   # Per-layer predictions and metrics
+fit$train_out$early                    # Concatenated model
+fit$train_out$late$stacked
+fit$train_out$late$majority
+fit$train_out$late$weighted_average
+
+fit$valid_out$late$weighted_average$valid_prob
+fit$valid_out$late$weighted_average$valid_class
+fit$valid_out$late$weighted_average$valid_logloss
+fit$train_out$late$weighted_average$weights
+fit$train_out$late$weighted_average$weights_by_fold
+```
+
+Each method includes a `metrics` table plus split-specific scalar metrics:
+`train_accuracy`, `train_balanced_accuracy`, `train_auc`, `train_logloss`, or
+their `valid_` equivalents. Prediction results provide the same `valid_out`
+structure, including probabilities and classes when outcome labels are absent;
+metrics then remain `NULL`. Without validation data, `fit$valid_out` is `NULL`.
+Disabled early fusion gives `early = NULL`; disabled late methods are omitted
+from `late`. The existing flat multiclass outputs remain available.
 
 For survival fits (`ILsurv` path):
 

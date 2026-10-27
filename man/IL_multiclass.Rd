@@ -30,6 +30,8 @@ IL_multiclass(
   print_learner = TRUE,
   family = stats::binomial(),
   eps = 1e-15,
+  run_majority = TRUE,
+  run_weighted = TRUE,
   ...
 )
 }
@@ -62,13 +64,12 @@ prediction is desired. Must have the exact same structure as
 validation set when available. Must have the exact same structure as
 \code{sample_metadata}.}
 
-\item{folds}{How many folds in the V-fold nested cross-validation? Default
-is 5.}
+\item{folds}{Number of subject-level folds for out-of-fold predictions.
+Default 5. Fully nested evaluation of the fusion pipeline is separate.}
 
 \item{seed}{Specify the seed for reproducibility. Default is 1234.}
 
-\item{base_learner}{Base learner for late fusion and early fusion. Default:
-\code{sl_bart}.}
+\item{base_learner}{Native multiclass base learner. Default \code{"glmnet"}.}
 
 \item{base_screener}{Deprecated for this backend; currently ignored and kept
 only for backward compatibility.}
@@ -93,8 +94,9 @@ selected \code{filter_method}. Keeps the top \code{filter_pct} percent features.
 prevalence-based filtering before model fitting. Deprecated alias of
 \code{filter_pct} with \code{filter_method = 'prevalence'}.}
 
-\item{meta_learner}{Meta-learner for late fusion (stacked generalization).
-Defaults to \code{sl_nnls_auc}.}
+\item{meta_learner}{Native multiclass stacking learner. Default
+\code{"glmnet"}. Legacy \code{sl_nnls_auc} and \code{SL.nnls} aliases
+map to multinomial glmnet, not scalar layer-weight optimization.}
 
 \item{run_concat}{Should early fusion be run? Default is TRUE.}
 
@@ -123,7 +125,15 @@ IL_survival().}
 
 \item{eps}{Small positive constant used to stabilize probabilities.}
 
-\item{...}{Additional arguments (currently unused).}
+\item{run_majority}{Logical; return multiclass majority voting. Default TRUE;
+ignored for other outcomes. Ties use the first class in training class order.}
+
+\item{run_weighted}{Logical; return multiclass probability averaging with
+nonnegative layer weights summing to one, learned by minimizing out-of-fold
+multiclass log loss. Default TRUE; ignored for other outcomes.}
+
+\item{...}{Additional arguments passed to native base-model fitting;
+these are not passed to the stacked meta-model or fusion-weight optimizer.}
 }
 \value{
 A fitted multiclass IntegratedLearner object containing class
@@ -135,6 +145,43 @@ Native multiclass backend used by \code{IntegratedLearner()} when
 \code{family = binomial()} and the outcome has more than two classes.
 This backend preserves the existing API while using multiclass-native
 probability modeling and multiclass stacking.
+}
+\details{
+Majority voting returns vote fractions under \code{majority}; these
+are not calibrated class probabilities. Ties use the first class in training
+class order. Learned averaging returns probabilities under
+\code{weighted_average} and stores final layer weights under
+\code{model_fits$model_weighted$weights}. Weights minimize multiclass log
+loss on out-of-fold layer probabilities. Training outputs cross-fit the
+weights across the existing folds. As with stacking, fully nested evaluation
+is needed for an unbiased assessment of the entire fitted pipeline.
+Results are also grouped under \code{train_out} and \code{valid_out}, each
+with \code{single}, \code{early}, and \code{late} entries. The \code{late}
+list contains all enabled methods: \code{stacked}, \code{majority}, and
+\code{weighted_average}. Each method includes split-specific probabilities,
+classes, and metrics; learned averaging also includes final weights and,
+for training, the weights fitted outside each fold. Existing flat outputs
+remain available. \code{late_methods} lists the returned late-fusion methods.
+Fusion entries contain \code{train_prob}, \code{train_class}, a
+\code{metrics} table, and scalar \code{train_accuracy},
+\code{train_balanced_accuracy}, \code{train_auc}, and \code{train_logloss};
+validation entries use the corresponding \code{valid_} names. AUC is the
+macro average of available one-vs-rest class AUCs. Single-layer entries
+contain probability lists and class data frames. Without validation data,
+\code{valid_out} is \code{NULL}. Disabled early fusion gives
+\code{early = NULL}, and disabled late methods are omitted from \code{late}.
+
+Feature importance retains a univariate class-association calculation:
+for each feature and class, the mean in the remaining classes is subtracted
+from the mean in that class and divided by the feature's overall training
+standard deviation plus \code{1e-8}. The signed scores form a
+feature-by-class matrix in \code{feature_importance_signed_by_class}.
+\code{feature_importance_signed_by_layer_by_class} groups these matrices
+by omics layer and ranks features by mean absolute score across classes.
+\code{feature_importance_global} is the unsigned mean absolute score
+across classes, ranked highest first. These associations use the training
+features after optional filtering, including features excluded by screening;
+they are shared across fusion methods and are not model-specific attributions.
 }
 \examples{
 set.seed(1)
@@ -162,4 +209,7 @@ fit <- IL_multiclass(
   print_learner = FALSE
 )
 fit$family
+fit$late_methods
+fit$train_out$late$weighted_average$weights
+head(fit$feature_importance_signed_by_layer_by_class[[1]])
 }

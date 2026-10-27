@@ -46,6 +46,10 @@ training set and, if available, the validation set produced by an
 \code{IntegratedLearner} fit. Depending on the outcome family, this may
 include ROC curves, R-squared bar plots, multiclass one-vs-rest ROC
 curves, or survival AUC / Kaplan-Meier panels.
+Multiclass plots include all enabled single-layer and fusion outputs,
+including stacking, majority voting, and learned probability averaging.
+Majority ROC curves use vote fractions, which are not calibrated
+probabilities.
 }
 \examples{
 PRISM_MAE <- readRDS(system.file(

@@ -35,6 +35,8 @@ IntegratedLearner(
   print_learner = TRUE,
   refit.stack = FALSE,
   family = stats::gaussian(),
+  run_majority = TRUE,
+  run_weighted = TRUE,
   ...
 )
 }
@@ -109,6 +111,8 @@ of \code{filter_pct} with \code{filter_method = 'prevalence'}.}
 
 \item{meta_learner}{Meta-learner for late fusion (stacked generalization).
 Defaults to \code{`sl_nnls_auc`}.
+For multiclass outcomes this legacy default maps to multinomial
+\code{glmnet}; use \code{run_weighted} for learned scalar layer weights.
 Check out the
 \href{https://CRAN.R-project.org/package=SuperLearner}{SuperLearner package page}
 for all available options.}
@@ -154,6 +158,13 @@ entire data are returned if specified. Default is FALSE.}
 for time-to-event outcomes. Determines whether \code{IL_conbin} or
 \code{IL_survival} is used internally.}
 
+\item{run_majority}{Logical; return multiclass majority voting. Default TRUE;
+ignored for other outcomes. Ties use the first class in training class order.}
+
+\item{run_weighted}{Logical; return multiclass probability averaging with
+nonnegative layer weights summing to one, learned by minimizing out-of-fold
+multiclass log loss. Default TRUE; ignored for other outcomes.}
+
 \item{...}{Additional arguments passed to the underlying engines.}
 }
 \value{
@@ -163,6 +174,11 @@ performance estimates, and predicted values for training and, if supplied,
 validation data. When \code{run_intermediate = TRUE}, the object also
 includes coefficient-based cooperative feature-importance scores from the
 selected \pkg{multiview} model.
+Multiclass fits also provide \code{train_out} and \code{valid_out} grouped
+into \code{single}, \code{early}, and \code{late} results. All enabled late
+methods (\code{stacked}, \code{majority}, \code{weighted_average}) include
+probabilities, predicted classes, and metrics; learned averaging also reports
+layer weights. Existing flat multiclass outputs remain available.
 }
 \description{
 Performs integrated machine learning to predict a binary, continuous, or

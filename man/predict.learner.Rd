@@ -52,6 +52,21 @@ gaussian fits.}
 For multiclass fits, returns the output of
 \code{predict_multiclass.learner()}, which contains class
 probabilities, predicted classes, and optional validation metrics.
+The flat outputs are \code{prob.test}, \code{class.test}, and
+\code{yhat.test}, with \code{metrics.test} when outcomes are available.
+Grouped results are returned in \code{valid_out$single},
+\code{valid_out$early}, and \code{valid_out$late}. The latter includes all
+methods enabled during fitting: \code{stacked}, \code{majority}, and
+\code{weighted_average}, as listed in \code{late_methods}. Each fusion
+method includes \code{valid_prob}, \code{valid_class}, and a \code{metrics}
+table, plus \code{valid_accuracy}, \code{valid_balanced_accuracy},
+\code{valid_auc}, and \code{valid_logloss} when labels are available.
+Without labels, \code{metrics} is \code{NULL} and scalar metrics are absent.
+Learned averaging also includes the training-derived layer \code{weights};
+prediction does not refit them. Majority outputs are vote fractions;
+ties use training class order, and the fractions are not calibrated
+probabilities. Disabled early fusion returns \code{early = NULL}, and
+disabled late methods are omitted from \code{late}.
 }
 \description{
 This function makes predictions using a trained 'IntegratedLearner' model for new samples for which predictions are to be made

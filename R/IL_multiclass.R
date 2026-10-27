@@ -6,10 +6,54 @@
 #' probability modeling and multiclass stacking.
 #'
 #' @inheritParams IL_conbin
+#' @param base_learner Native multiclass base learner. Default \code{"glmnet"}.
+#' @param meta_learner Native multiclass stacking learner. Default
+#'   \code{"glmnet"}. Legacy \code{sl_nnls_auc} and \code{SL.nnls} aliases
+#'   map to multinomial glmnet, not scalar layer-weight optimization.
+#' @param folds Number of subject-level folds for out-of-fold predictions.
+#'   Default 5. Fully nested evaluation of the fusion pipeline is separate.
+#' @param ... Additional arguments passed to native base-model fitting;
+#'   these are not passed to the stacked meta-model or fusion-weight optimizer.
 #' @param run_intermediate Ignored for multiclass outcomes with a message;
 #'   cooperative \pkg{multiview} learning is not currently supported for
 #'   multiclass fits.
 #' @param eps Small positive constant used to stabilize probabilities.
+#' @inheritParams IntegratedLearner
+#' @details Majority voting returns vote fractions under \code{majority}; these
+#'   are not calibrated class probabilities. Ties use the first class in training
+#'   class order. Learned averaging returns probabilities under
+#'   \code{weighted_average} and stores final layer weights under
+#'   \code{model_fits$model_weighted$weights}. Weights minimize multiclass log
+#'   loss on out-of-fold layer probabilities. Training outputs cross-fit the
+#'   weights across the existing folds. As with stacking, fully nested evaluation
+#'   is needed for an unbiased assessment of the entire fitted pipeline.
+#'   Results are also grouped under \code{train_out} and \code{valid_out}, each
+#'   with \code{single}, \code{early}, and \code{late} entries. The \code{late}
+#'   list contains all enabled methods: \code{stacked}, \code{majority}, and
+#'   \code{weighted_average}. Each method includes split-specific probabilities,
+#'   classes, and metrics; learned averaging also includes final weights and,
+#'   for training, the weights fitted outside each fold. Existing flat outputs
+#'   remain available. \code{late_methods} lists the returned late-fusion methods.
+#'   Fusion entries contain \code{train_prob}, \code{train_class}, a
+#'   \code{metrics} table, and scalar \code{train_accuracy},
+#'   \code{train_balanced_accuracy}, \code{train_auc}, and \code{train_logloss};
+#'   validation entries use the corresponding \code{valid_} names. AUC is the
+#'   macro average of available one-vs-rest class AUCs. Single-layer entries
+#'   contain probability lists and class data frames. Without validation data,
+#'   \code{valid_out} is \code{NULL}. Disabled early fusion gives
+#'   \code{early = NULL}, and disabled late methods are omitted from \code{late}.
+#'
+#'   Feature importance retains a univariate class-association calculation:
+#'   for each feature and class, the mean in the remaining classes is subtracted
+#'   from the mean in that class and divided by the feature's overall training
+#'   standard deviation plus \code{1e-8}. The signed scores form a
+#'   feature-by-class matrix in \code{feature_importance_signed_by_class}.
+#'   \code{feature_importance_signed_by_layer_by_class} groups these matrices
+#'   by omics layer and ranks features by mean absolute score across classes.
+#'   \code{feature_importance_global} is the unsigned mean absolute score
+#'   across classes, ranked highest first. These associations use the training
+#'   features after optional filtering, including features excluded by screening;
+#'   they are shared across fusion methods and are not model-specific attributions.
 #' @return A fitted multiclass IntegratedLearner object containing class
 #'   probabilities, predicted classes, fitted single-layer and fusion models,
 #'   and training/validation multiclass performance summaries when available.
@@ -40,6 +84,9 @@
 #'   print_learner = FALSE
 #' )
 #' fit$family
+#' fit$late_methods
+#' fit$train_out$late$weighted_average$weights
+#' head(fit$feature_importance_signed_by_layer_by_class[[1]])
 #' @export
 IL_multiclass <- function(
   feature_table, sample_metadata, feature_metadata, feature_table_valid = NULL,
@@ -49,9 +96,16 @@ IL_multiclass <- function(
   run_stacked = TRUE, run_intermediate = FALSE,
   cooperative_rho = c(0, 0.1, 0.25, 0.5, 1), cooperative_s = "lambda.min",
   cooperative_type_measure = NULL, verbose = FALSE, print_learner = TRUE, family = stats::binomial(),
-  eps = 1e-15, ...
+  eps = 1e-15, run_majority = TRUE, run_weighted = TRUE, ...
 ) {
   start.time <- Sys.time()
+
+  for (flag in c("run_majority", "run_weighted")) {
+    value <- get(flag)
+    if (!is.logical(value) || length(value) != 1L || is.na(value)) {
+      stop("'", flag, "' must be TRUE or FALSE.", call. = FALSE)
+    }
+  }
 
   validate_IL_inputs(
     feature_table = feature_table, sample_metadata = sample_metadata,
@@ -116,8 +170,6 @@ IL_multiclass <- function(
 
   layer_oof_probs <- vector("list", length(name_layers))
   names(layer_oof_probs) <- name_layers
-  layer_train_probs <- vector("list", length(name_layers))
-  names(layer_train_probs) <- name_layers
   full_layer_models <- vector("list", length(name_layers))
   names(full_layer_models) <- name_layers
   X_train_layers <- vector("list", length(name_layers))
@@ -167,11 +219,6 @@ IL_multiclass <- function(
       learner_id = learner_id, seed = seed + 1000 + i, model_args = dots
     )
 
-    layer_train_probs[[i]] <- predict_multiclass_model_impl(
-      fit_obj = full_layer_models[[i]],
-      newX = dat_slice, class_levels = class_levels, eps = eps
-    )
-
     if (!is.null(feature_table_valid)) {
       dat_slice_valid_all <- slice_feature_table(feature_table_valid, lay_features)
       dat_slice_valid <- dat_slice_valid_all[, layer_screen$feature_names,
@@ -195,7 +242,6 @@ IL_multiclass <- function(
     }
 
     combo_oof <- stack_prob_features(layer_oof_probs)
-    combo_full <- stack_prob_features(layer_train_probs)
 
     stacked_oof_prob <- fit_oof_multiclass(
       X = combo_oof, y = Y, fold_id = fold_id,
@@ -204,7 +250,8 @@ IL_multiclass <- function(
     )$oof_prob
 
     stacked_full_model <- fit_multiclass_model_impl(
-      X = combo_full, y = Y, learner_id = meta_id,
+      # Learn the deployed stack from held-out base predictions as well.
+      X = combo_oof, y = Y, learner_id = meta_id,
       seed = seed + 7000, model_args = list()
     )
 
@@ -263,6 +310,27 @@ IL_multiclass <- function(
   cooperative_fit <- NULL
 
   prob_train <- layer_oof_probs
+  weighted_model <- NULL
+  if (isTRUE(run_majority)) {
+    prob_train$majority <- multiclass_majority_probs(layer_oof_probs)
+  }
+  if (isTRUE(run_weighted)) {
+    weighted_model <- list(
+      weights = learn_multiclass_weights(layer_oof_probs, Y, eps),
+      weights_by_fold = list()
+    )
+    weighted_oof <- layer_oof_probs[[1]]
+    for (f in sort(unique(fold_id))) {
+      held_out <- fold_id == f
+      train_probs <- lapply(layer_oof_probs, function(p) p[!held_out, , drop = FALSE])
+      weights <- learn_multiclass_weights(train_probs, Y[!held_out], eps)
+      weighted_model$weights_by_fold[[as.character(f)]] <- weights
+      weighted_oof[held_out, ] <- multiclass_weighted_probs(
+        lapply(layer_oof_probs, function(p) p[held_out, , drop = FALSE]), weights
+      )
+    }
+    prob_train$weighted_average <- weighted_oof
+  }
   if (isTRUE(run_stacked)) {
     prob_train$stacked <- stacked_oof_prob
   }
@@ -293,6 +361,14 @@ IL_multiclass <- function(
     }
 
     prob_test <- layer_valid_probs
+    if (isTRUE(run_majority)) {
+      prob_test$majority <- multiclass_majority_probs(layer_valid_probs)
+    }
+    if (isTRUE(run_weighted)) {
+      prob_test$weighted_average <- multiclass_weighted_probs(
+        layer_valid_probs, weighted_model$weights
+      )
+    }
     if (isTRUE(run_stacked)) {
       prob_test$stacked <- stacked_valid_prob
     }
@@ -323,7 +399,8 @@ IL_multiclass <- function(
 
   model_fits <- list(
     model_layers = full_layer_models, model_stacked = stacked_full_model,
-    model_concat = concat_full_model, model_cooperative = cooperative_fit
+    model_concat = concat_full_model, model_cooperative = cooperative_fit,
+    model_weighted = weighted_model
   )
 
   res <- list(
@@ -338,6 +415,7 @@ IL_multiclass <- function(
     filter_pct = filtered$filter_pct, prevalence_pct = filtered$prevalence_pct,
     selected_features_by_layer = selected_features_by_layer, selected_features_concat = concat_selected_features,
     run_concat = run_concat, run_stacked = run_stacked, run_intermediate = FALSE,
+    run_majority = run_majority, run_weighted = run_weighted,
     cooperative_rho = NULL,
     cooperative_rho_grid = cooperative_rho,
     cooperative_rho_scores = NULL,
@@ -360,6 +438,16 @@ IL_multiclass <- function(
     res$metrics.test <- metrics_test
   }
 
+  res$late_methods <- intersect(c("stacked", "majority", "weighted_average"), names(prob_train))
+  res$train_out <- format_multiclass_outputs(
+    prob_train, class_train, metrics_train, name_layers, "train", weighted_model
+  )
+  res["valid_out"] <- list(if (!is.null(prob_test)) {
+    format_multiclass_outputs(prob_test, class_test, metrics_test, name_layers, "valid", weighted_model)
+  } else {
+    NULL
+  })
+
   stop.time <- Sys.time()
   res$time <- as.numeric(round(
     difftime(stop.time, start.time, units = "min"),
@@ -371,6 +459,39 @@ IL_multiclass <- function(
     print.learner(res)
   }
   res
+}
+
+# Provide the same single/early/late organization as survival without changing
+# the flat multiclass outputs used by existing plotting and prediction methods.
+format_multiclass_outputs <- function(prob, classes, metrics, layers, split, weighted_model = NULL) {
+  metric_rows <- function(models) {
+    if (is.null(metrics)) return(NULL)
+    metrics[metrics$model %in% models, , drop = FALSE]
+  }
+  method_output <- function(method) {
+    out <- stats::setNames(list(prob[[method]], classes[[method]]),
+      paste0(split, c("_prob", "_class")))
+    out["metrics"] <- list(metric_rows(method))
+    if (!is.null(out$metrics) && nrow(out$metrics) == 1L) {
+      for (metric in setdiff(names(out$metrics), "model")) {
+        out[[paste0(split, "_", metric)]] <- out$metrics[[metric]][1]
+      }
+    }
+    if (method == "weighted_average" && !is.null(weighted_model)) {
+      out$weights <- weighted_model$weights
+      if (split == "train") out$weights_by_fold <- weighted_model$weights_by_fold
+    }
+    out
+  }
+  single <- c(list(metrics = metric_rows(layers)), stats::setNames(
+    list(prob[layers], classes[, layers, drop = FALSE]), paste0(split, c("_prob", "_class"))
+  ))
+  late_methods <- intersect(c("stacked", "majority", "weighted_average"), names(prob))
+  list(
+    single = single,
+    early = if ("concatenated" %in% names(prob)) method_output("concatenated") else NULL,
+    late = stats::setNames(lapply(late_methods, method_output), late_methods)
+  )
 }
 
 multiclass_metrics <- function(prob_mat, y_true, eps = 1e-15) {
@@ -467,6 +588,88 @@ default_multiclass_prior <- function(y, class_levels, eps = 1e-15) {
   p <- as.numeric(tab)
   p <- pmax(p, eps)
   p / sum(p)
+}
+
+# Align classes before either fusion rule; samples must already share row order.
+align_multiclass_fusion_probs <- function(prob_list) {
+  if (!length(prob_list) || is.null(names(prob_list)) ||
+      anyNA(names(prob_list)) || any(!nzchar(names(prob_list))) ||
+      anyDuplicated(names(prob_list))) {
+    stop("Fusion requires a nonempty list with unique layer names.", call. = FALSE)
+  }
+  first <- as.matrix(prob_list[[1]])
+  classes <- colnames(first)
+  if (!nrow(first) || !length(classes) || anyNA(classes) || anyDuplicated(classes)) {
+    stop("Fusion requires nonempty class probability matrices with class names.", call. = FALSE)
+  }
+  lapply(prob_list, function(p) {
+    p <- as.matrix(p)
+    if (nrow(p) != nrow(first) || !identical(rownames(p), rownames(first)) ||
+        ncol(p) != length(classes) || !setequal(colnames(p), classes)) {
+      stop("Fusion layers must have matching samples and classes.", call. = FALSE)
+    }
+    p <- p[, classes, drop = FALSE]
+    if (any(!is.finite(p)) || any(p < 0) || any(abs(rowSums(p) - 1) > 1e-6)) {
+      stop("Fusion inputs must contain finite, nonnegative probabilities summing to one.",
+        call. = FALSE)
+    }
+    p
+  })
+}
+
+multiclass_majority_probs <- function(prob_list) {
+  probs <- align_multiclass_fusion_probs(prob_list)
+  votes <- probs[[1]] * 0
+  for (p in probs) {
+    index <- cbind(seq_len(nrow(p)), max.col(p, ties.method = "first"))
+    votes[index] <- votes[index] + 1
+  }
+  votes / length(probs)
+}
+
+multiclass_weighted_probs <- function(prob_list, weights) {
+  probs <- align_multiclass_fusion_probs(prob_list)
+  if (is.null(names(weights)) || anyDuplicated(names(weights)) ||
+      !setequal(names(weights), names(probs)) ||
+      any(!is.finite(weights)) || any(weights < 0) || abs(sum(weights) - 1) > 1e-6) {
+    stop("Fusion weights must match layers, be nonnegative, and sum to one.", call. = FALSE)
+  }
+  Reduce(`+`, lapply(names(probs), function(layer) probs[[layer]] * weights[[layer]]))
+}
+
+learn_multiclass_weights <- function(prob_list, y, eps = 1e-15) {
+  probs <- align_multiclass_fusion_probs(prob_list)
+  class_index <- match(as.character(y), colnames(probs[[1]]))
+  if (length(y) != nrow(probs[[1]]) || anyNA(class_index)) {
+    stop("Fusion outcomes must match the samples and probability classes.", call. = FALSE)
+  }
+  n_layers <- length(probs)
+  if (n_layers == 1L) return(stats::setNames(1, names(probs)))
+
+  # Only the probability assigned to the observed class enters log loss.
+  true_probs <- do.call(cbind, lapply(probs, function(p) {
+    p[cbind(seq_along(y), class_index)]
+  }))
+  true_probs <- pmax(true_probs, eps)
+  # Eliminate the final weight to enforce sum(w) = 1. The remaining linear
+  # constraints keep every weight nonnegative, giving a convex objective.
+  last <- true_probs[, n_layers]
+  delta <- sweep(true_probs[, -n_layers, drop = FALSE], 1, last, `-`)
+  objective <- function(w) -mean(log(pmax(last + as.numeric(delta %*% w), eps)))
+  gradient <- function(w) {
+    -colMeans(delta / pmax(last + as.numeric(delta %*% w), eps))
+  }
+  solution <- stats::constrOptim(
+    theta = rep(1 / n_layers, n_layers - 1L), f = objective, grad = gradient,
+    ui = rbind(diag(n_layers - 1L), rep(-1, n_layers - 1L)),
+    ci = c(rep(0, n_layers - 1L), -1), mu = 1e-6,
+    control = list(reltol = 1e-10, maxit = 1000), outer.iterations = 100
+  )
+  if (solution$convergence != 0L || any(!is.finite(solution$par))) {
+    stop("Multiclass fusion weight optimization did not converge.", call. = FALSE)
+  }
+  weights <- pmax(c(solution$par, 1 - sum(solution$par)), 0)
+  stats::setNames(weights / sum(weights), names(probs))
 }
 
 stack_prob_features <- function(prob_list) {
@@ -1183,6 +1386,15 @@ predict_multiclass.learner <- function(
 
   out_prob <- pred_layer_probs
 
+  if (isTRUE(fit$run_majority)) {
+    out_prob$majority <- multiclass_majority_probs(pred_layer_probs)
+  }
+  if (isTRUE(fit$run_weighted) && !is.null(fit$model_fits$model_weighted)) {
+    out_prob$weighted_average <- multiclass_weighted_probs(
+      pred_layer_probs, fit$model_fits$model_weighted$weights
+    )
+  }
+
   if (isTRUE(fit$run_stacked) && !is.null(fit$model_fits$model_stacked)) {
     combo_valid <- stack_prob_features(pred_layer_probs)
     out_prob$stacked <- predict_multiclass_model_impl(
@@ -1228,5 +1440,9 @@ predict_multiclass.learner <- function(
     }
   }
 
+  res$late_methods <- intersect(c("stacked", "majority", "weighted_average"), names(out_prob))
+  res$valid_out <- format_multiclass_outputs(
+    out_prob, out_class, res$metrics.test, names(layer_models), "valid", fit$model_fits$model_weighted
+  )
   res
 }

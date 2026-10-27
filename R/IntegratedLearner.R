@@ -79,12 +79,19 @@
 #'   of \code{filter_pct} with \code{filter_method = 'prevalence'}.
 #' @param meta_learner Meta-learner for late fusion (stacked generalization).
 #'   Defaults to \code{`sl_nnls_auc`}.
+#'   For multiclass outcomes this legacy default maps to multinomial
+#'   \code{glmnet}; use \code{run_weighted} for learned scalar layer weights.
 #'   Check out the
 #'   \href{https://CRAN.R-project.org/package=SuperLearner}{SuperLearner package page}
 #'   for all available options.
 #' @param run_concat Should early fusion be run? Default is TRUE.
 #'   Uses the specified \code{base_learner} as the learning algorithm.
 #' @param run_stacked Should stacked model (late fusion) be run? Default is TRUE.
+#' @param run_majority Logical; return multiclass majority voting. Default TRUE;
+#'   ignored for other outcomes. Ties use the first class in training class order.
+#' @param run_weighted Logical; return multiclass probability averaging with
+#'   nonnegative layer weights summing to one, learned by minimizing out-of-fold
+#'   multiclass log loss. Default TRUE; ignored for other outcomes.
 #' @param run_intermediate Should standalone cooperative learning via
 #'   \pkg{multiview} be run? Default is FALSE. When TRUE, IntegratedLearner
 #'   runs only the cooperative multiview model and skips base learners, early
@@ -121,6 +128,11 @@
 #' validation data. When \code{run_intermediate = TRUE}, the object also
 #' includes coefficient-based cooperative feature-importance scores from the
 #' selected \pkg{multiview} model.
+#' Multiclass fits also provide \code{train_out} and \code{valid_out} grouped
+#' into \code{single}, \code{early}, and \code{late} results. All enabled late
+#' methods (\code{stacked}, \code{majority}, \code{weighted_average}) include
+#' probabilities, predicted classes, and metrics; learned averaging also reports
+#' layer weights. Existing flat multiclass outputs remain available.
 #'
 #' @examples
 #' PRISM_MAE <- readRDS(system.file(
@@ -160,7 +172,8 @@ IntegratedLearner <- function(
   run_intermediate = FALSE, cooperative_rho = c(0, 0.1, 0.25, 0.5, 1),
   cooperative_s = "lambda.min", cooperative_type_measure = NULL,
   drop_poor_performing_layers = FALSE, verbose = FALSE, print_learner = TRUE,
-  refit.stack = FALSE, family = stats::gaussian(), ...
+  refit.stack = FALSE, family = stats::gaussian(),
+  run_majority = TRUE, run_weighted = TRUE, ...
 ) {
   if (!is_a_string(outcome_col)) {
     stop("'outcome_col' must be a single character value.", call. = FALSE)
@@ -305,6 +318,7 @@ IntegratedLearner <- function(
       screen_pct = screen_pct, filter_method = filter_method, filter_pct = filter_pct,
       prevalence_pct = prevalence_pct, meta_learner = meta_learner, run_concat = run_concat,
       run_stacked = run_stacked, verbose = verbose, print_learner = print_learner,
+      run_majority = run_majority, run_weighted = run_weighted,
       family = family, run_intermediate = run_intermediate,
       cooperative_rho = cooperative_rho, cooperative_s = cooperative_s,
       cooperative_type_measure = cooperative_type_measure, ...

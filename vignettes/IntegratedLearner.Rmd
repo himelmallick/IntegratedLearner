@@ -1,7 +1,7 @@
 ---
 title: "IntegratedLearner"
 author: "Nalin Arora, Anupreet Porwal and Himel Mallick"
-date: "2026-03-10"
+date: "2026-10-27"
 output:
   BiocStyle::html_document:
     toc: true
@@ -312,6 +312,8 @@ names(fit_min)
 | `meta_learner` | `"glmnet"` | Native multiclass learner used for stacked fusion. |
 | `base_screener` | `"All"` | Deprecated compatibility parameter. Prefer `run_screening` + `screen_pct`. |
 | `run_stacked` | `TRUE` | Enables late-fusion stacked multiclass model. |
+| `run_majority` | `TRUE` | Returns hard voting across layers, independently of `run_stacked`. Ties use the first training class. |
+| `run_weighted` | `TRUE` | Returns learned probability averaging, independently of `run_stacked`. Nonnegative layer weights sum to one and minimize OOF multiclass log loss. |
 | `run_concat` | `TRUE` | Enables early-fusion concatenated multiclass model. |
 | `run_intermediate` | `FALSE` | Not supported for multiclass outcomes; if set to `TRUE`, a message is printed and the option is ignored. |
 | `folds` | `5` | Subject-level CV folds for OOF multiclass probabilities. |
@@ -346,7 +348,7 @@ names(fit_min)
 | Path | Single-layer | Early fusion | Late fusion | Cooperative/intermediate fusion |
 |---|---|---|---|---|
 | Continuous/Binary | Yes in standard IL mode | `run_concat = TRUE` in standard IL mode | `run_stacked = TRUE` with `meta_learner` in standard IL mode | Standalone `run_intermediate = TRUE` via `multiview` |
-| Multiclass | Yes | `run_concat = TRUE` | `run_stacked = TRUE` with native multiclass `meta_learner` | Not supported; prints a message and is ignored |
+| Multiclass | Yes | `run_concat = TRUE` | Stacking, majority voting, and learned probability averaging, all enabled by default with independent flags | Not supported; prints a message and is ignored |
 | Survival | Yes (`train_out$single`) in standard IL mode | `do_early_fusion = TRUE` in standard IL mode | Weighted layer blending with both `IBS` and `COX` outputs returned in standard IL mode | Standalone `run_intermediate = TRUE` via `multiview` Cox model |
 
 ## Output Reference: What You Get and How to Access It
@@ -371,10 +373,33 @@ This section summarizes the outputs produced by each integration method and wher
 | Single-layer (per omics layer) | Layer-wise multiclass probability and class predictions | `fit$prob.train[[layer_name]]`, `fit$class.train[, layer_name]`, plus validation analogs `fit$prob.test[[layer_name]]`, `fit$class.test[, layer_name]` |
 | Early fusion (concatenated) | One multiclass model on concatenated features | Enable with `run_concat = TRUE`; outputs in `fit$prob.train$concatenated`, `fit$class.train[, "concatenated"]`, `fit$model_fits$model_concat` |
 | Late fusion (stacked) | Multiclass meta-model over OOF layer probabilities | Enable with `run_stacked = TRUE`; outputs in `fit$prob.train$stacked`, `fit$class.train[, "stacked"]`, `fit$model_fits$model_stacked` |
+| Late fusion (majority) | Per-class vote fractions and the class with the most votes | Enable with `run_majority = TRUE`; `fit$prob.train$majority`, `fit$class.train$majority`, `fit$train_out$late$majority` |
+| Late fusion (learned average) | Probability average with nonnegative layer weights summing to one | Enable with `run_weighted = TRUE`; `fit$prob.train$weighted_average`, `fit$class.train$weighted_average`, `fit$train_out$late$weighted_average` |
+| Grouped results | Survival-style `single`, `early`, and `late` entries for all enabled methods | `fit$train_out`, `fit$valid_out`; `fit$late_methods` lists the late-fusion methods |
+| Learned layer weights | Final weights and weights fitted outside each training fold | `fit$model_fits$model_weighted$weights`, `fit$train_out$late$weighted_average$weights_by_fold` |
 | Cooperative/intermediate fusion | Not supported for multiclass outcomes | `run_intermediate = TRUE` prints a message and is ignored; no cooperative probability object is returned |
 | Multiclass performance metrics | Accuracy, balanced accuracy, one-vs-rest AUC, and log-loss | `fit$metrics.train` and `fit$metrics.test` (if validation provided) |
 | Feature-selection metadata | Filtering/screening settings used in fit | `fit$filter_method`, `fit$filter_pct`, `fit$prevalence_pct`, `fit$screening_used`, `fit$screen_method`, `fit$screen_pct` |
 | Screened feature sets | Features retained by fold-safe screening | `fit$selected_features_by_layer`, `fit$selected_features_concat` |
+
+Every grouped fusion entry contains `train_prob` and `train_class` (or
+`valid_prob` and `valid_class`) and a `metrics` table. Scalar metrics are also
+available as `train_accuracy`, `train_balanced_accuracy`, `train_auc`, and
+`train_logloss`, with analogous `valid_` names for validation. Single-layer
+entries hold probability lists and class data frames covering all layers.
+Prediction returns the same `valid_out` structure; without outcome labels,
+predictions remain available, `metrics` is `NULL`, and scalar metrics are absent.
+Without validation data, `fit$valid_out` is `NULL`. Disabled early fusion gives
+`early = NULL`; disabled late methods are omitted from `late`. Flat outputs
+remain available for compatibility.
+
+Both the final stack and the final learned average train on OOF layer
+probabilities. Training predictions for the average fit weights outside each
+held-out fold. These procedures do not replace fully nested evaluation of the
+complete pipeline; use an untouched validation set or outer CV for assessment.
+Majority vote fractions are not calibrated probabilities, so its log loss should
+be interpreted accordingly. Both layer-level and final voting ties use the
+first class in `fit$class_levels`.
 
 ### Survival Outputs (Single/Early/Late)
 
@@ -390,13 +415,13 @@ This section summarizes the outputs produced by each integration method and wher
 
 | Importance type | Where to access | Notes |
 |---|---|---|
-| Conbin signed global feature importance | `fit$feature_importance_signed` | Always returned for non-survival fits; named numeric vector sorted by effect magnitude/sign. |
+| Conbin signed global feature importance | `fit$feature_importance_signed` | Returned for standard continuous/binary fits; named numeric vector sorted by effect magnitude/sign. |
 | Conbin signed per-layer importance | `fit$feature_importance_signed_by_layer` | List split by `featureType`. |
 | Cooperative absolute importance | `fit$cooperative_feature_importance` and `fit$cooperative_feature_importance_by_layer` | Absolute selected-model `multiview` coefficients; available when `run_intermediate = TRUE`. |
 | Cooperative signed importance | `fit$cooperative_feature_importance_signed` and `fit$cooperative_feature_importance_signed_by_layer` | Signed selected-model `multiview` coefficients; available when `run_intermediate = TRUE`. |
-| Multiclass signed global feature importance | `fit$feature_importance_global` | Global score aggregated across multiclass contrasts. |
-| Multiclass signed importance by class | `fit$feature_importance_signed_by_class` | List with one signed vector per class. |
-| Multiclass signed importance by layer and class | `fit$feature_importance_signed_by_layer_by_class` | Nested list by layer then class. |
+| Multiclass global feature importance (unsigned) | `fit$feature_importance_global` | Named vector of mean absolute class-association scores, ranked highest first. |
+| Multiclass signed importance by class | `fit$feature_importance_signed_by_class` | Feature-by-class matrix of signed class-association scores. |
+| Multiclass signed importance by layer and class | `fit$feature_importance_signed_by_layer_by_class` | List of feature-by-class matrices, one per omics layer; features ranked by mean absolute score across classes. |
 | Survival signed per-layer importance | `fit$train_out$single$feature_importance_signed_by_layer` | List of unweighted signed feature-importance scores from each single-layer survival base model. |
 | Cooperative survival importance | `fit$train_out$cooperative$feature_importance` and `fit$train_out$cooperative$feature_importance_by_layer` | Absolute selected-model `multiview` Cox coefficients; available when `run_intermediate = TRUE`. |
 | Cooperative survival signed importance | `fit$train_out$cooperative$feature_importance_signed` and `fit$train_out$cooperative$feature_importance_signed_by_layer` | Signed selected-model `multiview` Cox coefficients; available when `run_intermediate = TRUE`. |
@@ -425,7 +450,8 @@ head(fit_mc$class.train)
 head(fit_mc$class.test)
 head(fit_mc$prob.train$stacked)
 head(fit_mc$feature_importance_global, 20)
-head(fit_mc$feature_importance_signed_by_class[[1]], 20)
+head(fit_mc$feature_importance_signed_by_class[, 1, drop = FALSE], 20)
+head(fit_mc$feature_importance_signed_by_layer_by_class[[1]], 20)
 
 # ---- Survival: late-fusion weights + top combined features ----
 fit_surv$train_out$late$IBS$weights
@@ -788,7 +814,8 @@ Here we keep the original outcome column name (`diseaseCat`) and subject ID
 column (`sample_id`) and pass them through `outcome_col` and
 `subject_id_col`.
 
-The small multiclass example uses a ranger base model and multinomial stacking.
+The small multiclass example uses a ranger base model and returns multinomial
+stacking, majority voting, and learned probability averaging together.
 Supervised screening is already demonstrated above; it is disabled here because
 the fixture has only 25 features per assay.
 
@@ -815,6 +842,8 @@ fit <- IntegratedLearner::IntegratedLearner(
   meta_learner = "multinom",
   run_stacked = TRUE,
   run_concat = TRUE,
+  run_majority = TRUE,
+  run_weighted = TRUE,
   filter_method = "variance",
   filter_pct = 50,
   run_screening = FALSE,
@@ -826,6 +855,9 @@ fit <- IntegratedLearner::IntegratedLearner(
 
 Useful multiclass outputs:
 
+- `fit$train_out$single`, `fit$train_out$early`, `fit$train_out$late`
+- `fit$valid_out$single`, `fit$valid_out$early`, `fit$valid_out$late`
+- `fit$late_methods`
 - `fit$metrics.train`
 - `fit$metrics.test`
 - `fit$class.train`
@@ -833,10 +865,36 @@ Useful multiclass outputs:
 - `fit$prob.train`
 - `fit$prob.test`
 - `fit$feature_importance_signed_by_class`
+- `fit$feature_importance_signed_by_layer_by_class`
+- `fit$feature_importance_global`
 - `fit$filter_method`, `fit$filter_pct`
 - `fit$screening_used`, `fit$screen_pct`
 
 The multiclass metric tables now report accuracy, balanced accuracy, one-vs-rest AUC, and log-loss. The plotting helper also returns a single one-vs-rest ROC figure with all class curves overlaid for each fitted model.
+
+Multiclass feature importance retains the existing univariate calculation:
+for each feature and class, subtract the mean in the other classes from the
+mean in that class, then divide by the feature's standard deviation across all
+training samples (with a small numerical stabilizer). Positive scores indicate
+higher values in the class; negative scores indicate lower values. The global
+ranking averages the absolute scores across classes and is therefore unsigned.
+The per-layer output groups the same signed feature-by-class matrices by omics
+layer; it does not compute a single importance value for an entire layer.
+These scores use features remaining after optional filtering, including features
+excluded by supervised screening. They are shared across the fitted models and
+describe class associations rather than model-specific prediction attribution.
+
+```{r chunk-17a}
+fit$late_methods
+lapply(fit$valid_out$late, function(result) result$metrics)
+fit$train_out$late$weighted_average$weights
+fit$train_out$late$weighted_average$weights_by_fold
+head(fit$valid_out$late$majority$valid_class)
+head(fit$valid_out$late$weighted_average$valid_prob)
+head(fit$feature_importance_signed_by_class[, 1, drop = FALSE])
+head(fit$feature_importance_signed_by_layer_by_class[[1]])
+head(fit$feature_importance_global)
+```
 
 ```{r chunk-17b, warning=FALSE, fig.height=9, fig.width=8}
 plot.obj.mc <- IntegratedLearner:::plot.learner(fit)

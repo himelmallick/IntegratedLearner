@@ -1,3 +1,28 @@
+# IntegratedLearner 0.99.5
+
+## Multiclass stacking
+
+- Grouped multiclass results under survival-style `train_out` and `valid_out`
+  entries for `single`, `early`, and all enabled `late` methods. Each method
+  includes probabilities, classes, and metrics, with final and fold-specific
+  weights for learned averaging. Prediction returns the same validation layout;
+  existing flat outputs are preserved. Added `late_methods` to enumerate outputs.
+- Added majority voting (`majority`) and an out-of-fold log-loss-weighted
+  probability average (`weighted_average`) to multiclass fitting, prediction,
+  and metrics. Both default to enabled and can be disabled independently with
+  `run_majority` and `run_weighted`. Majority voting returns vote fractions and
+  resolves ties by training class order. Final averaging weights are stored in
+  `model_fits$model_weighted$weights`; training predictions cross-fit these
+  weights across the existing folds.
+- Fit the final multiclass meta-model on out-of-fold layer probabilities,
+  matching the inputs used to train the cross-validated stack and reducing
+  overfitting from in-sample base predictions.
+- Updated the README, vignette, and fitting, prediction, and plotting help for
+  all multiclass fusion methods, grouped results, and evaluation caveats.
+- Clarified the existing multiclass class-association importance calculation
+  and per-layer grouping. Corrected documentation to describe feature-by-class
+  matrices and an unsigned global ranking; the calculation is unchanged.
+
 # IntegratedLearner 0.99.4
 
 ## Tutorial data and documentation
