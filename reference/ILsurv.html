@@ -20,7 +20,7 @@ mlr3proba/mlr3extralearners."><!-- mathjax --><script src="https://cdnjs.cloudfl
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.5</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.6</span>
       </span>
     </div>
 
@@ -287,7 +287,27 @@ unweighted signed feature-importance scores by layer. Late-fusion results
 are returned under <code>train_out$late$IBS</code>, <code>train_out$late$COX</code>,
 and the analogous validation entries. When <code>run_intermediate = TRUE</code>,
 <code>train_out$cooperative</code> includes coefficient-based cooperative
-feature-importance scores from the selected <span class="pkg">multiview</span> Cox model.</p>
+feature-importance scores from the selected <span class="pkg">multiview</span> Cox model.
+<code>brier_time_grid</code> gives the shared training-derived grid used for
+training and validation Brier/IBS evaluation. <code>survival_calibration</code>
+stores the training-fitted risk-to-survival mappings. Single, early, late,
+and cooperative entries include <code>train_surv</code>/<code>valid_surv</code>
+probabilities when the corresponding model is fitted (lists for single
+layers, matrices for fusion models).</p>
+    </div>
+    <div id="details">
+    <h2>Details</h2>
+    <p>Risk-to-survival Cox calibration is fitted using training outcomes
+and OOF risk scores, then held fixed for validation, including coefficients,
+baseline survival, missing-risk replacement, and the Brier time grid. A
+training Kaplan-Meier curve is used if Cox calibration is not estimable.
+Validation outcomes are used only for performance evaluation, including
+estimating censoring weights, and never to fit a prediction calibration
+model. IBS fusion is scored directly on its weighted survival curves;
+single-layer, early-fusion, Cox-fusion, and cooperative models use their
+frozen training calibration. Reported training probability-error metrics
+remain internal summaries because calibration and fusion fitting use
+training outcomes; they are not fully nested evaluation estimates.</p>
     </div>
 
     <div id="ref-examples">
@@ -318,18 +338,24 @@ feature-importance scores from the selected <span class="pkg">multiview</span> C
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  [1] "train_out"                   "valid_out"                  </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  [3] "screening_used"              "screen_method"              </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  [5] "screen_pct"                  "surv_plot_data"             </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  [7] "backend"                     "base_learner"               </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  [9] "supported_learners"          "fold_id"                    </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [11] "folds"                       "test"                       </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [13] "drop_poor_performing_layers" "late_methods"               </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [15] "run_intermediate"            "cooperative_rho"            </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [17] "cooperative_rho_grid"        "cooperative_rho_scores"     </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [19] "cooperative_s"               "cooperative_type_measure"   </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [21] "fusion_layers_retained"      "fusion_layers_removed"      </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [23] "fusion_layer_scores"         "fusion_layer_metric"        </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [25] "fusion_layer_threshold"     </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [3] "screening_used"              "brier_time_grid"            </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [5] "survival_calibration"        "screen_method"              </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [7] "screen_pct"                  "surv_plot_data"             </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [9] "backend"                     "base_learner"               </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [11] "supported_learners"          "fold_id"                    </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [13] "folds"                       "test"                       </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [15] "drop_poor_performing_layers" "late_methods"               </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [17] "run_intermediate"            "cooperative_rho"            </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [19] "cooperative_rho_grid"        "cooperative_rho_scores"     </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [21] "cooperative_s"               "cooperative_type_measure"   </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [23] "fusion_layers_retained"      "fusion_layers_removed"      </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [25] "fusion_layer_scores"         "fusion_layer_metric"        </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [27] "fusion_layer_threshold"     </span>
+<span class="r-in"><span><span class="va">fit</span><span class="op">$</span><span class="va">brier_time_grid</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [1]  0.2025041  0.3715227  0.6941235  0.9110887  1.2556587  1.7856945</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [7]  2.1369196  2.3565563  2.9915892  4.3587055  7.1861760  7.4304362</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [13]  7.6318001  9.8181941 13.6457221 14.1954920 15.7271671 17.0992583</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [19] 18.3564098 32.5933710</span>
 </code></pre></div>
     </div>
   </div>
