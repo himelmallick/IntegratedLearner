@@ -403,7 +403,11 @@ fit_intermediate_survival <- function(
   layers <- shared$layers
   cooperative_fit <- shared$model
   train_risk <- prevalidated_cooperative_vector(cooperative_fit)
-  train_met <- compute_auc_cindex(times, events, train_risk)
+  calibration <- fit_survival_calibration(train_risk, times, events,
+    time_grid = ibs_time_grid(times, n_grid = 30L))
+  train_surv <- predict_survival_calibration(calibration, train_risk)
+  train_met <- compute_auc_cindex(times, events, train_risk,
+    surv_mat = train_surv, brier_time_grid = calibration$time_grid)
   cooperative_importance <- extract_cooperative_feature_importance(cooperative_fit)
   train_cooperative <- list(
     model = cooperative_fit,
@@ -413,6 +417,7 @@ fit_intermediate_survival <- function(
     train_brier = train_met$brier,
     train_ibs = train_met$ibs,
     train_risk = train_risk,
+    train_surv = train_surv,
     feature_importance = cooperative_importance$importance,
     feature_importance_by_layer = cooperative_importance$importance_by_layer,
     feature_importance_signed = cooperative_importance$signed,
@@ -429,14 +434,16 @@ fit_intermediate_survival <- function(
       layers = layers
     )
     valid_risk <- predict_cooperative_vector(cooperative_fit, x_valid)
-    valid_met <- compute_auc_cindex(v_times, v_events, valid_risk)
+    valid_surv <- predict_survival_calibration(calibration, valid_risk)
+    valid_met <- compute_auc_cindex(v_times, v_events, valid_risk,
+      surv_mat = valid_surv, brier_time_grid = calibration$time_grid)
     valid_cooperative <- list(
       valid_cindex = valid_met$cindex,
       valid_auc = valid_met$auc,
       valid_auc_mean = valid_met$auc_mean,
       valid_brier = valid_met$brier,
       valid_ibs = valid_met$ibs,
-      valid_risk = valid_risk
+      valid_risk = valid_risk, valid_surv = valid_surv
     )
   }
 
@@ -449,6 +456,8 @@ fit_intermediate_survival <- function(
       NULL
     },
     backend = "cooperative_multiview",
+    brier_time_grid = calibration$time_grid,
+    survival_calibration = list(cooperative = calibration),
     supported_learners = "multiview",
     fold_id = fold_id,
     surv_plot_data = list(

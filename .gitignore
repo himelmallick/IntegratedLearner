@@ -33,6 +33,9 @@ vignettes/*.html
 # top-level review artifacts
 images/
 
+# Local manuscript drafts, compiled copies, and LaTeX bundles
+/docs/manuscript/
+
 # Local public dataset analysis scripts and outputs
 Public Dataset Analysis/
 

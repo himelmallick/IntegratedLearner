@@ -170,12 +170,31 @@ are returned under \code{train_out$late$IBS}, \code{train_out$late$COX},
 and the analogous validation entries. When \code{run_intermediate = TRUE},
 \code{train_out$cooperative} includes coefficient-based cooperative
 feature-importance scores from the selected \pkg{multiview} Cox model.
+\code{brier_time_grid} gives the shared training-derived grid used for
+training and validation Brier/IBS evaluation. \code{survival_calibration}
+stores the training-fitted risk-to-survival mappings. Single, early, late,
+and cooperative entries include \code{train_surv}/\code{valid_surv}
+probabilities when the corresponding model is fitted (lists for single
+layers, matrices for fusion models).
 }
 \description{
 BioC-friendly survival backend used by \code{IntegratedLearner()} for
 time-to-event outcomes. This preserves the historical \code{ILsurv()}
 interface while using model fitting and fusion routines that do not depend on
 \pkg{mlr3proba}/\pkg{mlr3extralearners}.
+}
+\details{
+Risk-to-survival Cox calibration is fitted using training outcomes
+and OOF risk scores, then held fixed for validation, including coefficients,
+baseline survival, missing-risk replacement, and the Brier time grid. A
+training Kaplan-Meier curve is used if Cox calibration is not estimable.
+Validation outcomes are used only for performance evaluation, including
+estimating censoring weights, and never to fit a prediction calibration
+model. IBS fusion is scored directly on its weighted survival curves;
+single-layer, early-fusion, Cox-fusion, and cooperative models use their
+frozen training calibration. Reported training probability-error metrics
+remain internal summaries because calibration and fusion fitting use
+training outcomes; they are not fully nested evaluation estimates.
 }
 \examples{
 set.seed(1)
@@ -203,4 +222,5 @@ fit <- ILsurv(
   folds = 3
 )
 names(fit)
+fit$brier_time_grid
 }

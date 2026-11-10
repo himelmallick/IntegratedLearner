@@ -1,3 +1,33 @@
+# IntegratedLearner 0.99.6
+
+## Survival IBS fusion
+
+- Fixed sample alignment in IBS weight optimization: layer survival matrices now
+  use the same time-ordering permutation as outcomes and censoring weights.
+  Previously, unsorted training data could pair predictions with another
+  sample's outcome and yield incorrect fusion weights.
+- Added regression coverage comparing learned weights with an independently
+  evaluated IPCW Brier objective and checking sample-order invariance of weights
+  and fused survival curves for fixed layer predictions, including tied times,
+  censoring, multiple layers, and optional shrinkage toward uniform weights.
+- Removed validation-outcome recalibration from survival probability scoring.
+  Single-layer, early-fusion, Cox-fusion, and cooperative models now reuse
+  calibration fitted only to training outcomes and OOF risks; validation
+  predictions preserve the training Cox coefficients, baseline survival,
+  missing-risk replacement, and Brier time grid.
+- Compute training and validation IBS-fusion Brier scores directly from the
+  blended survival matrices, without fitting an additional model to their
+  scalar risk summaries. AUC and concordance retain their existing risk-marker
+  definitions and evaluation grids.
+- Added `brier_time_grid`, stored `survival_calibration` objects, and
+  `train_surv`/`valid_surv` matrices for inspecting the probabilities actually
+  evaluated. The metric helper no longer fits calibration implicitly.
+- Added regression tests for frozen/serialized calibration, validation-label
+  independence of probabilities, direct IBS scoring, and cooperative survival
+  calibration. Updated the help, README, vignette, and manuscript accordingly.
+  Rerun affected earlier survival probability-error analyses before reporting
+  results; the package version remains 0.99.6 for these corrections.
+
 # IntegratedLearner 0.99.5
 
 ## Multiclass stacking

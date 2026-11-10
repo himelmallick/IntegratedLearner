@@ -30,7 +30,7 @@ compute_auc_cindex <- function(
   times, events, marker,
   probs = c(0.25, 0.5, 0.75),
   time_grid = NULL,
-  n_auc_grid = 25L
+  n_auc_grid = 25L, surv_mat = NULL, brier_time_grid = NULL
 ) {
   obj_surv <- survival::Surv(times, events)
   cindex <- tryCatch(survival::concordance(obj_surv ~ I(-marker))$concordance,
@@ -69,16 +69,23 @@ compute_auc_cindex <- function(
   } else {
     NA_real_
   }
-  surv_mat <- tryCatch(risk_to_surv_matrix(
-    risk_train = marker, time_train = times,
-    event_train = events, risk_new = marker, time_grid = auc_times
-  ), error = function(e) NULL)
+  # Scoring must never fit an outcome model on the dataset being evaluated.
+  # Callers supply probabilities from training-fitted calibration (or IBS fusion).
+  if (is.null(brier_time_grid)) brier_time_grid <- auc_times
+  if (!is.null(surv_mat) && (
+    !is.matrix(surv_mat) || nrow(surv_mat) != length(times) ||
+      ncol(surv_mat) != length(brier_time_grid) ||
+      any(!is.finite(surv_mat)) || any(surv_mat < 0 | surv_mat > 1)
+  )) {
+    stop("Survival probabilities must match the evaluated samples and Brier time grid and lie in [0, 1].",
+      call. = FALSE)
+  }
   brier_df <- if (is.null(surv_mat)) {
-    data.frame(time = auc_times, Brier = NA_real_)
+    data.frame(time = brier_time_grid, Brier = rep(NA_real_, length(brier_time_grid)))
   } else {
     compute_ipcw_brier(
       times = times, events = events, surv_mat = surv_mat,
-      time_grid = auc_times
+      time_grid = brier_time_grid
     )
   }
   ibs <- integrated_brier(brier_df$time, brier_df$Brier)
@@ -1073,22 +1080,14 @@ eval_survfit_at_times <- function(sf, time_grid) {
   out
 }
 
-risk_to_surv_matrix <- function(
-  risk_train, time_train, event_train, risk_new = NULL,
-  time_grid = NULL
-) {
+fit_survival_calibration <- function(risk_train, time_train, event_train, time_grid = NULL) {
   risk_train <- as.numeric(risk_train)
-  if (is.null(risk_new)) {
-    risk_new <- risk_train
-  }
-  risk_new <- as.numeric(risk_new)
 
   med_train <- stats::median(risk_train[is.finite(risk_train)], na.rm = TRUE)
   if (!is.finite(med_train)) {
     med_train <- 0
   }
   risk_train[!is.finite(risk_train)] <- med_train
-  risk_new[!is.finite(risk_new)] <- med_train
 
   if (is.null(time_grid)) {
     time_grid <- ibs_time_grid(time_train)
@@ -1103,24 +1102,42 @@ risk_to_surv_matrix <- function(
   }
 
   fit <- tryCatch(survival::coxph(survival::Surv(time_train, event_train) ~ risk_train,
-    ties = "efron"
+    ties = "efron", model = TRUE
   ), error = function(e) NULL)
-  if (is.null(fit)) {
+  if (is.null(fit) || any(!is.finite(stats::coef(fit)))) {
     sf0 <- survival::survfit(survival::Surv(time_train, event_train) ~ 1)
     base_surv <- summary(sf0, times = time_grid, extend = TRUE)$surv
     if (length(base_surv) != length(time_grid)) {
       base_surv <- rep(1, length(time_grid))
     }
-    out <- matrix(rep(base_surv, each = length(risk_new)),
-      nrow = length(risk_new),
-      ncol = length(time_grid)
-    )
-    colnames(out) <- as.character(time_grid)
-    return(out)
+    return(list(model = NULL, baseline_survival = base_surv,
+      median_risk = med_train, time_grid = time_grid))
   }
 
-  sf <- survival::survfit(fit, newdata = data.frame(risk_train = risk_new))
-  eval_survfit_at_times(sf, time_grid)
+  list(model = fit, median_risk = med_train, time_grid = time_grid)
+}
+
+predict_survival_calibration <- function(calibration, risk_new) {
+  risk_new <- as.numeric(risk_new)
+  risk_new[!is.finite(risk_new)] <- calibration$median_risk
+  if (is.null(calibration$model)) {
+    out <- matrix(rep(calibration$baseline_survival, each = length(risk_new)),
+      nrow = length(risk_new), ncol = length(calibration$time_grid))
+    colnames(out) <- as.character(calibration$time_grid)
+    return(out)
+  }
+  sf <- survival::survfit(calibration$model, newdata = data.frame(risk_train = risk_new))
+  eval_survfit_at_times(sf, calibration$time_grid)
+}
+
+# Compatibility helper: calibration fitting and prediction are separated so
+# validation paths can reuse the exact training-fitted object without refitting.
+risk_to_surv_matrix <- function(
+  risk_train, time_train, event_train, risk_new = NULL, time_grid = NULL
+) {
+  if (is.null(risk_new)) risk_new <- risk_train
+  calibration <- fit_survival_calibration(risk_train, time_train, event_train, time_grid)
+  predict_survival_calibration(calibration, risk_new)
 }
 
 # Shared IPCW calculation for reported Brier scores and fusion optimization.
@@ -1187,6 +1204,8 @@ learn_weights <- function(
 
     ot <- order(times)
     time_sorted <- as.numeric(times[ot])
+    # Censoring weights use sorted outcomes; preserve each curve's sample pairing.
+    fit_list <- lapply(fit_list, function(surv_mat) surv_mat[ot, , drop = FALSE])
 
     cens_fit <- survival::survfit(survival::Surv(time_sorted, events[ot] == 0) ~
       1)
@@ -1420,9 +1439,21 @@ ILsurv_bioc_core <- function(
   layer_risk_mat <- as.matrix(as.data.frame(preds_list, check.names = FALSE))
   colnames(layer_risk_mat) <- names(preds_list)
 
+  ibs_time_grid <- ibs_time_grid(times, n_grid = as.integer(ibs_grid_n))
+  layer_calibrations <- lapply(preds_list, function(risk) {
+    fit_survival_calibration(risk, times, events, time_grid = ibs_time_grid)
+  })
+  # Use the normalized grid returned by calibration, including degenerate-time fallbacks.
+  ibs_time_grid <- layer_calibrations[[1]]$time_grid
+  layer_surv_train <- lapply(names(preds_list), function(lay) {
+    predict_survival_calibration(layer_calibrations[[lay]], preds_list[[lay]])
+  })
+  names(layer_surv_train) <- names(preds_list)
+
   vmsg("Computing single-layer training metrics")
   single_layer_metrics <- lapply(names(preds_list), function(lay) {
-    compute_auc_cindex(times, events, preds_list[[lay]])
+    compute_auc_cindex(times, events, preds_list[[lay]],
+      surv_mat = layer_surv_train[[lay]], brier_time_grid = ibs_time_grid)
   })
   names(single_layer_metrics) <- names(preds_list)
   if (isTRUE(verbose)) {
@@ -1447,6 +1478,7 @@ ILsurv_bioc_core <- function(
   colnames(layer_risk_mat_fusion) <- names(preds_list_fusion)
 
   early_fusion_out <- NULL
+  early_calibration <- NULL
   if (isTRUE(do_early_fusion)) {
     vmsg("Running early fusion")
     all_features <- feature_ids_for_layers(feature_metadata, fusion_layers_retained)
@@ -1465,12 +1497,16 @@ ILsurv_bioc_core <- function(
       fold_id = fold_id,
       method_args = method_opts
     )
-    early_met <- compute_auc_cindex(times, events, early_oof$oof_risk)
+    early_calibration <- fit_survival_calibration(
+      early_oof$oof_risk, times, events, time_grid = ibs_time_grid)
+    early_surv_train <- predict_survival_calibration(early_calibration, early_oof$oof_risk)
+    early_met <- compute_auc_cindex(times, events, early_oof$oof_risk,
+      surv_mat = early_surv_train, brier_time_grid = ibs_time_grid)
     signs_all <- get_univariate_signs(as.data.frame(X_all), times, events)
     imp_all <- early_oof$importance
     imp_all_signed <- imp_all * signs_all[names(imp_all)]
     early_fusion_out <- list(
-      train_risk = early_oof$oof_risk, train_cindex = early_met$cindex,
+      train_risk = early_oof$oof_risk, train_surv = early_surv_train, train_cindex = early_met$cindex,
       train_auc = early_met$auc, train_auc_mean = early_met$auc_mean, train_brier = early_met$brier,
       train_ibs = early_met$ibs, combined_importance = imp_all_signed, full_model = train_full(base_learner,
         X_all, times, events,
@@ -1490,19 +1526,11 @@ ILsurv_bioc_core <- function(
   })
   names(feature_importance_signed_by_layer) <- names(importance_list)
 
-  vmsg("Preparing survival-matrix weighting inputs from layer risks")
-  ibs_time_grid <- ibs_time_grid(times, n_grid = as.integer(ibs_grid_n))
-  layer_surv_train <- list()
-  for (lay in names(preds_list_fusion)) {
-    layer_surv_train[[lay]] <- risk_to_surv_matrix(
-      risk_train = preds_list[[lay]],
-      time_train = times, event_train = events, risk_new = preds_list_fusion[[lay]],
-      time_grid = ibs_time_grid
-    )
-  }
+  vmsg("Using training-calibrated survival matrices for weighting")
 
   vmsg("Learning late-fusion weights")
   late_train_results <- setNames(vector("list", length(late_methods)), late_methods)
+  late_calibrations <- list()
   for (late_method in late_methods) {
     weights <- learn_weights(
       layer_risk_mat = layer_risk_mat_fusion, times = times, events = events,
@@ -1524,7 +1552,16 @@ ILsurv_bioc_core <- function(
     } else {
       as.numeric(combined_train_obj)
     }
-    late_train <- compute_auc_cindex(times, events, combined_train_risk)
+    if (late_method == "IBS") {
+      combined_train_surv <- combined_train_obj
+    } else {
+      late_calibrations[[late_method]] <- fit_survival_calibration(
+        combined_train_risk, times, events, time_grid = ibs_time_grid)
+      combined_train_surv <- predict_survival_calibration(
+        late_calibrations[[late_method]], combined_train_risk)
+    }
+    late_train <- compute_auc_cindex(times, events, combined_train_risk,
+      surv_mat = combined_train_surv, brier_time_grid = ibs_time_grid)
     vmsg("  [late:", late_method, "] weights: ", paste(
       names(weights), "=", sprintf("%.4f", weights),
       collapse = ", "
@@ -1550,11 +1587,12 @@ ILsurv_bioc_core <- function(
       train_brier = late_train$brier,
       train_ibs = late_train$ibs,
       combined_importance = combined_importance,
-      train_risk = combined_train_risk
+      train_risk = combined_train_risk, train_surv = combined_train_surv
     )
   }
 
   cooperative_train <- NULL
+  cooperative_calibration <- NULL
   if (isTRUE(run_intermediate)) {
     vmsg("Running cooperative multiview survival model")
     cooperative_x_train <- build_multiview_x_list(
@@ -1569,7 +1607,12 @@ ILsurv_bioc_core <- function(
       s = cooperative_s, seed = cooperative_seed(seed), trace.it = as.integer(isTRUE(verbose))
     )
     cooperative_train_risk <- prevalidated_cooperative_vector(cooperative_fit)
-    cooperative_met <- compute_auc_cindex(times, events, cooperative_train_risk)
+    cooperative_calibration <- fit_survival_calibration(
+      cooperative_train_risk, times, events, time_grid = ibs_time_grid)
+    cooperative_surv_train <- predict_survival_calibration(
+      cooperative_calibration, cooperative_train_risk)
+    cooperative_met <- compute_auc_cindex(times, events, cooperative_train_risk,
+      surv_mat = cooperative_surv_train, brier_time_grid = ibs_time_grid)
     cooperative_importance <- extract_cooperative_feature_importance(cooperative_fit)
     cooperative_train <- list(
       model = cooperative_fit,
@@ -1579,6 +1622,7 @@ ILsurv_bioc_core <- function(
       train_brier = cooperative_met$brier,
       train_ibs = cooperative_met$ibs,
       train_risk = cooperative_train_risk,
+      train_surv = cooperative_surv_train,
       feature_importance = cooperative_importance$importance,
       feature_importance_by_layer = cooperative_importance$importance_by_layer,
       feature_importance_signed = cooperative_importance$signed,
@@ -1600,6 +1644,7 @@ ILsurv_bioc_core <- function(
 
     preds_valid_list <- list()
     single_valid_metrics <- list()
+    layer_surv_valid <- list()
 
     for (lay in names(full_layer_models)) {
       lay_features <- rownames(feature_metadata)[feature_metadata$featureType ==
@@ -1610,24 +1655,16 @@ ILsurv_bioc_core <- function(
         Xv
       )
       preds_valid_list[[lay]] <- pred_v
+      layer_surv_valid[[lay]] <- predict_survival_calibration(layer_calibrations[[lay]], pred_v)
       single_valid_metrics[[lay]] <- compute_auc_cindex(
         V_times, V_events,
-        pred_v
+        pred_v, surv_mat = layer_surv_valid[[lay]], brier_time_grid = ibs_time_grid
       )
       vmsg("  [valid single:", lay, "] cindex=", fmt(single_valid_metrics[[lay]]$cindex))
     }
 
     layer_risk_valid <- as.matrix(as.data.frame(preds_valid_list, check.names = FALSE))
     colnames(layer_risk_valid) <- names(preds_valid_list)
-    layer_surv_valid <- list()
-    for (lay in fusion_layers_retained) {
-      layer_surv_valid[[lay]] <- risk_to_surv_matrix(
-        risk_train = preds_list[[lay]],
-        time_train = times, event_train = events, risk_new = preds_valid_list[[lay]],
-        time_grid = ibs_time_grid
-      )
-    }
-
     late_valid_results <- setNames(vector("list", length(late_methods)), late_methods)
     for (late_method in late_methods) {
       late_train_obj <- late_train_results[[late_method]]
@@ -1643,7 +1680,13 @@ ILsurv_bioc_core <- function(
       } else {
         as.numeric(combined_valid_obj)
       }
-      late_valid <- compute_auc_cindex(V_times, V_events, combined_valid_risk)
+      combined_valid_surv <- if (late_method == "IBS") {
+        combined_valid_obj
+      } else {
+        predict_survival_calibration(late_calibrations[[late_method]], combined_valid_risk)
+      }
+      late_valid <- compute_auc_cindex(V_times, V_events, combined_valid_risk,
+        surv_mat = combined_valid_surv, brier_time_grid = ibs_time_grid)
       vmsg("  [valid late:", late_method, "] cindex=", fmt(late_valid$cindex))
       late_valid_results[[late_method]] <- list(
         weight_method = late_method,
@@ -1652,7 +1695,7 @@ ILsurv_bioc_core <- function(
         valid_auc_mean = late_valid$auc_mean,
         valid_brier = late_valid$brier,
         valid_ibs = late_valid$ibs,
-        valid_risk = combined_valid_risk
+        valid_risk = combined_valid_risk, valid_surv = combined_valid_surv
       )
     }
 
@@ -1664,7 +1707,9 @@ ILsurv_bioc_core <- function(
         base_learner, early_fusion_out$full_model,
         Xv_all
       )
-      early_valid <- compute_auc_cindex(V_times, V_events, risk_early_v)
+      early_surv_valid <- predict_survival_calibration(early_calibration, risk_early_v)
+      early_valid <- compute_auc_cindex(V_times, V_events, risk_early_v,
+        surv_mat = early_surv_valid, brier_time_grid = ibs_time_grid)
       vmsg("  [valid early] cindex=", fmt(early_valid$cindex))
     }
 
@@ -1678,14 +1723,17 @@ ILsurv_bioc_core <- function(
       cooperative_valid_risk <- predict_cooperative_vector(
         cooperative_train$model, cooperative_x_valid
       )
-      cooperative_valid_met <- compute_auc_cindex(V_times, V_events, cooperative_valid_risk)
+      cooperative_surv_valid <- predict_survival_calibration(
+        cooperative_calibration, cooperative_valid_risk)
+      cooperative_valid_met <- compute_auc_cindex(V_times, V_events, cooperative_valid_risk,
+        surv_mat = cooperative_surv_valid, brier_time_grid = ibs_time_grid)
       cooperative_valid <- list(
         valid_cindex = cooperative_valid_met$cindex,
         valid_auc = cooperative_valid_met$auc,
         valid_auc_mean = cooperative_valid_met$auc_mean,
         valid_brier = cooperative_valid_met$brier,
         valid_ibs = cooperative_valid_met$ibs,
-        valid_risk = cooperative_valid_risk
+        valid_risk = cooperative_valid_risk, valid_surv = cooperative_surv_valid
       )
       vmsg("  [valid cooperative] cindex=", fmt(cooperative_valid$valid_cindex))
     }
@@ -1699,14 +1747,14 @@ ILsurv_bioc_core <- function(
       valid_brier = lapply(single_valid_metrics, function(x) x$brier), valid_ibs = lapply(
         single_valid_metrics,
         function(x) x$ibs
-      ), valid_risk = preds_valid_list
+      ), valid_risk = preds_valid_list, valid_surv = layer_surv_valid
     ), early = if (is.null(early_valid)) {
       NULL
     } else {
       list(
         valid_cindex = early_valid$cindex,
         valid_auc = early_valid$auc, valid_auc_mean = early_valid$auc_mean, valid_brier = early_valid$brier,
-        valid_ibs = early_valid$ibs, valid_risk = risk_early_v
+        valid_ibs = early_valid$ibs, valid_risk = risk_early_v, valid_surv = early_surv_valid
       )
     }, late = late_valid_results, cooperative = cooperative_valid)
   } else {
@@ -1717,6 +1765,7 @@ ILsurv_bioc_core <- function(
     single = list(
       metrics = single_layer_metrics,
       train_risk = preds_list,
+      train_surv = layer_surv_train,
       feature_importance_signed_by_layer = feature_importance_signed_by_layer
     ), early = if (is.null(early_fusion_out)) {
       NULL
@@ -1725,7 +1774,8 @@ ILsurv_bioc_core <- function(
         train_cindex = early_fusion_out$train_cindex,
         train_auc = early_fusion_out$train_auc, train_auc_mean = early_fusion_out$train_auc_mean,
         train_brier = early_fusion_out$train_brier, train_ibs = early_fusion_out$train_ibs,
-        combined_importance = early_fusion_out$combined_importance, train_risk = early_fusion_out$train_risk
+        combined_importance = early_fusion_out$combined_importance, train_risk = early_fusion_out$train_risk,
+        train_surv = early_fusion_out$train_surv
       )
     }, late = late_train_results, cooperative = cooperative_train
   )
@@ -1733,6 +1783,9 @@ ILsurv_bioc_core <- function(
   vmsg("ILsurv completed")
   list(
     train_out = train_out, valid_out = valid_out_formatted, backend = "bioc_prototype",
+    brier_time_grid = ibs_time_grid,
+    survival_calibration = list(layers = layer_calibrations, early = early_calibration,
+      late = late_calibrations, cooperative = cooperative_calibration),
     base_learner = base_learner, supported_learners = supported, fold_id = fold_id,
     screening_used = isTRUE(screening$enabled), screen_method = if (isTRUE(screening$enabled)) "cox" else NULL,
     screen_pct = screening$screen_pct, surv_plot_data = list(
@@ -1810,6 +1863,24 @@ ILsurv_bioc_core <- function(
 #'   and the analogous validation entries. When \code{run_intermediate = TRUE},
 #'   \code{train_out$cooperative} includes coefficient-based cooperative
 #'   feature-importance scores from the selected \pkg{multiview} Cox model.
+#'   \code{brier_time_grid} gives the shared training-derived grid used for
+#'   training and validation Brier/IBS evaluation. \code{survival_calibration}
+#'   stores the training-fitted risk-to-survival mappings. Single, early, late,
+#'   and cooperative entries include \code{train_surv}/\code{valid_surv}
+#'   probabilities when the corresponding model is fitted (lists for single
+#'   layers, matrices for fusion models).
+#'
+#' @details Risk-to-survival Cox calibration is fitted using training outcomes
+#'   and OOF risk scores, then held fixed for validation, including coefficients,
+#'   baseline survival, missing-risk replacement, and the Brier time grid. A
+#'   training Kaplan-Meier curve is used if Cox calibration is not estimable.
+#'   Validation outcomes are used only for performance evaluation, including
+#'   estimating censoring weights, and never to fit a prediction calibration
+#'   model. IBS fusion is scored directly on its weighted survival curves;
+#'   single-layer, early-fusion, Cox-fusion, and cooperative models use their
+#'   frozen training calibration. Reported training probability-error metrics
+#'   remain internal summaries because calibration and fusion fitting use
+#'   training outcomes; they are not fully nested evaluation estimates.
 #'
 #' @examples
 #' set.seed(1)
@@ -1837,6 +1908,7 @@ ILsurv_bioc_core <- function(
 #'   folds = 3
 #' )
 #' names(fit)
+#' fit$brier_time_grid
 #' @export
 ILsurv <- function(
   feature_table, sample_metadata, feature_metadata, valid_feature_table = NULL,
@@ -1918,6 +1990,7 @@ ILsurv <- function(
 
   out <- list(
     train_out = res$train_out, valid_out = res$valid_out, screening_used = res$screening_used,
+    brier_time_grid = res$brier_time_grid, survival_calibration = res$survival_calibration,
     screen_method = res$screen_method, screen_pct = res$screen_pct,
     surv_plot_data = res$surv_plot_data, backend = res$backend,
     base_learner = base_learner, supported_learners = res$supported_learners,

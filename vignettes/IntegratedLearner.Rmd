@@ -911,6 +911,21 @@ For survival tasks, `IntegratedLearner` dispatches to `ILsurv` when survival met
 
 This path uses the package-native survival backend (no `mlr3` dependency required).
 
+Survival probabilities are calibrated using only training outcomes and OOF
+risks. The resulting Cox calibration model, including baseline survival and
+missing-risk replacement, is held fixed for validation. When calibration is
+not estimable, the training Kaplan-Meier fallback is also held fixed.
+Validation outcomes enter metric computation and IPCW censoring-weight
+estimation, but never prediction calibration. IBS fusion Brier scores use the
+actual weighted survival curves rather than recalibrated scalar risk summaries.
+All models are scored on the same training-derived `fit_surv_mae$brier_time_grid`
+for Brier/IBS, separately from the event-time AUC grid. Survival matrices are
+available as `train_surv` and `valid_surv` within the single, early, late, or
+cooperative output entries, and fitted calibration objects are stored in
+`survival_calibration`. Training probability-error summaries are internal
+diagnostics; a complete outer evaluation or independent validation is still
+required to assess the full fitted pipeline.
+
 For plotting, the survival backend now stores:
 
 - a time-dependent AUC table evaluated over a denser event-time grid (rather than only a few summary quantiles), and
@@ -976,6 +991,11 @@ fit_surv_coop <- IntegratedLearner(
 ```{r chunk-19}
 # Single-layer training metrics
 # fit_surv_mae$train_out$single$metrics
+
+# Training-derived probability-evaluation grid and directly scored IBS curves
+fit_surv_mae$brier_time_grid
+head(fit_surv_mae$valid_out$late$IBS$valid_surv)
+fit_surv_mae$valid_out$late$IBS$valid_ibs
 
 # Late fusion (two weighted integration summaries)
 fit_surv_mae$train_out$late$IBS$weights

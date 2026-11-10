@@ -318,14 +318,27 @@ from `late`. The existing flat multiclass outputs remain available.
 
 For survival fits (`ILsurv` path):
 
+* `brier_time_grid`: Training-derived time grid reused for training and validation Brier/IBS evaluation.
+* `survival_calibration`: Stored training-fitted Cox or Kaplan-Meier risk-to-survival mappings.
 * `train_out$single`: Single-layer metrics in standard IL survival mode.
 * `train_out$early`: Early-fusion metrics in standard IL survival mode (if enabled).
 * `train_out$late$IBS` and `train_out$late$COX`: Late-fusion metrics and learned layer weights for both survival fusion strategies in standard IL survival mode.
+* `train_surv` / `valid_surv` within each fitted branch: Survival probabilities actually used for Brier/IBS scoring; single-layer entries contain named lists of matrices.
 * `train_out$single$feature_importance_signed_by_layer`: Per-layer signed survival feature-importance scores from the single-layer survival base models.
 * `train_out$cooperative` / `valid_out$cooperative`: standalone cooperative `multiview` Cox model metrics and risk scores when `run_intermediate = TRUE`.
 * `train_out$cooperative$feature_importance`, `train_out$cooperative$feature_importance_by_layer`, `train_out$cooperative$feature_importance_signed`, and `train_out$cooperative$feature_importance_signed_by_layer`: coefficient-based survival feature-importance scores from the selected cooperative `multiview` Cox model when `run_intermediate = TRUE`.
 * `valid_out$...`: Validation analogs of single/early/late outputs (if validation provided).
 * `train_out$late$IBS$combined_importance`, `train_out$late$COX$combined_importance`, and (if available) `train_out$early$combined_importance`: survival feature-importance outputs.
+
+Survival probability calibration is fitted only to training outcomes and OOF
+risks. Its Cox coefficients, baseline survival (or training Kaplan-Meier
+fallback), and missing-risk replacement remain fixed when predicting validation
+probabilities. Validation outcomes are used for scoring and censoring-weight
+estimation, not calibration fitting. IBS fusion is scored directly on its
+weighted survival curves. All branches use the shared training-derived
+`brier_time_grid` for Brier/IBS comparison; AUC keeps its separate event-time
+grid. Training summaries remain internal estimates, because calibration and
+fusion weights are fitted using training outcomes.
 
 Citation
 --------
