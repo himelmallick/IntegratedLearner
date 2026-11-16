@@ -1,0 +1,601 @@
+# IntegratedLearner
+
+**Integrated machine learning for multi-omics prediction and
+classification**
+
+The repository houses the **`IntegratedLearner`** R package for
+multi-omics prediction and classification. Binary, multiclass,
+continuous, and survival outcomes are supported through a single
+high-level interface.
+
+Optional dependency for BART workflows:
+
+- `sl_bart` and BART uncertainty utilities rely on `bartMachine` and a
+  working Java setup.
+- If Java/BART are unavailable, use another continuous/binary learner
+  (`SL.randomForest` is a standard SuperLearner alternative) or a native
+  multiclass learner for multiclass outcomes.
+
+## Code entry points
+
+Use
+[`IntegratedLearner()`](https://himelmallick.github.io/IntegratedLearner/reference/IntegratedLearner.md)
+to fit models and the S3 generics
+[`predict()`](https://rdrr.io/r/stats/predict.html),
+[`plot()`](https://rdrr.io/r/graphics/plot.default.html),
+[`print()`](https://rdrr.io/r/base/print.html), and
+[`update()`](https://rdrr.io/r/stats/update.html) to work with fitted
+models. Existing low-level `IL_*`, `ILsurv`, and solver exports are
+retained for compatibility; package-provided SuperLearner wrappers use
+`sl_*` names.
+
+Seven small MAE tutorial fixtures live in `inst/extdata` and total about
+**258 KB**. Each assay has at most **25 variable features**; paired
+cohorts share feature IDs and order. All samples and outcomes are
+retained. Read the RDS files directly using
+`readRDS(system.file("extdata", "PRISM_MAE.rds", package = "IntegratedLearner"))`;
+see the [fixture
+inventory](https://github.com/himelmallick/IntegratedLearner/blob/master/inst/extdata/README.md)
+and [selection
+recipe](https://github.com/himelmallick/IntegratedLearner/blob/master/inst/scripts/build_mae_vignette_data.R).
+The former [`data()`](https://rdrr.io/r/utils/data.html) objects, raw
+tables, and duplicate PCL datasets have been removed. PCL inputs remain
+supported using user-supplied data.
+
+## Installation
+
+`IntegratedLearner` was accepted into Bioconductor. It is initially
+available through Bioconductor devel once the nightly build succeeds. In
+a Bioconductor devel environment, install it with:
+
+\
+`if`` ``(``!`[`requireNamespace`](https://rdrr.io/r/base/ns-load.html)`(``"BiocManager"``, quietly ``=`` ``TRUE``)``)`` ``{`\
+`  `[`install.packages`](https://rdrr.io/r/utils/install.packages.html)`(``"BiocManager"``)`\
+`}`\
+`BiocManager``::`[`install`](https://bioconductor.github.io/BiocManager/reference/install.html)`(``"IntegratedLearner"``)`
+
+To install directly from GitHub, use:
+
+\
+`BiocManager``::`[`install`](https://bioconductor.github.io/BiocManager/reference/install.html)`(``"himelmallick/IntegratedLearner"``)`
+
+## Features
+
+- Uses `MultiAssayExperiment` (`MAE`) as the primary Bioconductor-facing
+  input mode, while retaining `PCL` as a legacy compatibility mode
+- Supports binary, multiclass, continuous, and survival outcomes
+- Supports custom outcome/subject column names via `outcome_col` and
+  `subject_id_col`
+- Supports early and late fusion in one interface
+- Integrates with
+  [SuperLearner](https://cran.r-project.org/web/packages/SuperLearner/index.html)
+  for binary/continuous models, using IntegratedLearner `sl_*` wrappers
+  by default (standard SuperLearner `SL.*` learners are also supported)
+- Includes a native multiclass backend with multiclass learners
+  (`glmnet`, `randomforest`, `ranger`, `xgboost`, `mbart`, `multinom`)
+- Uses a native BioC-friendly survival backend (`ILsurv`) for `surv.*`
+  models
+- Supports optional feature filtering (`filter_method`, `filter_pct`)
+  and supervised screening (`run_screening`, `screen_pct`)
+- Applies screening in a fold-safe way (fit on fold-training only; apply
+  to fold-validation) to avoid leakage
+- Visualization using built-in plotting
+- Built-in layer weights and feature-importance outputs for
+  interpretability
+- Nested cross-validation to estimate prediction performance
+- Multicore and multinode parallelization for scalability (**Not yet
+  available**)
+
+## Quickstart Guide
+
+The package vignette demonstrates binary, multiclass, continuous, and
+survival workflows using `MultiAssayExperiment` as the primary
+interface, with `PCL` retained for backward compatibility.
+
+## Background
+
+**`IntegratedLearner`** provides an integrated machine learning
+framework to 1) consolidate predictions by borrowing information across
+several longitudinal and cross-sectional omics data layers, 2) decipher
+the mechanistic role of individual omics features that can potentially
+lead to new sets of testable hypotheses, and 3) quantify uncertainty of
+the integration process. Two integration paradigms are supported: early
+and late.
+
+Within a Bioconductor workflow, the intended pattern is: assemble
+aligned assays in `MultiAssayExperiment`, inspect the object with
+`experiments()`, `assay()`, `colData()`, and `sampleMap()`, fit
+[`IntegratedLearner()`](https://himelmallick.github.io/IntegratedLearner/reference/IntegratedLearner.md),
+and then pass predictions, layer weights, and feature summaries into
+downstream interpretation or visualization steps. IntegratedLearner
+focuses on supervised multi-omics prediction/integration rather than
+general container management or unsupervised integration.
+
+For binary/continuous outcomes, late fusion proceeds by 1) fitting a
+machine learning algorithm (`base_learner`) per layer and 2) combining
+layer-wise cross-validated predictions using a meta model
+(`meta_learner`). A common default is
+[BART](https://arxiv.org/abs/0806.3286) as base learner
+(`base_learner = "sl_bart"`) with `sl_nnls_auc` as the meta-learner.
+
+For multiclass outcomes (`family = binomial()` with more than two
+outcome classes), `IntegratedLearner` dispatches to a native multiclass
+backend that performs multiclass probability modeling at layer, stacked,
+and concatenated levels. Optional filtering and screening are supported
+via `filter_method`/`filter_pct` and `run_screening`/`screen_pct`.
+
+Multiclass fits also return two late-fusion methods by default,
+independently of `run_stacked`: `majority` counts each layer’s predicted
+class, and `weighted_average` combines class probabilities using
+nonnegative layer weights that sum to one. Weights minimize multiclass
+log loss on out-of-fold layer predictions; training outputs fit weights
+separately outside each held-out fold. Set `run_majority = FALSE` or
+`run_weighted = FALSE` to disable either method. Majority ties use the
+first class in `fit$class_levels`. Its `prob.*$majority` matrices
+contain vote fractions, which are not calibrated probabilities, so their
+log loss should be interpreted accordingly. Fully nested evaluation or
+an untouched validation set is needed to assess the complete learned
+fusion pipeline.
+
+For survival outcomes, `IntegratedLearner` dispatches to the native
+survival engine (`ILsurv`) with configurable late-fusion weighting
+(`COX`/`IBS`). Supported survival learners include Cox, penalized Cox,
+tree ensembles, boosting, and XGBoost-based survival variants (see full
+list below).
+
+Naming conventions:
+
+- Use IntegratedLearner’s snake_case `sl_*` wrappers for the documented
+  defaults and package-provided learners, such as `sl_bart`, `sl_lasso`,
+  and `sl_nnls_auc`.
+- Standard `SuperLearner` learners remain available with their upstream
+  names (`SL.randomForest`, `SL.glmnet`).
+- Multiclass learners use native IDs without either prefix, such as
+  `randomforest`, `ranger`, `xgboost`, `glmnet`, `mbart`, and
+  `multinom`.
+
+Feature workflow (when enabled):
+
+1.  Filtering happens first (`filter_method`, `filter_pct`) on the
+    training feature table.
+2.  Screening happens second (`run_screening = TRUE`, `screen_pct`)
+    within CV folds and again for final model fit.
+
+## Basic Usage
+
+Recommended MAE-first Bioconductor workflow:
+
+\
+[`library`](https://rdrr.io/r/base/library.html)`(`[`IntegratedLearner`](https://himelmallick.github.io/IntegratedLearner/)`)`\
+\
+`PRISM_MAE`` ``<-`` `[`readRDS`](https://rdrr.io/r/base/readRDS.html)`(`[`system.file`](https://rdrr.io/r/base/system.file.html)`(`\
+`  ``"extdata"``, ``"PRISM_MAE.rds"``, package ``=`` ``"IntegratedLearner"``, mustWork ``=`` ``TRUE`\
+`)``)`\
+\
+`mae_train`` ``<-`` ``PRISM_MAE`\
+\
+[`names`](https://rdrr.io/r/base/names.html)`(``MultiAssayExperiment``::`[`experiments`](https://github.com/waldronlab/MultiAssayExperiment/reference/MultiAssayExperiment-methods.html)`(``mae_train``)``)`\
+[`head`](https://rdrr.io/r/utils/head.html)`(`[`as.data.frame`](https://rdrr.io/r/base/as.data.frame.html)`(``S4Vectors``::`[`DataFrame`](https://rdrr.io/pkg/S4Vectors/man/DataFrame-class.html)`(``MultiAssayExperiment``::``colData``(``mae_train``)``)``)``[``, ``1``:``4``]``)`\
+[`head`](https://rdrr.io/r/utils/head.html)`(``MultiAssayExperiment``::`[`sampleMap`](https://github.com/waldronlab/MultiAssayExperiment/reference/MultiAssayExperiment-methods.html)`(``mae_train``)``)`\
+\
+`se`` ``<-`` ``MultiAssayExperiment``::`[`experiments`](https://github.com/waldronlab/MultiAssayExperiment/reference/MultiAssayExperiment-methods.html)`(``mae_train``)``[[``1``]``]`\
+`SummarizedExperiment``::`[`assayNames`](https://rdrr.io/pkg/SummarizedExperiment/man/SummarizedExperiment-class.html)`(``se``)`
+
+Then fit the model directly from the MAE:
+
+\
+`# MAE mode (binary/continuous)`\
+[`IntegratedLearner`](https://himelmallick.github.io/IntegratedLearner/reference/IntegratedLearner.md)`(`\
+`  MAE_train ``=`` ``mae_train``,`\
+`  experiment ``=`` `[`c`](https://rdrr.io/r/base/c.html)`(``"metabolome"``, ``"species"``)``,`\
+`  assay.type ``=`` `[`c`](https://rdrr.io/r/base/c.html)`(``"abundance"``, ``"abundance"``)``,`\
+`  outcome_col ``=`` ``"Y"``,`\
+`  subject_id_col ``=`` ``"subjectID"``,`\
+`  folds ``=`` ``5``,`\
+`  base_learner ``=`` ``"sl_bart"``,`\
+`  meta_learner ``=`` ``"sl_nnls_auc"``,`\
+`  filter_method ``=`` ``"prevalence"``,`\
+`  filter_pct ``=`` ``40``,`\
+`  run_screening ``=`` ``TRUE``,`\
+`  screen_pct ``=`` ``30``,`\
+`  family ``=`` `[`binomial`](https://rdrr.io/r/stats/family.html)`(``)`\
+`)`\
+\
+`# MAE mode (multiclass)`\
+[`IntegratedLearner`](https://himelmallick.github.io/IntegratedLearner/reference/IntegratedLearner.md)`(`\
+`  MAE_train ``=`` ``mae_train``,`\
+`  experiment ``=`` `[`c`](https://rdrr.io/r/base/c.html)`(``"metabolome"``, ``"species"``)``,`\
+`  assay.type ``=`` `[`c`](https://rdrr.io/r/base/c.html)`(``"abundance"``, ``"abundance"``)``,`\
+`  outcome_col ``=`` ``"diseaseCat"``,   ``# column in colData(MAE_train)`\
+`  subject_id_col ``=`` ``"sample_id"``, ``# subject/sample ID column in colData(MAE_train)`\
+`  folds ``=`` ``5``,`\
+`  base_learner ``=`` ``"randomforest"``,`\
+`  meta_learner ``=`` ``"randomforest"``,`\
+`  filter_method ``=`` ``"variance"``,`\
+`  filter_pct ``=`` ``50``,`\
+`  run_screening ``=`` ``TRUE``,`\
+`  screen_pct ``=`` ``25``,`\
+`  family ``=`` `[`binomial`](https://rdrr.io/r/stats/family.html)`(``)`\
+`)`\
+\
+`# MAE mode (survival)`\
+[`IntegratedLearner`](https://himelmallick.github.io/IntegratedLearner/reference/IntegratedLearner.md)`(`\
+`  MAE_train ``=`` ``mae_train``,`\
+`  MAE_valid ``=`` ``mae_valid``,        ``# optional`\
+`  experiment ``=`` `[`c`](https://rdrr.io/r/base/c.html)`(``"taxonomy"``, ``"pathway"``)``,`\
+`  assay.type ``=`` `[`c`](https://rdrr.io/r/base/c.html)`(``"relative_abundance"``, ``"pathway_abundance"``)``,`\
+`  outcome_col ``=`` ``"surv_outcome"``, ``# survival outcome column in colData(MAE_train)`\
+`  subject_id_col ``=`` ``"patient_id"``,`\
+`  folds ``=`` ``5``,`\
+`  base_learner ``=`` ``"surv.coxph"``,`\
+`  filter_method ``=`` ``"variance"``,`\
+`  filter_pct ``=`` ``40``,`\
+`  run_screening ``=`` ``TRUE``,`\
+`  screen_pct ``=`` ``25`\
+`)`\
+\
+`# MAE mode (survival with custom metadata column names)`\
+[`IntegratedLearner`](https://himelmallick.github.io/IntegratedLearner/reference/IntegratedLearner.md)`(`\
+`  MAE_train ``=`` ``mae_train``,`\
+`  MAE_valid ``=`` ``mae_valid``,        ``# optional`\
+`  experiment ``=`` `[`c`](https://rdrr.io/r/base/c.html)`(``"taxonomy"``, ``"pathway"``)``,`\
+`  assay.type ``=`` `[`c`](https://rdrr.io/r/base/c.html)`(``"relative_abundance"``, ``"pathway_abundance"``)``,`\
+`  outcome_col ``=`` ``"time_to_event_obj"``,`\
+`  subject_id_col ``=`` ``"participant_id"``,`\
+`  folds ``=`` ``5``,`\
+`  base_learner ``=`` ``"surv.coxph"`\
+`)`\
+\
+`# Legacy PCL mode remains supported for backward compatibility`\
+[`IntegratedLearner`](https://himelmallick.github.io/IntegratedLearner/reference/IntegratedLearner.md)`(`\
+`  PCL_train ``=`` ``pcl_train``,`\
+`  PCL_valid ``=`` ``pcl_valid``,        ``# optional`\
+`  outcome_col ``=`` ``"disease_status"``,`\
+`  subject_id_col ``=`` ``"participant_id"``,`\
+`  folds ``=`` ``5``,`\
+`  base_learner ``=`` ``"sl_bart"``,`\
+`  meta_learner ``=`` ``"sl_nnls_auc"``,`\
+`  filter_method ``=`` ``"prevalence"``,`\
+`  filter_pct ``=`` ``40``,`\
+`  run_screening ``=`` ``TRUE``,`\
+`  screen_pct ``=`` ``30``,`\
+`  family ``=`` `[`binomial`](https://rdrr.io/r/stats/family.html)`(``)`\
+`)`
+
+Custom metadata names are optional. If omitted, defaults remain
+`outcome_col = "Y"` and `subject_id_col = "subjectID"` (backward
+compatible). \### Arguments
+
+Call [`set.seed()`](https://rdrr.io/r/base/Random.html) before fitting
+to make the run reproducible. To display fit progress, wrap the call in
+[`progressr::with_progress()`](https://progressr.futureverse.org/reference/with_progress.html).
+Print the fitted object with `print(fit)` to see its summary.
+
+- `MAE_train` / `MAE_valid`: primary `MultiAssayExperiment` inputs for
+  training and optional validation.
+- `PCL_train` / `PCL_valid`: legacy list inputs (`feature_table`,
+  `sample_metadata`, `feature_metadata`) retained for backward
+  compatibility.
+- `experiment`: Selected MAE experiment names/indices (optional;
+  defaults to all in `MAE_train`).
+- `assay.type`: Assay name per selected MAE experiment.
+- `outcome_col`: Outcome column name in `sample_metadata` / `colData`.
+  Default is `"Y"`.
+- `subject_id_col`: Subject identifier column name in `sample_metadata`
+  / `colData`. Default is `"subjectID"`.
+- `na.rm`: Logical; drop features containing missing values after
+  extraction/prep.
+- `folds`: Integer. Number of folds for cross-validation. Default is
+  `5`.
+- `base_learner`: Binary/continuous uses IntegratedLearner `sl_*`
+  wrappers by default (standard SuperLearner `SL.*` learners are also
+  supported); multiclass uses native multiclass learners; survival uses
+  supported `surv.*` learners. Not used when `run_intermediate = TRUE`.
+- `base_screener`: Deprecated. Kept for backward compatibility.
+- `filter_method`: Optional feature filtering method (`"prevalence"` or
+  `"variance"`).
+- `filter_pct`: Optional retention percentage in `(0,100]` for
+  filtering.
+- `run_screening`: Logical flag to enable supervised screening (`FALSE`
+  by default).
+- `screen_pct`: Retention percentage in `(0,100]` for screening.
+- `prevalence_pct`: Deprecated alias of `filter_pct` when
+  `filter_method = "prevalence"`.
+- `meta_learner`: Meta learner for non-survival late fusion. Defaults to
+  `"sl_nnls_auc"` in binary/continuous; multiclass supports native
+  learners (for example `glmnet`, `randomforest`, `xgboost`). Not used
+  when `run_intermediate = TRUE`.
+- `run_majority`, `run_weighted`: Multiclass-only flags, both `TRUE` by
+  default. Return majority voting and learned probability averaging
+  independently of `run_stacked`.
+- `run_concat`: Logical; include early-fusion (concatenated) model for
+  non-survival.
+- `run_stacked`: Logical; include late-fusion stacked model for
+  non-survival.
+- `run_intermediate`: Logical; run standalone direct cooperative
+  learning via the `multiview` package. Default is `FALSE`. When `TRUE`,
+  early fusion, late fusion, single-layer base learners, and supervised
+  screening are skipped.
+- `cooperative_rho`: Non-negative agreement-penalty values to evaluate
+  for cooperative learning. Default is `c(0, 0.1, 0.25, 0.5, 1)`.
+- `cooperative_s`: Penalty value used for cooperative predictions.
+  Default is `"lambda.min"`.
+- `cooperative_type_measure`: Optional `multiview` CV loss/score. If
+  `NULL`, IL uses an outcome-appropriate default.
+- `drop_poor_performing_layers`: If `TRUE`, layers with poor
+  single-layer performance are removed from early and late fusion only
+  (`AUC < 0.5` for binary, `R2 < 0.5` for continuous, `C-index < 0.5`
+  for survival). Single-layer outputs are still retained. Ignored when
+  `run_intermediate = TRUE`.
+- `family`: [`gaussian()`](https://rdrr.io/r/stats/family.html)
+  (continuous), [`binomial()`](https://rdrr.io/r/stats/family.html)
+  (binary or multiclass), or survival family/metadata.
+- `...`: Additional backend parameters. For survival, includes options
+  such as `do_early_fusion` and learner-specific hyperparameters (or
+  `model_args`).
+
+Automatic outcome coercion:
+
+- [`gaussian()`](https://rdrr.io/r/stats/family.html): outcome is
+  coerced to numeric (errors if conversion fails).
+- binary [`binomial()`](https://rdrr.io/r/stats/family.html): two
+  classes are mapped internally to `{0,1}`.
+- multiclass [`binomial()`](https://rdrr.io/r/stats/family.html): class
+  labels are retained.
+
+Supported model families:
+
+- Binary/continuous non-survival: IntegratedLearner `sl_*` wrappers (or
+  any available standard SuperLearner `SL.*` model).
+- Multiclass non-survival: `glmnet`, `randomforest`, `ranger`,
+  `xgboost`, `mbart`, `multinom`.
+- Survival: `surv.coxph`, `surv.glmnet`, `surv.ranger`,
+  `surv.ranger.extratrees`, `surv.ranger.maxstat`, `surv.ranger.C`,
+  `surv.rfsrc`, `surv.coxboost`, `surv.gbm`, `surv.xgboost.cox`,
+  `surv.xgboost.aft`, `surv.mboost`, `surv.bart`.
+- Direct cooperative learning: standalone `multiview` feature-level
+  fusion for continuous, binary, and survival outcomes. Multiclass
+  cooperative learning is not supported.
+
+Supported fusion modules:
+
+- Continuous/Binary: either standard IL mode with single-layer + early
+  (`run_concat`) + late (`run_stacked`), or standalone cooperative mode
+  (`run_intermediate`).
+- Multiclass: single-layer + early (`run_concat`) + late
+  (`run_stacked`). `run_intermediate` is ignored with a message.
+- Survival: either standard IL mode with single-layer + early
+  (`do_early_fusion`) + late weighted fusion with both `COX` and `IBS`,
+  or standalone cooperative mode (`run_intermediate`).
+
+#### The IntegratedLearner workflow
+
+![Flow Chart](reference/figures/Flowchart.png)
+
+Flow Chart
+
+#### Value
+
+For continuous/binary fits (`IL_conbin` path):
+
+- `SL_fits`: Fitted SuperLearner objects (layer-wise, stacked,
+  concatenated as applicable in standard IL mode).
+- `model_fits`: Extracted learner objects. In standalone cooperative
+  mode this contains only `model_fits$model_cooperative`.
+- `X_train_layers`, `Y_train`, `yhat.train`: training inputs and
+  predictions. In standalone cooperative mode, `yhat.train` contains
+  only the `cooperative` column.
+- `X_test_layers`, `Y_test`, `yhat.test`: validation inputs and
+  predictions (if validation provided).
+- `weights`: Layer weights in stacked model
+  (`meta_learner = "sl_nnls_auc"` and `run_stacked = TRUE`).
+- `model_fits$model_cooperative`, `yhat.train[, "cooperative"]`, and
+  `yhat.test[, "cooperative"]`: standalone cooperative `multiview` model
+  and predictions when `run_intermediate = TRUE`.
+- `cooperative_feature_importance`,
+  `cooperative_feature_importance_by_layer`,
+  `cooperative_feature_importance_signed`, and
+  `cooperative_feature_importance_signed_by_layer`: coefficient-based
+  feature-importance scores from the selected cooperative `multiview`
+  model when `run_intermediate = TRUE`.
+- `AUC.train`/`AUC.test` (binomial) or `R2.train`/`R2.test` (gaussian).
+- `feature_importance_signed`: Global signed feature importance.
+- `feature_importance_signed_by_layer`: Per-layer signed feature
+  importance.
+
+For multiclass fits (`IL_multiclass` path):
+
+- `model_fits`: Layer-wise, stacked, concatenated, and weighted-average
+  multiclass fits.
+- `model_fits$model_weighted$weights`: Named weights for the learned
+  probability average.
+- `prob.train` / `prob.test`: Per-model class-probability matrices;
+  `majority` contains vote fractions.
+- `class.train` / `class.test`: Predicted class labels.
+- `metrics.train` / `metrics.test`: Accuracy, balanced accuracy, macro
+  one-vs-rest AUC, and multiclass log-loss.
+- `selected_features_by_layer`, `selected_features_concat`: Features
+  retained by screening (when used).
+- `feature_importance_signed_by_class`: Feature-by-class matrix of
+  signed class-association scores.
+- `feature_importance_signed_by_layer_by_class`: The same
+  feature-by-class matrices grouped by omics layer, with features ranked
+  by mean absolute score across classes.
+- `feature_importance_global`: Unsigned mean absolute class-association
+  score per feature, ranked highest first.
+
+The current multiclass importance calculation compares each feature’s
+mean in one class against its mean in all other classes, divided by the
+feature’s standard deviation across training samples. Positive scores
+indicate higher values in that class; negative scores indicate lower
+values. These are univariate associations calculated after optional
+feature filtering, including features that supervised screening may
+exclude. They are shared across fusion methods and do not attribute
+predictions to the fitted models. Grouping by omics layer is already
+available:
+
+\
+[`head`](https://rdrr.io/r/utils/head.html)`(``fit``$``feature_importance_signed_by_class``[``, ``1``, drop ``=`` ``FALSE``]``)`\
+[`head`](https://rdrr.io/r/utils/head.html)`(``fit``$``feature_importance_signed_by_layer_by_class``[[``1``]``]``)`\
+[`head`](https://rdrr.io/r/utils/head.html)`(``fit``$``feature_importance_global``)`
+
+Multiclass results also follow the survival-style organization, with all
+enabled methods returned together. `fit$late_methods` lists the
+available late-fusion methods. By default these are `stacked`,
+`majority`, and `weighted_average`.
+
+\
+`fit``$``train_out``$``single``                   ``# Per-layer predictions and metrics`\
+`fit``$``train_out``$``early``                    ``# Concatenated model`\
+`fit``$``train_out``$``late``$``stacked`\
+`fit``$``train_out``$``late``$``majority`\
+`fit``$``train_out``$``late``$``weighted_average`\
+\
+`fit``$``valid_out``$``late``$``weighted_average``$``valid_prob`\
+`fit``$``valid_out``$``late``$``weighted_average``$``valid_class`\
+`fit``$``valid_out``$``late``$``weighted_average``$``valid_logloss`\
+`fit``$``train_out``$``late``$``weighted_average``$``weights`\
+`fit``$``train_out``$``late``$``weighted_average``$``weights_by_fold`
+
+Each method includes a `metrics` table plus split-specific scalar
+metrics: `train_accuracy`, `train_balanced_accuracy`, `train_auc`,
+`train_logloss`, or their `valid_` equivalents. Prediction results
+provide the same `valid_out` structure, including probabilities and
+classes when outcome labels are absent; metrics then remain `NULL`.
+Without validation data, `fit$valid_out` is `NULL`. Disabled early
+fusion gives `early = NULL`; disabled late methods are omitted from
+`late`. The existing flat multiclass outputs remain available.
+
+For survival fits (`ILsurv` path):
+
+- `brier_time_grid`: Training-derived time grid reused for training and
+  validation Brier/IBS evaluation.
+- `survival_calibration`: Stored training-fitted Cox or Kaplan-Meier
+  risk-to-survival mappings.
+- `train_out$single`: Single-layer metrics in standard IL survival mode.
+- `train_out$early`: Early-fusion metrics in standard IL survival mode
+  (if enabled).
+- `train_out$late$IBS` and `train_out$late$COX`: Late-fusion metrics and
+  learned layer weights for both survival fusion strategies in standard
+  IL survival mode.
+- `train_surv` / `valid_surv` within each fitted branch: Survival
+  probabilities actually used for Brier/IBS scoring; single-layer
+  entries contain named lists of matrices.
+- `train_out$single$feature_importance_signed_by_layer`: Per-layer
+  signed survival feature-importance scores from the single-layer
+  survival base models.
+- `train_out$cooperative` / `valid_out$cooperative`: standalone
+  cooperative `multiview` Cox model metrics and risk scores when
+  `run_intermediate = TRUE`.
+- `train_out$cooperative$feature_importance`,
+  `train_out$cooperative$feature_importance_by_layer`,
+  `train_out$cooperative$feature_importance_signed`, and
+  `train_out$cooperative$feature_importance_signed_by_layer`:
+  coefficient-based survival feature-importance scores from the selected
+  cooperative `multiview` Cox model when `run_intermediate = TRUE`.
+- `valid_out$...`: Validation analogs of single/early/late outputs (if
+  validation provided).
+- `train_out$late$IBS$combined_importance`,
+  `train_out$late$COX$combined_importance`, and (if available)
+  `train_out$early$combined_importance`: survival feature-importance
+  outputs.
+
+Survival probability calibration is fitted only to training outcomes and
+OOF risks. Its Cox coefficients, baseline survival (or training
+Kaplan-Meier fallback), and missing-risk replacement remain fixed when
+predicting validation probabilities. Validation outcomes are used for
+scoring and censoring-weight estimation, not calibration fitting. IBS
+fusion is scored directly on its weighted survival curves. All branches
+use the shared training-derived `brier_time_grid` for Brier/IBS
+comparison; AUC keeps its separate event-time grid. Training summaries
+remain internal estimates, because calibration and fusion weights are
+fitted using training outcomes.
+
+## Citation
+
+If you use `IntegratedLearner` in your work, please cite the following:
+
+Mallick H et al. (2024). [An Integrated Bayesian Framework for
+Multi-omics Prediction and
+Classification](https://onlinelibrary.wiley.com/doi/10.1002/sim.9953).
+*Statistics in Medicine* 43(5):983–1002.
+
+## Issues
+
+We are happy to troubleshoot any issues with the package. Please contact
+the maintainer via email or [open an
+issue](https://github.com/himelmallick/IntegratedLearner/issues) in the
+GitHub repository.
+
+# Package index
+
+## Fit and use a model
+
+[`IntegratedLearner()`](https://himelmallick.github.io/IntegratedLearner/reference/IntegratedLearner.md)
+is the main entry point. Fitted models work with the standard
+[`predict()`](https://rdrr.io/r/stats/predict.html),
+[`update()`](https://rdrr.io/r/stats/update.html),
+[`plot()`](https://rdrr.io/r/graphics/plot.default.html) and
+[`print()`](https://rdrr.io/r/base/print.html) generics.
+
+- [`IntegratedLearner()`](https://himelmallick.github.io/IntegratedLearner/reference/IntegratedLearner.md)
+  : Integrated machine learning for multi-omics prediction and
+  classification
+- [`predict(`*`<learner>`*`)`](https://himelmallick.github.io/IntegratedLearner/reference/predict.learner.md)
+  : Make predictions using a trained 'IntegratedLearner' model
+- [`update(`*`<learner>`*`)`](https://himelmallick.github.io/IntegratedLearner/reference/update.learner.md)
+  : Update IntegratedLearner fit object based on layers available in the
+  test set
+- [`plot(`*`<learner>`*`)`](https://himelmallick.github.io/IntegratedLearner/reference/plot.learner.md)
+  : Plot the summary curves produced by an IntegratedLearner object
+
+## Outcome-specific engines
+
+Lower-level fitting functions, kept for compatibility.
+
+- [`IL_conbin()`](https://himelmallick.github.io/IntegratedLearner/reference/IL_conbin.md)
+  : Integrated machine learning for multi-omics prediction
+  (continuous/binary outcomes)
+- [`IL_multiclass()`](https://himelmallick.github.io/IntegratedLearner/reference/IL_multiclass.md)
+  : Integrated machine learning for multi-omics multiclass
+  classification
+- [`ILsurv()`](https://himelmallick.github.io/IntegratedLearner/reference/ILsurv.md)
+  [`IL_survival()`](https://himelmallick.github.io/IntegratedLearner/reference/ILsurv.md)
+  : IntegratedLearner Survival Engine
+
+## Base learners
+
+SuperLearner wrappers that can be used as layer-level learners.
+
+- [`sl_bart()`](https://himelmallick.github.io/IntegratedLearner/reference/sl_bart.md)
+  : Wrapper for bartMachine learner
+- [`predict(`*`<sl_bart>`*`)`](https://himelmallick.github.io/IntegratedLearner/reference/predict.sl_bart.md)
+  : Predict function for sl_bart
+- [`sl_enet()`](https://himelmallick.github.io/IntegratedLearner/reference/sl_enet.md)
+  : Elastic net regression with optimized alpha and lambda
+- [`sl_glmnet2()`](https://himelmallick.github.io/IntegratedLearner/reference/sl_glmnet2.md)
+  : Elastic net regression, including lasso and ridge with a fixed alpha
+- [`sl_lasso()`](https://himelmallick.github.io/IntegratedLearner/reference/sl_lasso.md)
+  : Lasso regression with a fixed alpha
+- [`sl_horseshoe()`](https://himelmallick.github.io/IntegratedLearner/reference/sl_horseshoe.md)
+  : Horseshoe regression
+
+## Stacking (meta-learners)
+
+Combine layer-specific predictions in late fusion.
+
+- [`sl_nnls_auc()`](https://himelmallick.github.io/IntegratedLearner/reference/sl_nnls_auc.md)
+  : Combined SuperLearner function for both NNLS/AUC maximization
+- [`predict(`*`<sl_nnls_auc>`*`)`](https://himelmallick.github.io/IntegratedLearner/reference/predict.sl_nnls_auc.md)
+  : Predict function for sl_nnls_auc
+- [`NNLS()`](https://himelmallick.github.io/IntegratedLearner/reference/NNLS.md)
+  : NNLS function to optimize weights of several base learners
+- [`auc_obj()`](https://himelmallick.github.io/IntegratedLearner/reference/auc_obj.md)
+  : Title Meta level Objective function: NNLS for gaussian; Rank loss
+  for binary observations
+
+# Articles
+
+### All vignettes
+
+- [IntegratedLearner](https://himelmallick.github.io/IntegratedLearner/articles/IntegratedLearner.md):
