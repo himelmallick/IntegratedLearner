@@ -17,7 +17,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.6</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.7</span>
       </span>
     </div>
 
@@ -51,6 +51,15 @@
     </div>
 
     <div class="section level2">
+<h2 class="page-header" data-toc-text="0.99.7" id="integratedlearner-0997">IntegratedLearner 0.99.7<a class="anchor" aria-label="anchor" href="#integratedlearner-0997"></a></h2>
+<div class="section level3">
+<h3 id="fitting-controls-and-maintenance-0-99-7">Fitting controls and maintenance<a class="anchor" aria-label="anchor" href="#fitting-controls-and-maintenance-0-99-7"></a></h3>
+<ul><li>Fitting entry points use <code><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed()</a></code> for reproducibility, <code><a href="https://progressr.futureverse.org/reference/with_progress.html" class="external-link">progressr::with_progress()</a></code> for progress, and <code>print(fit)</code> for summaries. Remove the old <code>seed</code>, <code>verbose</code>, and <code>print_learner</code> arguments from fitting calls. The same seed now reproduces results within this API; it may produce different cross-validation splits from an older release.</li>
+<li>Multiclass credible intervals compute all four bounds in one quantile call per observation. Shared helpers now live in files grouped by responsibility, and outcome validation and feature selection share a numeric parser.</li>
+<li>Multiclass random forests use training class proportions when all predictors are constant. This can happen when a stacking fold receives identical probabilities from every layer model.</li>
+</ul></div>
+</div>
+    <div class="section level2">
 <h2 class="page-header" data-toc-text="0.99.6" id="integratedlearner-0996">IntegratedLearner 0.99.6<a class="anchor" aria-label="anchor" href="#integratedlearner-0996"></a></h2>
 <div class="section level3">
 <h3 id="survival-ibs-fusion-0-99-6">Survival IBS fusion<a class="anchor" aria-label="anchor" href="#survival-ibs-fusion-0-99-6"></a></h3>
@@ -59,7 +68,7 @@
 <li>Removed validation-outcome recalibration from survival probability scoring. Single-layer, early-fusion, Cox-fusion, and cooperative models now reuse calibration fitted only to training outcomes and OOF risks; validation predictions preserve the training Cox coefficients, baseline survival, missing-risk replacement, and Brier time grid.</li>
 <li>Compute training and validation IBS-fusion Brier scores directly from the blended survival matrices, without fitting an additional model to their scalar risk summaries. AUC and concordance retain their existing risk-marker definitions and evaluation grids.</li>
 <li>Added <code>brier_time_grid</code>, stored <code>survival_calibration</code> objects, and <code>train_surv</code>/<code>valid_surv</code> matrices for inspecting the probabilities actually evaluated. The metric helper no longer fits calibration implicitly.</li>
-<li>Added regression tests for frozen/serialized calibration, validation-label independence of probabilities, direct IBS scoring, and cooperative survival calibration. Updated the help, README, vignette, and manuscript accordingly. Rerun affected earlier survival probability-error analyses before reporting results; the package version remains 0.99.6 for these corrections.</li>
+<li>Added regression tests for frozen/serialized calibration, validation-label independence of probabilities, direct IBS scoring, and cooperative survival calibration. Updated the help, README, vignette, and manuscript accordingly. Rerun affected earlier survival probability-error analyses before reporting results.</li>
 </ul></div>
 </div>
     <div class="section level2">

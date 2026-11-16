@@ -20,7 +20,7 @@ mlr3proba/mlr3extralearners."><!-- mathjax --><script src="https://cdnjs.cloudfl
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.6</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.7</span>
       </span>
     </div>
 
@@ -70,11 +70,9 @@ interface while using model fitting and fusion routines that do not depend on
 <span>  valid_sample_metadata <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  base_learner <span class="op">=</span> <span class="st">"surv.coxph"</span>,</span>
 <span>  folds <span class="op">=</span> <span class="fl">5</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">123</span>,</span>
 <span>  run_screening <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  screen_pct <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  drop_poor_performing_layers <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  do_early_fusion <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  t_vec <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  t_vec_probs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.05</span>, <span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">0.75</span>, <span class="fl">0.95</span><span class="op">)</span>,</span>
@@ -101,11 +99,9 @@ interface while using model fitting and fusion routines that do not depend on
 <span>  valid_sample_metadata <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  base_learner <span class="op">=</span> <span class="st">"surv.coxph"</span>,</span>
 <span>  folds <span class="op">=</span> <span class="fl">5</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">123</span>,</span>
 <span>  run_screening <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  screen_pct <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  drop_poor_performing_layers <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  do_early_fusion <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  t_vec <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  t_vec_probs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.05</span>, <span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">0.75</span>, <span class="fl">0.95</span><span class="op">)</span>,</span>
@@ -173,10 +169,6 @@ and <code>event</code>.</p></dd>
 is 5.</p></dd>
 
 
-<dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
-<dd><p>Specify the seed for reproducibility. Default is 1234.</p></dd>
-
-
 <dt id="arg-run-screening">run_screening<a class="anchor" aria-label="anchor" href="#arg-run-screening"></a></dt>
 <dd><p>Logical; if <code>TRUE</code>, run supervised screening
 within each training fold (and again on full training data) before fitting
@@ -194,10 +186,6 @@ single-layer performance below the screening threshold are removed from
 early and late fusion only. The threshold is AUC &lt; 0.5 for binary and
 R\(^2\) &lt; 0.5 for continuous outcomes. Single-layer outputs are still
 retained and reported.</p></dd>
-
-
-<dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
-<dd><p>logical; TRUE for printing SuperLearner progress. Default FALSE.</p></dd>
 
 
 <dt id="arg-do-early-fusion">do_early_fusion<a class="anchor" aria-label="anchor" href="#arg-do-early-fusion"></a></dt>
@@ -309,6 +297,14 @@ frozen training calibration. Reported training probability-error metrics
 remain internal summaries because calibration and fusion fitting use
 training outcomes; they are not fully nested evaluation estimates.</p>
     </div>
+    <div id="progress-summaries-and-reproducibility">
+    <h2>Progress, summaries, and reproducibility</h2>
+
+
+<p>Call <code><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed()</a></code> before fitting to reproduce the data splits and stochastic
+fitting steps. To display progress, wrap the call in
+<code><a href="https://progressr.futureverse.org/reference/with_progress.html" class="external-link">progressr::with_progress()</a></code>. Use <code>print(fit)</code> to show a fitted model summary.</p>
+    </div>
 
     <div id="ref-examples">
     <h2>Examples</h2>
@@ -337,20 +333,20 @@ training outcomes; they are not fully nested evaluation estimates.</p>
 <span class="r-in"><span>  folds <span class="op">=</span> <span class="fl">3</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  [1] "train_out"                   "valid_out"                  </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  [3] "screening_used"              "brier_time_grid"            </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  [5] "survival_calibration"        "screen_method"              </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  [7] "screen_pct"                  "surv_plot_data"             </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  [9] "backend"                     "base_learner"               </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [11] "supported_learners"          "fold_id"                    </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [13] "folds"                       "test"                       </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [15] "drop_poor_performing_layers" "late_methods"               </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [17] "run_intermediate"            "cooperative_rho"            </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [19] "cooperative_rho_grid"        "cooperative_rho_scores"     </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [21] "cooperative_s"               "cooperative_type_measure"   </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [23] "fusion_layers_retained"      "fusion_layers_removed"      </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [25] "fusion_layer_scores"         "fusion_layer_metric"        </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [27] "fusion_layer_threshold"     </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [1] "family"                      "train_out"                  </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [3] "valid_out"                   "screening_used"             </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [5] "brier_time_grid"             "survival_calibration"       </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [7] "screen_method"               "screen_pct"                 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [9] "surv_plot_data"              "backend"                    </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [11] "base_learner"                "supported_learners"         </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [13] "fold_id"                     "folds"                      </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [15] "test"                        "drop_poor_performing_layers"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [17] "late_methods"                "run_intermediate"           </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [19] "cooperative_rho"             "cooperative_rho_grid"       </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [21] "cooperative_rho_scores"      "cooperative_s"              </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [23] "cooperative_type_measure"    "fusion_layers_retained"     </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [25] "fusion_layers_removed"       "fusion_layer_scores"        </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [27] "fusion_layer_metric"         "fusion_layer_threshold"     </span>
 <span class="r-in"><span><span class="va">fit</span><span class="op">$</span><span class="va">brier_time_grid</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  [1]  0.2025041  0.3715227  0.6941235  0.9110887  1.2556587  1.7856945</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  [7]  2.1369196  2.3565563  2.9915892  4.3587055  7.1861760  7.4304362</span>

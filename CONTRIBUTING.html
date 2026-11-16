@@ -17,7 +17,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.6</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.7</span>
       </span>
     </div>
 
@@ -118,6 +118,31 @@
 <li>Avoid adding heavy dependencies. New packages should go in <code>Suggests</code> unless they are essential to core functionality.</li>
 <li>Do not commit large data files. Tutorial data belongs in <code>inst/extdata/</code> as small MAE RDS files; do not duplicate it as raw tables or PCL objects.</li>
 </ul></div>
+<div class="section level2">
+<h2 id="finding-your-way-around-r">Finding your way around <code>R/</code>
+<a class="anchor" aria-label="anchor" href="#finding-your-way-around-r"></a></h2>
+<p><code>IntegratedLearner.R</code> prepares the inputs and dispatches by outcome. <code>IL_conbin.R</code> fits continuous and binary outcomes, <code>IL_multiclass.R</code> fits multiclass outcomes, <code>IL_survival.R</code> fits time-to-event outcomes, and <code>IL_cooperative.R</code> implements cooperative learning.</p>
+<table class="table"><colgroup><col width="50%"><col width="50%"></colgroup><thead><tr><th>If you are changing…</th>
+<th>Start in…</th>
+</tr></thead><tbody><tr><td>MAE or PCL input preparation, outcome conversion, or input checks</td>
+<td>
+<code>IL_PrepareInputs.R</code>, <code>IL_Outcomes.R</code>, or <code>IL_validate.R</code>
+</td>
+</tr><tr><td>Feature selection or filtering</td>
+<td><code>IL_Features.R</code></td>
+</tr><tr><td>SuperLearner adapters</td>
+<td><code>IL_SuperLearner.R</code></td>
+</tr><tr><td>Fold setup or fit controls</td>
+<td><code>IL_FitSupport.R</code></td>
+</tr><tr><td>Shared fusion results, metrics, or layer prediction</td>
+<td>
+<code>IL_Fusion.R</code> or <code>IL_PredictLayers.R</code>
+</td>
+</tr><tr><td>Numeric parsing shared by outcomes and feature options</td>
+<td><code>IL_Numeric.R</code></td>
+</tr><tr><td>Fit summaries</td>
+<td><code>IL_Print.R</code></td>
+</tr></tbody></table></div>
 <div class="section level2">
 <h2 id="adding-a-new-learner">Adding a new learner<a class="anchor" aria-label="anchor" href="#adding-a-new-learner"></a></h2>
 <p>New learners are a welcome contribution. Please:</p>

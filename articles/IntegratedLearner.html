@@ -32,7 +32,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.6</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.7</span>
       </span>
     </div>
 
@@ -179,13 +179,15 @@ survival outcomes. For multiclass outcomes,
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
-<p>Install the release version from Bioconductor with:</p>
+<p>IntegratedLearner was accepted into Bioconductor. Once the nightly
+build succeeds, install it from a Bioconductor devel environment
+with:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"BiocManager"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"BiocManager"</span><span class="op">)</span></span>
 <span><span class="op">}</span></span>
 <span><span class="fu">BiocManager</span><span class="fu">::</span><span class="fu"><a href="https://bioconductor.github.io/BiocManager/reference/install.html" class="external-link">install</a></span><span class="op">(</span><span class="st">"IntegratedLearner"</span><span class="op">)</span></span></code></pre></div>
-<p>For the development version, use:</p>
+<p>To install directly from GitHub, use:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">BiocManager</span><span class="fu">::</span><span class="fu"><a href="https://bioconductor.github.io/BiocManager/reference/install.html" class="external-link">install</a></span><span class="op">(</span><span class="st">"himelmallick/IntegratedLearner"</span><span class="op">)</span></span></code></pre></div>
 </div>
@@ -647,7 +649,6 @@ standard Bioconductor accessors for inspection, and then fits
 <span>  base_learner <span class="op">=</span> <span class="st">"SL.mean"</span>,</span>
 <span>  run_stacked <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  run_concat <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  print_learner <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  family <span class="op">=</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">binomial</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span></span>
@@ -674,6 +675,23 @@ standard Bioconductor accessors for inspection, and then fits
 <div class="section level2">
 <h2 id="parameter-reference-conbin-multiclass-and-survival">Parameter Reference (Conbin, Multiclass, and Survival)<a class="anchor" aria-label="anchor" href="#parameter-reference-conbin-multiclass-and-survival"></a>
 </h2>
+<p>Set the seed before fitting to reproduce cross-validation splits and
+stochastic model fitting. Progress and the fit summary are optional:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">123</span><span class="op">)</span></span>
+<span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu">progressr</span><span class="fu">::</span><span class="fu"><a href="https://progressr.futureverse.org/reference/with_progress.html" class="external-link">with_progress</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="../reference/IntegratedLearner.html">IntegratedLearner</a></span><span class="op">(</span></span>
+<span>    MAE_train <span class="op">=</span> <span class="va">mae_min</span>,</span>
+<span>    experiment <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="fu">MultiAssayExperiment</span><span class="fu">::</span><span class="fu"><a href="https://github.com/waldronlab/MultiAssayExperiment/reference/MultiAssayExperiment-methods.html" class="external-link">experiments</a></span><span class="op">(</span><span class="va">mae_min</span><span class="op">)</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">2</span><span class="op">]</span>,</span>
+<span>    assay.type <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="st">"abundance"</span>, <span class="fl">2</span><span class="op">)</span>,</span>
+<span>    folds <span class="op">=</span> <span class="fl">2</span>, base_learner <span class="op">=</span> <span class="st">"SL.mean"</span>,</span>
+<span>    run_stacked <span class="op">=</span> <span class="cn">FALSE</span>, run_concat <span class="op">=</span> <span class="cn">FALSE</span>, family <span class="op">=</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">binomial</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></code></pre></div>
+<p>To show progress from a non-interactive script, pass
+<code>enable = TRUE</code> to
+<code><a href="https://progressr.futureverse.org/reference/with_progress.html" class="external-link">progressr::with_progress()</a></code>.</p>
 <div class="section level3">
 <h3 id="common-wrapper-parameters-integratedlearner">Common Wrapper Parameters (<code>IntegratedLearner</code>)<a class="anchor" aria-label="anchor" href="#common-wrapper-parameters-integratedlearner"></a>
 </h3>
@@ -748,12 +766,6 @@ tabular sample metadata, if using PCL mode).</td>
 <td>Outer CV folds.</td>
 </tr>
 <tr class="odd">
-<td><code>seed</code></td>
-<td><code>1234</code></td>
-<td>all</td>
-<td>Reproducibility seed.</td>
-</tr>
-<tr class="even">
 <td><code>base_learner</code></td>
 <td><code>"sl_bart"</code></td>
 <td>standard IL mode</td>
@@ -765,42 +777,42 @@ uses native IDs (for example <code>randomforest</code>,
 a supported <code>surv.*</code> ID. Not used when
 <code>run_intermediate = TRUE</code>.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>filter_method</code></td>
 <td><code>NULL</code></td>
 <td>all</td>
 <td>Optional feature filtering method: <code>"prevalence"</code> or
 <code>"variance"</code>.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>filter_pct</code></td>
 <td><code>NULL</code></td>
 <td>all</td>
 <td>Optional retention percentage in <code>(0,100]</code> for
 filtering.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>run_screening</code></td>
 <td><code>FALSE</code></td>
 <td>standard IL mode</td>
 <td>Enable supervised screening. Ignored when
 <code>run_intermediate = TRUE</code>.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>screen_pct</code></td>
 <td><code>NULL</code></td>
 <td>all</td>
 <td>Retention percentage in <code>(0,100]</code> for screening. Required
 when screening is enabled.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>prevalence_pct</code></td>
 <td><code>NULL</code></td>
 <td>all</td>
 <td>Deprecated alias for prevalence filtering
 (<code>filter_method = "prevalence"</code>).</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>drop_poor_performing_layers</code></td>
 <td><code>FALSE</code></td>
 <td>standard IL mode</td>
@@ -810,7 +822,7 @@ performance from early and late fusion only (AUC &lt; 0.5 for binary, R²
 results are still retained. Ignored when
 <code>run_intermediate = TRUE</code>.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>run_intermediate</code></td>
 <td><code>FALSE</code></td>
 <td>continuous, binary, survival</td>
@@ -819,7 +831,7 @@ results are still retained. Ignored when
 supervised screening are skipped. Multiclass fits print a message and
 ignore this option. Requires at least 3 CV folds.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>cooperative_rho</code></td>
 <td><code>c(0, 0.1, 0.25, 0.5, 1)</code></td>
 <td>continuous, binary, survival</td>
@@ -828,7 +840,7 @@ fits one <code><a href="https://rdrr.io/pkg/multiview/man/cv.multiview.html" cla
 the same fold assignments, then keeps the best <code>rho</code> by CV
 score.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>cooperative_s</code></td>
 <td><code>"lambda.min"</code></td>
 <td>continuous, binary, survival</td>
@@ -836,18 +848,12 @@ score.</td>
 <code>"lambda.min"</code>, <code>"lambda.1se"</code>, or a numeric
 lambda.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>cooperative_type_measure</code></td>
 <td><code>NULL</code></td>
 <td>continuous, binary, survival</td>
 <td>Optional <code>multiview</code> CV metric. Defaults are MSE for
 gaussian, AUC for binomial, and Harrell’s C for survival.</td>
-</tr>
-<tr class="odd">
-<td><code>verbose</code></td>
-<td><code>FALSE</code></td>
-<td>all</td>
-<td>Print progress.</td>
 </tr>
 <tr class="even">
 <td><code>family</code></td>
@@ -862,7 +868,8 @@ metadata or family.</td>
 <td><code>...</code></td>
 <td>—</td>
 <td>all</td>
-<td>Passed to the selected backend (<code>IL_conbin</code> or
+<td>Additional arguments for the selected fitter
+(<code>IL_conbin</code>, <code>IL_multiclass</code>, or
 <code>ILsurv</code>).</td>
 </tr>
 </tbody>
@@ -905,11 +912,6 @@ metadata or family.</td>
 <td>Enables early-fusion concatenated model.</td>
 </tr>
 <tr class="odd">
-<td><code>print_learner</code></td>
-<td><code>TRUE</code></td>
-<td>Prints fit summary.</td>
-</tr>
-<tr class="even">
 <td><code>refit.stack</code></td>
 <td><code>FALSE</code></td>
 <td>Refit stacked learner on full data for final predictions.</td>
@@ -1560,7 +1562,7 @@ available when <code>run_intermediate = TRUE</code>.</td>
 <div class="section level3">
 <h3 id="quick-access-snippets">Quick Access Snippets<a class="anchor" aria-label="anchor" href="#quick-access-snippets"></a>
 </h3>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># ---- Conbin: weights + top features ----</span></span>
 <span><span class="va">fit</span><span class="op">$</span><span class="va">weights</span></span>
 <span><span class="va">fit</span><span class="op">$</span><span class="va">cooperative_rho</span></span>
@@ -1609,7 +1611,7 @@ status.</p>
 <div class="section level3">
 <h3 id="step-1-load-and-inspect-training-and-validation-data">Step 1: Load and Inspect Training and Validation Data<a class="anchor" aria-label="anchor" href="#step-1-load-and-inspect-training-and-validation-data"></a>
 </h3>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">PRISM_MAE</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span></span>
 <span>  <span class="st">"extdata"</span>, <span class="st">"PRISM_MAE.rds"</span>, package <span class="op">=</span> <span class="st">"IntegratedLearner"</span>, mustWork <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span><span class="op">)</span></span>
@@ -1639,7 +1641,7 @@ status.</p>
 <div class="section level3">
 <h3 id="step-2-inspect-layer-assays">Step 2: Inspect Layer Assays<a class="anchor" aria-label="anchor" href="#step-2-inspect-layer-assays"></a>
 </h3>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">vapply</a></span><span class="op">(</span></span>
 <span>  <span class="fu">MultiAssayExperiment</span><span class="fu">::</span><span class="fu"><a href="https://github.com/waldronlab/MultiAssayExperiment/reference/MultiAssayExperiment-methods.html" class="external-link">experiments</a></span><span class="op">(</span><span class="va">mae_train</span><span class="op">)</span>,</span>
 <span>  <span class="kw">function</span><span class="op">(</span><span class="va">se</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="fu">SummarizedExperiment</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/SummarizedExperiment/man/SummarizedExperiment-class.html" class="external-link">assay</a></span><span class="op">(</span><span class="va">se</span>, <span class="st">"abundance"</span><span class="op">)</span><span class="op">)</span>,</span>
@@ -1654,7 +1656,7 @@ status.</p>
 <p><code>IntegratedLearner</code> fits one model per layer
 (<code>base_learner</code>) and then combines layer-level predictions
 with a meta-learner (<code>meta_learner</code>).</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/IntegratedLearner.html">IntegratedLearner</a></span><span class="op">(</span></span>
 <span>  MAE_train <span class="op">=</span> <span class="va">mae_train</span>,</span>
 <span>  MAE_valid <span class="op">=</span> <span class="va">mae_valid</span>,</span>
@@ -1665,71 +1667,9 @@ with a meta-learner (<code>meta_learner</code>).</p>
 <span>  filter_pct <span class="op">=</span> <span class="fl">40</span>,</span>
 <span>  run_screening <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  screen_pct <span class="op">=</span> <span class="fl">30</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">binomial</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt; IntegratedLearner: using all experiments in mae_train: species, metabolites</span></span>
-<span><span class="co">#&gt; IntegratedLearner: default assay.type per experiment: species -&gt; abundance, metabolites -&gt; abundance</span></span>
-<span><span class="co">#&gt; Feature filter (prevalence ranking, top 40.00% per layer): kept 20/50 features. Layer breakdown: species=10/25, metabolites=10/25.</span></span>
-<span><span class="co">#&gt; Running base model for layer 1...</span></span>
-<span><span class="co">#&gt; Loading required namespace: randomForest</span></span>
-<span><span class="co">#&gt; Number of covariates in screen.il.glmnet is: 3</span></span>
-<span><span class="co">#&gt; CV SL.randomForest_screen.il.glmnet</span></span>
-<span><span class="co">#&gt; Number of covariates in screen.il.glmnet is: 3</span></span>
-<span><span class="co">#&gt; CV SL.randomForest_screen.il.glmnet</span></span>
-<span><span class="co">#&gt; Non-Negative least squares convergence: TRUE</span></span>
-<span><span class="co">#&gt; full SL.randomForest_screen.il.glmnet</span></span>
-<span><span class="co">#&gt; Running base model for layer 2...</span></span>
-<span><span class="co">#&gt; Number of covariates in screen.il.glmnet is: 3</span></span>
-<span><span class="co">#&gt; CV SL.randomForest_screen.il.glmnet</span></span>
-<span><span class="co">#&gt; Number of covariates in screen.il.glmnet is: 3</span></span>
-<span><span class="co">#&gt; CV SL.randomForest_screen.il.glmnet</span></span>
-<span><span class="co">#&gt; Non-Negative least squares convergence: TRUE</span></span>
-<span><span class="co">#&gt; full SL.randomForest_screen.il.glmnet</span></span>
-<span><span class="co">#&gt; Running stacked model...</span></span>
-<span><span class="co">#&gt; Number of covariates in All is: 2</span></span>
-<span><span class="co">#&gt; CV sl_nnls_auc_All</span></span>
-<span><span class="co">#&gt; Number of covariates in All is: 2</span></span>
-<span><span class="co">#&gt; CV sl_nnls_auc_All</span></span>
-<span><span class="co">#&gt; Non-Negative least squares convergence: TRUE</span></span>
-<span><span class="co">#&gt; full sl_nnls_auc_All</span></span>
-<span><span class="co">#&gt; Running concatenated model...</span></span>
-<span><span class="co">#&gt; Number of covariates in screen.il.glmnet is: 6</span></span>
-<span><span class="co">#&gt; CV SL.randomForest_screen.il.glmnet</span></span>
-<span><span class="co">#&gt; Number of covariates in screen.il.glmnet is: 6</span></span>
-<span><span class="co">#&gt; CV SL.randomForest_screen.il.glmnet</span></span>
-<span><span class="co">#&gt; Non-Negative least squares convergence: TRUE</span></span>
-<span><span class="co">#&gt; full SL.randomForest_screen.il.glmnet</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.034 minutes </span></span>
-<span><span class="co">#&gt; ========================================</span></span>
-<span><span class="co">#&gt; Model fit for individual layers: SL.randomForest </span></span>
-<span><span class="co">#&gt; Model fit for stacked layer: sl_nnls_auc </span></span>
-<span><span class="co">#&gt; Model fit for concatenated layer: SL.randomForest </span></span>
-<span><span class="co">#&gt; ========================================</span></span>
-<span><span class="co">#&gt; AUC metric for training data: </span></span>
-<span><span class="co">#&gt; Individual layers: </span></span>
-<span><span class="co">#&gt; metabolites     species </span></span>
-<span><span class="co">#&gt;       0.647       0.916 </span></span>
-<span><span class="co">#&gt; ======================</span></span>
-<span><span class="co">#&gt; Stacked model:0.92 </span></span>
-<span><span class="co">#&gt; ======================</span></span>
-<span><span class="co">#&gt; Concatenated model:0.872 </span></span>
-<span><span class="co">#&gt; ======================</span></span>
-<span><span class="co">#&gt; ========================================</span></span>
-<span><span class="co">#&gt; AUC metric for test data: </span></span>
-<span><span class="co">#&gt; Individual layers: </span></span>
-<span><span class="co">#&gt; metabolites     species </span></span>
-<span><span class="co">#&gt;       0.451       0.373 </span></span>
-<span><span class="co">#&gt; ======================</span></span>
-<span><span class="co">#&gt; Stacked model:0.355 </span></span>
-<span><span class="co">#&gt; ======================</span></span>
-<span><span class="co">#&gt; Concatenated model:0.459 </span></span>
-<span><span class="co">#&gt; ======================</span></span>
-<span><span class="co">#&gt; ========================================</span></span>
-<span><span class="co">#&gt; Weights for individual layers predictions in IntegratedLearner: </span></span>
-<span><span class="co">#&gt; metabolites     species </span></span>
-<span><span class="co">#&gt;       0.024       0.976 </span></span>
-<span><span class="co">#&gt; ========================================</span></span></code></pre></div>
+<span><span class="co">#&gt; Loading required namespace: randomForest</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="step-4-inspect-and-interpret-outputs">Step 4: Inspect and Interpret Outputs<a class="anchor" aria-label="anchor" href="#step-4-inspect-and-interpret-outputs"></a>
@@ -1756,30 +1696,30 @@ compact metric tables with AUC, accuracy, and balanced accuracy.</li>
 <code>fit$yhat.train</code> and <code>fit$yhat.test</code>:
 predicted probabilities.</li>
 </ul>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span><span class="op">$</span><span class="va">AUC.train</span></span>
 <span><span class="co">#&gt;  metabolites      species      stacked concatenated </span></span>
-<span><span class="co">#&gt;        0.647        0.916        0.920        0.872</span></span>
+<span><span class="co">#&gt;        0.680        0.925        0.924        0.891</span></span>
 <span><span class="va">fit</span><span class="op">$</span><span class="va">AUC.test</span></span>
 <span><span class="co">#&gt;  metabolites      species      stacked concatenated </span></span>
-<span><span class="co">#&gt;        0.451        0.373        0.355        0.459</span></span>
+<span><span class="co">#&gt;        0.450        0.347        0.347        0.461</span></span>
 <span><span class="va">fit</span><span class="op">$</span><span class="va">accuracy.train</span></span>
 <span><span class="co">#&gt;  metabolites      species      stacked concatenated </span></span>
-<span><span class="co">#&gt;    0.7419355    0.8709677    0.8709677    0.8903226</span></span>
+<span><span class="co">#&gt;    0.7612903    0.8967742    0.8967742    0.8709677</span></span>
 <span><span class="va">fit</span><span class="op">$</span><span class="va">balanced_accuracy.train</span></span>
 <span><span class="co">#&gt;  metabolites      species      stacked concatenated </span></span>
-<span><span class="co">#&gt;    0.5492222    0.7798979    0.7798979    0.8134419</span></span>
+<span><span class="co">#&gt;    0.5933398    0.8492951    0.8492951    0.7693243</span></span>
 <span><span class="va">fit</span><span class="op">$</span><span class="va">metrics.test</span></span>
 <span><span class="co">#&gt;          model   auc  accuracy balanced_accuracy</span></span>
-<span><span class="co">#&gt; 1  metabolites 0.451 0.6307692         0.4878436</span></span>
-<span><span class="co">#&gt; 2      species 0.373 0.6615385         0.5000000</span></span>
-<span><span class="co">#&gt; 3      stacked 0.355 0.6615385         0.5000000</span></span>
-<span><span class="co">#&gt; 4 concatenated 0.459 0.6615385         0.5000000</span></span>
+<span><span class="co">#&gt; 1  metabolites 0.450 0.6307692         0.4878436</span></span>
+<span><span class="co">#&gt; 2      species 0.347 0.6615385         0.5000000</span></span>
+<span><span class="co">#&gt; 3      stacked 0.347 0.6615385         0.5000000</span></span>
+<span><span class="co">#&gt; 4 concatenated 0.461 0.6615385         0.5000000</span></span>
 <span><span class="va">fit</span><span class="op">$</span><span class="va">weights</span></span>
 <span><span class="co">#&gt; metabolites     species </span></span>
-<span><span class="co">#&gt;  0.02377742  0.97622258</span></span></code></pre></div>
+<span><span class="co">#&gt;           0           1</span></span></code></pre></div>
 <p>Plot ROC summaries for train and validation sets:</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plot.obj</span> <span class="op">&lt;-</span> <span class="fu">IntegratedLearner</span><span class="fu">:::</span><span class="fu"><a href="../reference/plot.learner.html">plot.learner</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
 <span><span class="va">plot.obj</span><span class="op">$</span><span class="va">plot</span></span></code></pre></div>
 <p><img src="IntegratedLearner_files/figure-html/chunk-09-1.png" class="r-plt" alt="" width="672"></p>
@@ -1802,7 +1742,7 @@ predictions use <code>cooperative_s</code>, which defaults to
 <p>The chunk below is not evaluated during vignette builds because
 <code>multiview</code> fits can be expensive on real omics matrices. It
 can be run directly in an analysis session.</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_coop</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/IntegratedLearner.html">IntegratedLearner</a></span><span class="op">(</span></span>
 <span>  MAE_train <span class="op">=</span> <span class="va">mae_train</span>,</span>
 <span>  MAE_valid <span class="op">=</span> <span class="va">mae_valid</span>,</span>
@@ -1814,7 +1754,6 @@ can be run directly in an analysis session.</p>
 <span>  cooperative_s <span class="op">=</span> <span class="st">"lambda.min"</span>,</span>
 <span>  filter_method <span class="op">=</span> <span class="st">"prevalence"</span>,</span>
 <span>  filter_pct <span class="op">=</span> <span class="fl">20</span>,</span>
-<span>  print_learner <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">binomial</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span></span>
@@ -1836,7 +1775,7 @@ converted into <code>MultiAssayExperiment</code> format. Here
 <div class="section level3">
 <h3 id="step-1-load-and-inspect-data">Step 1: Load and Inspect Data<a class="anchor" aria-label="anchor" href="#step-1-load-and-inspect-data"></a>
 </h3>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pregnancy_MAE</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span></span>
 <span>  <span class="st">"extdata"</span>, <span class="st">"pregnancy_MAE.rds"</span>, package <span class="op">=</span> <span class="st">"IntegratedLearner"</span>, mustWork <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span><span class="op">)</span></span>
@@ -1874,7 +1813,7 @@ bytecode). In that case, either:</p>
 <li>upgrade Java runtime to 21 and restart R, or</li>
 <li>use a non-Java learner (example fallback shown below).</li>
 </ul>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">options</a></span><span class="op">(</span>java.parameters <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"-Xmx6G"</span>, <span class="st">"--add-modules=jdk.incubator.vector"</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/IntegratedLearner.html">IntegratedLearner</a></span><span class="op">(</span></span>
@@ -1889,7 +1828,7 @@ bytecode). In that case, either:</p>
 <span>  family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">gaussian</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p>Fallback (non-Java) run:</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/IntegratedLearner.html">IntegratedLearner</a></span><span class="op">(</span></span>
 <span>  MAE_train <span class="op">=</span> <span class="va">mae_train</span>,</span>
 <span>  folds <span class="op">=</span> <span class="fl">2</span>,</span>
@@ -1900,31 +1839,7 @@ bytecode). In that case, either:</p>
 <span>  run_screening <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  screen_pct <span class="op">=</span> <span class="fl">30</span>,</span>
 <span>  family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">gaussian</a></span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="op">)</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.018 minutes </span></span>
-<span><span class="co">#&gt; ========================================</span></span>
-<span><span class="co">#&gt; Model fit for individual layers: SL.randomForest </span></span>
-<span><span class="co">#&gt; Model fit for stacked layer: sl_nnls_auc </span></span>
-<span><span class="co">#&gt; Model fit for concatenated layer: SL.randomForest </span></span>
-<span><span class="co">#&gt; ========================================</span></span>
-<span><span class="co">#&gt; R^2 for training data: </span></span>
-<span><span class="co">#&gt; Individual layers: </span></span>
-<span><span class="co">#&gt;     CellfreeRNA    ImmuneSystem    Metabolomics      Microbiome   PlasmaLuminex </span></span>
-<span><span class="co">#&gt;     0.003035637     0.064327863     0.009018942     0.428824021     0.201013700 </span></span>
-<span><span class="co">#&gt; PlasmaSomalogic    SerumLuminex </span></span>
-<span><span class="co">#&gt;     0.609644982     0.001050213 </span></span>
-<span><span class="co">#&gt; ======================</span></span>
-<span><span class="co">#&gt; Stacked model:0.5234515 </span></span>
-<span><span class="co">#&gt; ======================</span></span>
-<span><span class="co">#&gt; Concatenated model:0.5383477 </span></span>
-<span><span class="co">#&gt; ======================</span></span>
-<span><span class="co">#&gt; ========================================</span></span>
-<span><span class="co">#&gt; Weights for individual layers predictions in IntegratedLearner: </span></span>
-<span><span class="co">#&gt;     CellfreeRNA    ImmuneSystem    Metabolomics      Microbiome   PlasmaLuminex </span></span>
-<span><span class="co">#&gt;           0.000           0.000           0.000           0.282           0.000 </span></span>
-<span><span class="co">#&gt; PlasmaSomalogic    SerumLuminex </span></span>
-<span><span class="co">#&gt;           0.718           0.000 </span></span>
-<span><span class="co">#&gt; ========================================</span></span></code></pre></div>
+<span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="step-3-evaluate-predictive-accuracy">Step 3: Evaluate Predictive Accuracy<a class="anchor" aria-label="anchor" href="#step-3-evaluate-predictive-accuracy"></a>
@@ -1932,13 +1847,13 @@ bytecode). In that case, either:</p>
 <p>For continuous outcomes, <code>IntegratedLearner</code> reports
 <code>R2.train</code> (and <code>R2.test</code> if validation is
 provided).</p>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span><span class="op">$</span><span class="va">R2.train</span></span>
 <span><span class="co">#&gt;     CellfreeRNA    ImmuneSystem    Metabolomics      Microbiome   PlasmaLuminex </span></span>
-<span><span class="co">#&gt;     0.003035637     0.064327863     0.009018942     0.428824021     0.201013700 </span></span>
+<span><span class="co">#&gt;      0.02105091      0.06008405      0.10303044      0.40931703      0.16106101 </span></span>
 <span><span class="co">#&gt; PlasmaSomalogic    SerumLuminex         stacked    concatenated </span></span>
-<span><span class="co">#&gt;     0.609644982     0.001050213     0.523451469     0.538347680</span></span></code></pre></div>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<span><span class="co">#&gt;      0.64507920      0.10006211      0.67144827      0.58214775</span></span></code></pre></div>
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plot.obj</span> <span class="op">&lt;-</span> <span class="fu">IntegratedLearner</span><span class="fu">:::</span><span class="fu"><a href="../reference/plot.learner.html">plot.learner</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
 <span><span class="va">plot.obj</span><span class="op">$</span><span class="va">plot</span></span></code></pre></div>
 <p><img src="IntegratedLearner_files/figure-html/chunk-21-1.png" class="r-plt" alt="" width="672"></p>
@@ -1950,7 +1865,7 @@ provided).</p>
 distributions and derive weighted posterior summaries. This section is
 skipped in this session because Java &lt; 21 (or bartMachine is
 unavailable).</p>
-<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">weights</span> <span class="op">&lt;-</span> <span class="va">fit</span><span class="op">$</span><span class="va">weights</span></span>
 <span></span>
 <span><span class="va">dataX</span> <span class="op">&lt;-</span> <span class="va">fit</span><span class="op">$</span><span class="va">X_train_layers</span></span>
@@ -1970,7 +1885,7 @@ unavailable).</p>
 <span><span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/row_colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">weighted.post.samples</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/row_colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">dataX</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">dataY</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/row_colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">dataX</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">)</span></span></code></pre></div>
 <p>Visualize 68% and 95% credible intervals for observations:</p>
-<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">ord_names</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/sort.html" class="external-link">sort</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/MatrixGenerics/man/rowMeans.html" class="external-link">rowMeans</a></span><span class="op">(</span><span class="va">weighted.post.samples</span><span class="op">)</span>, decreasing <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://mc-stan.org/bayesplot/reference/MCMC-intervals.html" class="external-link">mcmc_intervals</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">weighted.post.samples</span><span class="op">)</span>, prob <span class="op">=</span> <span class="fl">0.68</span>, prob_outer <span class="op">=</span> <span class="fl">0.95</span><span class="op">)</span> <span class="op">+</span></span>
@@ -1985,7 +1900,7 @@ unavailable).</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>axis.text.x <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_text</a></span><span class="op">(</span>angle <span class="op">=</span> <span class="fl">90</span>, hjust <span class="op">=</span> <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>Layer weights and feature-level inclusion proportions can also be
 examined for biological interpretation.</p>
-<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">omicsEye_theme</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">angle</span> <span class="op">&lt;-</span> <span class="fl">45</span></span>
 <span>  <span class="va">hjust</span> <span class="op">&lt;-</span> <span class="fl">1</span></span>
@@ -2065,7 +1980,7 @@ examined for biological interpretation.</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>strip.background <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">ylab</a></span><span class="op">(</span><span class="st">"Inclusion proportion"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">xlab</a></span><span class="op">(</span><span class="st">""</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://wilkelab.org/cowplot/reference/plot_grid.html" class="external-link">plot_grid</a></span><span class="op">(</span></span>
 <span>  <span class="va">p4</span>,</span>
 <span>  ncol <span class="op">=</span> <span class="fl">1</span>,</span>
@@ -2073,7 +1988,7 @@ examined for biological interpretation.</p>
 <span>  label_size <span class="op">=</span> <span class="fl">8</span>,</span>
 <span>  vjust <span class="op">=</span> <span class="fl">0.1</span></span>
 <span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>plot.margin <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grid/unit.html" class="external-link">unit</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">0.5</span>, <span class="fl">0.5</span>, <span class="fl">0.5</span><span class="op">)</span>, <span class="st">"cm"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://wilkelab.org/cowplot/reference/plot_grid.html" class="external-link">plot_grid</a></span><span class="op">(</span></span>
 <span>  <span class="va">p5</span>,</span>
 <span>  ncol <span class="op">=</span> <span class="fl">1</span>,</span>
@@ -2096,7 +2011,7 @@ and pass them through <code>outcome_col</code> and
 multinomial stacking, majority voting, and learned probability averaging
 together. Supervised screening is already demonstrated above; it is
 disabled here because the fixture has only 25 features per assay.</p>
-<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">Franzosa_MAE_train</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span></span>
 <span>  <span class="st">"extdata"</span>, <span class="st">"Franzosa_MAE_train.rds"</span>, package <span class="op">=</span> <span class="st">"IntegratedLearner"</span>, mustWork <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span><span class="op">)</span></span>
@@ -2124,39 +2039,8 @@ disabled here because the fixture has only 25 features per assay.</p>
 <span>  filter_method <span class="op">=</span> <span class="st">"variance"</span>,</span>
 <span>  filter_pct <span class="op">=</span> <span class="fl">50</span>,</span>
 <span>  run_screening <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  folds <span class="op">=</span> <span class="fl">2</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span>
-<span><span class="co">#&gt; Feature filter (caret variance ranking, top 50.00% per layer): kept 26/50 features. Layer breakdown: metabolome=13/25, species=13/25.</span></span>
-<span><span class="co">#&gt; Running multiclass base model for layer 1...</span></span>
-<span><span class="co">#&gt; Running multiclass base model for layer 2...</span></span>
-<span><span class="co">#&gt; Running multiclass stacked model...</span></span>
-<span><span class="co">#&gt; Running multiclass concatenated model...</span></span>
-<span><span class="co">#&gt; Time for model fit : 0.006 minutes </span></span>
-<span><span class="co">#&gt; ========================================</span></span>
-<span><span class="co">#&gt; Multiclass model fit with 3 classes</span></span>
-<span><span class="co">#&gt; Base learner: ranger </span></span>
-<span><span class="co">#&gt; Stacked learner: multinom </span></span>
-<span><span class="co">#&gt; Concatenated learner: ranger </span></span>
-<span><span class="co">#&gt; ========================================</span></span>
-<span><span class="co">#&gt; Multiclass metrics for training data:</span></span>
-<span><span class="co">#&gt;              model  accuracy balanced_accuracy       auc   logloss</span></span>
-<span><span class="co">#&gt; 1       metabolome 0.4774194         0.4766926 0.6243295 1.0029164</span></span>
-<span><span class="co">#&gt; 2          species 0.5354839         0.5305216 0.7408962 0.8860159</span></span>
-<span><span class="co">#&gt; 3         majority 0.5032258         0.4859415 0.6764073 9.4535696</span></span>
-<span><span class="co">#&gt; 4 weighted_average 0.5161290         0.5102664 0.7402640 0.8880100</span></span>
-<span><span class="co">#&gt; 5          stacked 0.5354839         0.5145209 0.7353418 0.9418464</span></span>
-<span><span class="co">#&gt; 6     concatenated 0.4774194         0.4872364 0.6920283 0.9165502</span></span>
-<span><span class="co">#&gt; ========================================</span></span>
-<span><span class="co">#&gt; Multiclass metrics for test data:</span></span>
-<span><span class="co">#&gt;              model  accuracy balanced_accuracy       auc   logloss</span></span>
-<span><span class="co">#&gt; 1       metabolome 0.4615385         0.4744401 0.6427817 1.0076090</span></span>
-<span><span class="co">#&gt; 2          species 0.5230769         0.5143610 0.7099021 0.9985027</span></span>
-<span><span class="co">#&gt; 3         majority 0.4615385         0.4774704 0.6749088 9.3744601</span></span>
-<span><span class="co">#&gt; 4 weighted_average 0.5230769         0.5143610 0.7185067 0.9465800</span></span>
-<span><span class="co">#&gt; 5          stacked 0.6461538         0.6418314 0.8074481 0.8628265</span></span>
-<span><span class="co">#&gt; 6     concatenated 0.4923077         0.4912385 0.7219948 0.9364180</span></span>
-<span><span class="co">#&gt; ========================================</span></span></code></pre></div>
+<span>  folds <span class="op">=</span> <span class="fl">2</span></span>
+<span><span class="op">)</span></span></code></pre></div>
 <p>Useful multiclass outputs:</p>
 <ul>
 <li>
@@ -2201,42 +2085,42 @@ scores use features remaining after optional filtering, including
 features excluded by supervised screening. They are shared across the
 fitted models and describe class associations rather than model-specific
 prediction attribution.</p>
-<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span><span class="op">$</span><span class="va">late_methods</span></span>
 <span><span class="co">#&gt; [1] "stacked"          "majority"         "weighted_average"</span></span>
 <span><span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">valid_out</span><span class="op">$</span><span class="va">late</span>, <span class="kw">function</span><span class="op">(</span><span class="va">result</span><span class="op">)</span> <span class="va">result</span><span class="op">$</span><span class="va">metrics</span><span class="op">)</span></span>
 <span><span class="co">#&gt; $stacked</span></span>
 <span><span class="co">#&gt;     model  accuracy balanced_accuracy       auc   logloss</span></span>
-<span><span class="co">#&gt; 5 stacked 0.6461538         0.6418314 0.8074481 0.8628265</span></span>
+<span><span class="co">#&gt; 5 stacked 0.6307692         0.6236495 0.8207078 0.8349868</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; $majority</span></span>
-<span><span class="co">#&gt;      model  accuracy balanced_accuracy       auc logloss</span></span>
-<span><span class="co">#&gt; 3 majority 0.4615385         0.4774704 0.6749088 9.37446</span></span>
+<span><span class="co">#&gt;      model  accuracy balanced_accuracy       auc  logloss</span></span>
+<span><span class="co">#&gt; 3 majority 0.4153846         0.4274704 0.6338046 11.45727</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; $weighted_average</span></span>
-<span><span class="co">#&gt;              model  accuracy balanced_accuracy       auc logloss</span></span>
-<span><span class="co">#&gt; 4 weighted_average 0.5230769          0.514361 0.7185067 0.94658</span></span>
+<span><span class="co">#&gt;              model  accuracy balanced_accuracy       auc   logloss</span></span>
+<span><span class="co">#&gt; 4 weighted_average 0.5230769          0.514361 0.7267828 0.9267507</span></span>
 <span><span class="va">fit</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">weighted_average</span><span class="op">$</span><span class="va">weights</span></span>
 <span><span class="co">#&gt; metabolome    species </span></span>
-<span><span class="co">#&gt;  0.1442797  0.8557203</span></span>
+<span><span class="co">#&gt;  0.2393267  0.7606733</span></span>
 <span><span class="va">fit</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">weighted_average</span><span class="op">$</span><span class="va">weights_by_fold</span></span>
 <span><span class="co">#&gt; $`1`</span></span>
 <span><span class="co">#&gt; metabolome    species </span></span>
-<span><span class="co">#&gt; 0.01953706 0.98046294 </span></span>
+<span><span class="co">#&gt;  0.1340057  0.8659943 </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; $`2`</span></span>
 <span><span class="co">#&gt; metabolome    species </span></span>
-<span><span class="co">#&gt;  0.2283534  0.7716466</span></span>
+<span><span class="co">#&gt;  0.3294426  0.6705574</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">valid_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">majority</span><span class="op">$</span><span class="va">valid_class</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1] "Control" "Control" "CD"      "CD"      "Control" "Control"</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">valid_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">weighted_average</span><span class="op">$</span><span class="va">valid_prob</span><span class="op">)</span></span>
-<span><span class="co">#&gt;             CD    Control        UC</span></span>
-<span><span class="co">#&gt; [1,] 0.0982275 0.64301798 0.2587545</span></span>
-<span><span class="co">#&gt; [2,] 0.3079379 0.06007768 0.6319844</span></span>
-<span><span class="co">#&gt; [3,] 0.4643264 0.21736748 0.3183061</span></span>
-<span><span class="co">#&gt; [4,] 0.1362191 0.40847204 0.4553089</span></span>
-<span><span class="co">#&gt; [5,] 0.2096880 0.56133808 0.2289739</span></span>
-<span><span class="co">#&gt; [6,] 0.1211003 0.52590903 0.3529907</span></span>
+<span><span class="co">#&gt;              CD   Control        UC</span></span>
+<span><span class="co">#&gt; [1,] 0.09653629 0.6373103 0.2661535</span></span>
+<span><span class="co">#&gt; [2,] 0.30580810 0.1007212 0.5934707</span></span>
+<span><span class="co">#&gt; [3,] 0.45892778 0.2485591 0.2925131</span></span>
+<span><span class="co">#&gt; [4,] 0.16159268 0.3830102 0.4553971</span></span>
+<span><span class="co">#&gt; [5,] 0.18337831 0.6025799 0.2140418</span></span>
+<span><span class="co">#&gt; [6,] 0.13965707 0.5526322 0.3077108</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">feature_importance_signed_by_class</span><span class="op">[</span>, <span class="fl">1</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span><span class="op">)</span></span>
 <span><span class="co">#&gt;                                 CD</span></span>
 <span><span class="co">#&gt; oleic.acid              -0.3912816</span></span>
@@ -2258,7 +2142,7 @@ prediction attribution.</p>
 <span><span class="co">#&gt;               0.4600156               0.4440633               0.4128222 </span></span>
 <span><span class="co">#&gt; X2.hydroxyhexadecanoate           linoleic.acid    alpha.linolenic.acid </span></span>
 <span><span class="co">#&gt;               0.3644632               0.3415060               0.3185461</span></span></code></pre></div>
-<div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plot.obj.mc</span> <span class="op">&lt;-</span> <span class="fu">IntegratedLearner</span><span class="fu">:::</span><span class="fu"><a href="../reference/plot.learner.html">plot.learner</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
 <span><span class="va">plot.obj.mc</span><span class="op">$</span><span class="va">plot</span></span></code></pre></div>
 <p><img src="IntegratedLearner_files/figure-html/chunk-17b-1.png" class="r-plt" alt="" width="768"></p>
@@ -2303,7 +2187,7 @@ validation is still required to assess the full fitted pipeline.</p>
 best fused survival model.</li>
 </ul>
 <p>This section provides a complete MAE workflow.</p>
-<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">TCGA_survival_MAE_train</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span></span>
 <span>  <span class="st">"extdata"</span>, <span class="st">"TCGA_survival_MAE_train.rds"</span>, package <span class="op">=</span> <span class="st">"IntegratedLearner"</span>, mustWork <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span><span class="op">)</span></span>
@@ -2326,42 +2210,11 @@ best fused survival model.</li>
 <span>  filter_method <span class="op">=</span> <span class="st">"variance"</span>,</span>
 <span>  filter_pct <span class="op">=</span> <span class="fl">40</span>,</span>
 <span>  run_screening <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  screen_pct <span class="op">=</span> <span class="fl">25</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span>
-<span><span class="co">#&gt; Feature filter (caret variance ranking, top 40.00% per layer): kept 20/50 features. Layer breakdown: gene=10/25, mirna=10/25.</span></span>
-<span><span class="co">#&gt; ILsurv starting</span></span>
-<span><span class="co">#&gt;   base_learner: surv.coxph</span></span>
-<span><span class="co">#&gt;   returning late fusion methods: IBS, COX</span></span>
-<span><span class="co">#&gt;   folds: 2 | seed: 1234</span></span>
-<span><span class="co">#&gt;   samples: 223 | features: 20</span></span>
-<span><span class="co">#&gt;   layers: gene, mirna</span></span>
-<span><span class="co">#&gt;   screening: cox (25.00%)</span></span>
-<span><span class="co">#&gt; [gene] fitting OOF + full model (10 features)</span></span>
-<span><span class="co">#&gt; [gene] done</span></span>
-<span><span class="co">#&gt; [mirna] fitting OOF + full model (10 features)</span></span>
-<span><span class="co">#&gt; [mirna] done</span></span>
-<span><span class="co">#&gt; Computing single-layer training metrics</span></span>
-<span><span class="co">#&gt;   [single:gene] cindex=0.5069</span></span>
-<span><span class="co">#&gt;   [single:mirna] cindex=0.5397</span></span>
-<span><span class="co">#&gt; Running early fusion</span></span>
-<span><span class="co">#&gt;   [early] cindex=0.5150</span></span>
-<span><span class="co">#&gt; Using training-calibrated survival matrices for weighting</span></span>
-<span><span class="co">#&gt; Learning late-fusion weights</span></span>
-<span><span class="co">#&gt;   [late:IBS] weights: gene = 1.0000, mirna = 0.0000</span></span>
-<span><span class="co">#&gt;   [late:IBS] cindex=0.4931</span></span>
-<span><span class="co">#&gt;   [late:COX] weights: gene = 0.4937, mirna = 0.5063</span></span>
-<span><span class="co">#&gt;   [late:COX] cindex=0.5013</span></span>
-<span><span class="co">#&gt; Running validation</span></span>
-<span><span class="co">#&gt;   [valid single:gene] cindex=0.6626</span></span>
-<span><span class="co">#&gt;   [valid single:mirna] cindex=0.3576</span></span>
-<span><span class="co">#&gt;   [valid late:IBS] cindex=0.3374</span></span>
-<span><span class="co">#&gt;   [valid late:COX] cindex=0.3051</span></span>
-<span><span class="co">#&gt;   [valid early] cindex=0.6000</span></span>
-<span><span class="co">#&gt; ILsurv completed</span></span></code></pre></div>
+<span>  screen_pct <span class="op">=</span> <span class="fl">25</span></span>
+<span><span class="op">)</span></span></code></pre></div>
 <p>To run standalone direct cooperative survival modeling, use at least
 3 folds and set the cooperative options:</p>
-<div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_surv_coop</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/IntegratedLearner.html">IntegratedLearner</a></span><span class="op">(</span></span>
 <span>  MAE_train <span class="op">=</span> <span class="va">mae_train</span>,</span>
 <span>  MAE_valid <span class="op">=</span> <span class="va">mae_valid</span>,</span>
@@ -2376,13 +2229,12 @@ best fused survival model.</li>
 <span>  screen_pct <span class="op">=</span> <span class="fl">25</span>,</span>
 <span>  run_intermediate <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  cooperative_rho <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.25</span>, <span class="fl">1</span><span class="op">)</span>,</span>
-<span>  cooperative_s <span class="op">=</span> <span class="st">"lambda.min"</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  cooperative_s <span class="op">=</span> <span class="st">"lambda.min"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <div class="section level3">
 <h3 id="interpret-survival-outputs">Interpret Survival Outputs<a class="anchor" aria-label="anchor" href="#interpret-survival-outputs"></a>
 </h3>
-<div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb30"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Single-layer training metrics</span></span>
 <span><span class="co"># fit_surv_mae$train_out$single$metrics</span></span>
 <span></span>
@@ -2395,100 +2247,100 @@ best fused survival model.</li>
 <span><span class="co">#&gt; [29] 3067.4897 3250.6000</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">valid_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">IBS</span><span class="op">$</span><span class="va">valid_surv</span><span class="op">)</span></span>
 <span><span class="co">#&gt;          159.6 223.131034482759 304.034482758621 371.827586206897</span></span>
-<span><span class="co">#&gt; [1,] 0.9852480        0.9750905        0.9647714        0.9541722</span></span>
-<span><span class="co">#&gt; [2,] 0.9855657        0.9756242        0.9655223        0.9551438</span></span>
-<span><span class="co">#&gt; [3,] 0.9865491        0.9772772        0.9678489        0.9581554</span></span>
-<span><span class="co">#&gt; [4,] 0.9864759        0.9771540        0.9676755        0.9579309</span></span>
-<span><span class="co">#&gt; [5,] 0.9851711        0.9749613        0.9645896        0.9539371</span></span>
-<span><span class="co">#&gt; [6,] 0.9865760        0.9773224        0.9679125        0.9582378</span></span>
+<span><span class="co">#&gt; [1,] 0.9861863        0.9766789        0.9670013        0.9570194</span></span>
+<span><span class="co">#&gt; [2,] 0.9870580        0.9781423        0.9690606        0.9596868</span></span>
+<span><span class="co">#&gt; [3,] 0.9871915        0.9783655        0.9693741        0.9600928</span></span>
+<span><span class="co">#&gt; [4,] 0.9867150        0.9775647        0.9682459        0.9586299</span></span>
+<span><span class="co">#&gt; [5,] 0.9874488        0.9787999        0.9699876        0.9608894</span></span>
+<span><span class="co">#&gt; [6,] 0.9860812        0.9764996        0.9667461        0.9566862</span></span>
 <span><span class="co">#&gt;      393.441379310345 427.351724137931 461.262068965517 517.758620689655</span></span>
-<span><span class="co">#&gt; [1,]        0.9541722        0.9541722        0.9541722        0.9541722</span></span>
-<span><span class="co">#&gt; [2,]        0.9551438        0.9551438        0.9551438        0.9551438</span></span>
-<span><span class="co">#&gt; [3,]        0.9581554        0.9581554        0.9581554        0.9581554</span></span>
-<span><span class="co">#&gt; [4,]        0.9579309        0.9579309        0.9579309        0.9579309</span></span>
-<span><span class="co">#&gt; [5,]        0.9539371        0.9539371        0.9539371        0.9539371</span></span>
-<span><span class="co">#&gt; [6,]        0.9582378        0.9582378        0.9582378        0.9582378</span></span>
+<span><span class="co">#&gt; [1,]        0.9570194        0.9570194        0.9570194        0.9570194</span></span>
+<span><span class="co">#&gt; [2,]        0.9596868        0.9596868        0.9596868        0.9596868</span></span>
+<span><span class="co">#&gt; [3,]        0.9600928        0.9600928        0.9600928        0.9600928</span></span>
+<span><span class="co">#&gt; [4,]        0.9586299        0.9586299        0.9586299        0.9586299</span></span>
+<span><span class="co">#&gt; [5,]        0.9608894        0.9608894        0.9608894        0.9608894</span></span>
+<span><span class="co">#&gt; [6,]        0.9566862        0.9566862        0.9566862        0.9566862</span></span>
 <span><span class="co">#&gt;      568.165517241379 611.496551724138 639.758620689655 690.324137931034</span></span>
-<span><span class="co">#&gt; [1,]        0.9541722        0.9407090        0.9270880        0.9270880</span></span>
-<span><span class="co">#&gt; [2,]        0.9551438        0.9419571        0.9286118        0.9286118</span></span>
-<span><span class="co">#&gt; [3,]        0.9581554        0.9458287        0.9333416        0.9333416</span></span>
-<span><span class="co">#&gt; [4,]        0.9579309        0.9455399        0.9329887        0.9329887</span></span>
-<span><span class="co">#&gt; [5,]        0.9539371        0.9404069        0.9267193        0.9267193</span></span>
-<span><span class="co">#&gt; [6,]        0.9582378        0.9459347        0.9334713        0.9334713</span></span>
+<span><span class="co">#&gt; [1,]        0.9570194        0.9443349        0.9314858        0.9314858</span></span>
+<span><span class="co">#&gt; [2,]        0.9596868        0.9477669        0.9356801        0.9356801</span></span>
+<span><span class="co">#&gt; [3,]        0.9600928        0.9482925        0.9363239        0.9363239</span></span>
+<span><span class="co">#&gt; [4,]        0.9586299        0.9464080        0.9340176        0.9340176</span></span>
+<span><span class="co">#&gt; [5,]        0.9608894        0.9493155        0.9375756        0.9375756</span></span>
+<span><span class="co">#&gt; [6,]        0.9566862        0.9439064        0.9309588        0.9309588</span></span>
 <span><span class="co">#&gt;      744.241379310345 807.586206896552 911.772413793103 996.227586206897</span></span>
-<span><span class="co">#&gt; [1,]        0.9270880        0.9270880        0.9101665        0.9101665</span></span>
-<span><span class="co">#&gt; [2,]        0.9286118        0.9286118        0.9120270        0.9120270</span></span>
-<span><span class="co">#&gt; [3,]        0.9333416        0.9333416        0.9178061        0.9178061</span></span>
-<span><span class="co">#&gt; [4,]        0.9329887        0.9329887        0.9173747        0.9173747</span></span>
-<span><span class="co">#&gt; [5,]        0.9267193        0.9267193        0.9097165        0.9097165</span></span>
-<span><span class="co">#&gt; [6,]        0.9334713        0.9334713        0.9179646        0.9179646</span></span>
+<span><span class="co">#&gt; [1,]        0.9314858        0.9314858        0.9155606        0.9155606</span></span>
+<span><span class="co">#&gt; [2,]        0.9356801        0.9356801        0.9206855        0.9206855</span></span>
+<span><span class="co">#&gt; [3,]        0.9363239        0.9363239        0.9214778        0.9214778</span></span>
+<span><span class="co">#&gt; [4,]        0.9340176        0.9340176        0.9186550        0.9186550</span></span>
+<span><span class="co">#&gt; [5,]        0.9375756        0.9375756        0.9230046        0.9230046</span></span>
+<span><span class="co">#&gt; [6,]        0.9309588        0.9309588        0.9149161        0.9149161</span></span>
 <span><span class="co">#&gt;      1061.04827586207 1140.51724137931 1208.3724137931 1327.59310344828</span></span>
-<span><span class="co">#&gt; [1,]        0.9101665        0.9101665       0.8992939        0.8870073</span></span>
-<span><span class="co">#&gt; [2,]        0.9120270        0.9120270       0.9013671        0.8893174</span></span>
-<span><span class="co">#&gt; [3,]        0.9178061        0.9178061       0.9078105        0.8965020</span></span>
-<span><span class="co">#&gt; [4,]        0.9173747        0.9173747       0.9073293        0.8959653</span></span>
-<span><span class="co">#&gt; [5,]        0.9097165        0.9097165       0.8987925        0.8864486</span></span>
-<span><span class="co">#&gt; [6,]        0.9179646        0.9179646       0.9079873        0.8966992</span></span>
+<span><span class="co">#&gt; [1,]        0.9155606        0.9155606       0.9053418        0.8938481</span></span>
+<span><span class="co">#&gt; [2,]        0.9206855        0.9206855       0.9110513        0.9002078</span></span>
+<span><span class="co">#&gt; [3,]        0.9214778        0.9214778       0.9119325        0.9011908</span></span>
+<span><span class="co">#&gt; [4,]        0.9186550        0.9186550       0.9087839        0.8976791</span></span>
+<span><span class="co">#&gt; [5,]        0.9230046        0.9230046       0.9136399        0.9030957</span></span>
+<span><span class="co">#&gt; [6,]        0.9149161        0.9149161       0.9046155        0.8930335</span></span>
 <span><span class="co">#&gt;      1478.20689655172 1602.01379310345 1683.65517241379 1850.41379310345</span></span>
-<span><span class="co">#&gt; [1,]        0.8613457        0.8342945        0.8195216        0.7714909</span></span>
-<span><span class="co">#&gt; [2,]        0.8641392        0.8375799        0.8230677        0.7758451</span></span>
-<span><span class="co">#&gt; [3,]        0.8728382        0.8478251        0.8341348        0.7894705</span></span>
-<span><span class="co">#&gt; [4,]        0.8721877        0.8470582        0.8333060        0.7884481</span></span>
-<span><span class="co">#&gt; [5,]        0.8606704        0.8335007        0.8186650        0.7704400</span></span>
-<span><span class="co">#&gt; [6,]        0.8730772        0.8481070        0.8344395        0.7898463</span></span>
+<span><span class="co">#&gt; [1,]        0.8697030        0.8442868        0.8303461        0.7856206</span></span>
+<span><span class="co">#&gt; [2,]        0.8773978        0.8533374        0.8401195        0.7976047</span></span>
+<span><span class="co">#&gt; [3,]        0.8785929        0.8547468        0.8416447        0.7994834</span></span>
+<span><span class="co">#&gt; [4,]        0.8743322        0.8497200        0.8362071        0.7927772</span></span>
+<span><span class="co">#&gt; [5,]        0.8809029        0.8574760        0.8445979        0.8031363</span></span>
+<span><span class="co">#&gt; [6,]        0.8687051        0.8430925        0.8290451        0.7839724</span></span>
 <span><span class="co">#&gt;      2039.55172413793 2195.89655172414 2395.30344827586 2723.62068965517</span></span>
-<span><span class="co">#&gt; [1,]        0.7532261        0.6951808        0.6746054        0.6491397</span></span>
-<span><span class="co">#&gt; [2,]        0.7578710        0.7006856        0.6803906        0.6552533</span></span>
-<span><span class="co">#&gt; [3,]        0.7724217        0.7179919        0.6986027        0.6745321</span></span>
-<span><span class="co">#&gt; [4,]        0.7713291        0.7166892        0.6972305        0.6730778</span></span>
-<span><span class="co">#&gt; [5,]        0.7521054        0.6938540        0.6732116        0.6476676</span></span>
-<span><span class="co">#&gt; [6,]        0.7728234        0.7184710        0.6991074        0.6750671</span></span>
+<span><span class="co">#&gt; [1,]        0.7685648        0.7135547        0.6940653        0.6699152</span></span>
+<span><span class="co">#&gt; [2,]        0.7813487        0.7287448        0.7100430        0.6868159</span></span>
+<span><span class="co">#&gt; [3,]        0.7833573        0.7311498        0.7125816        0.6895088</span></span>
+<span><span class="co">#&gt; [4,]        0.7761873        0.7225642        0.7035249        0.6798932</span></span>
+<span><span class="co">#&gt; [5,]        0.7872661        0.7358435        0.7175356        0.6947790</span></span>
+<span><span class="co">#&gt; [6,]        0.7667855        0.7113549        0.6917199        0.6673851</span></span>
 <span><span class="co">#&gt;      3067.48965517241    3250.6</span></span>
-<span><span class="co">#&gt; [1,]        0.6096277 0.6096277</span></span>
-<span><span class="co">#&gt; [2,]        0.6162080 0.6162080</span></span>
-<span><span class="co">#&gt; [3,]        0.6370170 0.6370170</span></span>
-<span><span class="co">#&gt; [4,]        0.6354442 0.6354442</span></span>
-<span><span class="co">#&gt; [5,]        0.6080445 0.6080445</span></span>
-<span><span class="co">#&gt; [6,]        0.6375957 0.6375957</span></span>
+<span><span class="co">#&gt; [1,]        0.6337126 0.6337126</span></span>
+<span><span class="co">#&gt; [2,]        0.6519203 0.6519203</span></span>
+<span><span class="co">#&gt; [3,]        0.6548840 0.6548840</span></span>
+<span><span class="co">#&gt; [4,]        0.6444686 0.6444686</span></span>
+<span><span class="co">#&gt; [5,]        0.6605366 0.6605366</span></span>
+<span><span class="co">#&gt; [6,]        0.6309742 0.6309742</span></span>
 <span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">valid_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">IBS</span><span class="op">$</span><span class="va">valid_ibs</span></span>
-<span><span class="co">#&gt; [1] 0.1297728</span></span>
+<span><span class="co">#&gt; [1] 0.1270228</span></span>
 <span></span>
 <span><span class="co"># Late fusion (two weighted integration summaries)</span></span>
 <span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">IBS</span><span class="op">$</span><span class="va">weights</span></span>
-<span><span class="co">#&gt;         gene        mirna </span></span>
-<span><span class="co">#&gt; 9.999965e-01 3.473905e-06</span></span>
+<span><span class="co">#&gt;      gene     mirna </span></span>
+<span><span class="co">#&gt; 0.1880844 0.8119156</span></span>
 <span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">IBS</span><span class="op">$</span><span class="va">train_cindex</span></span>
-<span><span class="co">#&gt; [1] 0.4931199</span></span>
+<span><span class="co">#&gt; [1] 0.5593934</span></span>
 <span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">IBS</span><span class="op">$</span><span class="va">train_auc</span></span>
 <span><span class="co">#&gt;            time       AUC</span></span>
-<span><span class="co">#&gt; t=141.2   141.2 0.3157052</span></span>
-<span><span class="co">#&gt; t=169.2   169.2 0.5399187</span></span>
-<span><span class="co">#&gt; t=197     197.0 0.5108891</span></span>
-<span><span class="co">#&gt; t=238.2   238.2 0.3998883</span></span>
-<span><span class="co">#&gt; t=311.4   311.4 0.4397459</span></span>
-<span><span class="co">#&gt; t=353.4   353.4 0.4634619</span></span>
-<span><span class="co">#&gt; t=534.6   534.6 0.5045775</span></span>
-<span><span class="co">#&gt; t=612     612.0 0.4299771</span></span>
-<span><span class="co">#&gt; t=653.4   653.4 0.4118545</span></span>
-<span><span class="co">#&gt; t=848.2   848.2 0.4434011</span></span>
-<span><span class="co">#&gt; t=1052.8 1052.8 0.4513950</span></span>
-<span><span class="co">#&gt; t=1289.6 1289.6 0.5169122</span></span>
-<span><span class="co">#&gt; t=1430   1430.0 0.5262203</span></span>
-<span><span class="co">#&gt; t=1452.8 1452.8 0.5543571</span></span>
-<span><span class="co">#&gt; t=1527.2 1527.2 0.5776807</span></span>
-<span><span class="co">#&gt; t=1607.6 1607.6 0.5446888</span></span>
-<span><span class="co">#&gt; t=1678.8 1678.8 0.5301570</span></span>
-<span><span class="co">#&gt; t=1699   1699.0 0.5588274</span></span>
-<span><span class="co">#&gt; t=1805.8 1805.8 0.5995195</span></span>
-<span><span class="co">#&gt; t=2034.6 2034.6 0.5422605</span></span>
-<span><span class="co">#&gt; t=2115   2115.0 0.5745504</span></span>
-<span><span class="co">#&gt; t=2179   2179.0 0.5962289</span></span>
-<span><span class="co">#&gt; t=2207   2207.0 0.6095699</span></span>
-<span><span class="co">#&gt; t=2628.6 2628.6 0.6378205</span></span>
-<span><span class="co">#&gt; t=3222.6 3222.6 0.6714623</span></span>
+<span><span class="co">#&gt; t=141.2   141.2 0.5856839</span></span>
+<span><span class="co">#&gt; t=169.2   169.2 0.4623876</span></span>
+<span><span class="co">#&gt; t=197     197.0 0.4017748</span></span>
+<span><span class="co">#&gt; t=238.2   238.2 0.5273826</span></span>
+<span><span class="co">#&gt; t=311.4   311.4 0.6015853</span></span>
+<span><span class="co">#&gt; t=353.4   353.4 0.6219914</span></span>
+<span><span class="co">#&gt; t=534.6   534.6 0.6039661</span></span>
+<span><span class="co">#&gt; t=612     612.0 0.5981226</span></span>
+<span><span class="co">#&gt; t=653.4   653.4 0.5783219</span></span>
+<span><span class="co">#&gt; t=848.2   848.2 0.5530379</span></span>
+<span><span class="co">#&gt; t=1052.8 1052.8 0.5674843</span></span>
+<span><span class="co">#&gt; t=1289.6 1289.6 0.5563507</span></span>
+<span><span class="co">#&gt; t=1430   1430.0 0.5626661</span></span>
+<span><span class="co">#&gt; t=1452.8 1452.8 0.5917654</span></span>
+<span><span class="co">#&gt; t=1527.2 1527.2 0.6221224</span></span>
+<span><span class="co">#&gt; t=1607.6 1607.6 0.5881078</span></span>
+<span><span class="co">#&gt; t=1678.8 1678.8 0.5435788</span></span>
+<span><span class="co">#&gt; t=1699   1699.0 0.5038004</span></span>
+<span><span class="co">#&gt; t=1805.8 1805.8 0.5268698</span></span>
+<span><span class="co">#&gt; t=2034.6 2034.6 0.5429630</span></span>
+<span><span class="co">#&gt; t=2115   2115.0 0.5519070</span></span>
+<span><span class="co">#&gt; t=2179   2179.0 0.5807968</span></span>
+<span><span class="co">#&gt; t=2207   2207.0 0.5304632</span></span>
+<span><span class="co">#&gt; t=2628.6 2628.6 0.5440115</span></span>
+<span><span class="co">#&gt; t=3222.6 3222.6 0.5187270</span></span>
 <span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">COX</span><span class="op">$</span><span class="va">weights</span></span>
 <span><span class="co">#&gt;      gene     mirna </span></span>
-<span><span class="co">#&gt; 0.4937095 0.5062905 </span></span>
+<span><span class="co">#&gt; 0.6077569 0.3922431 </span></span>
 <span><span class="co">#&gt; attr(,"method_details")</span></span>
 <span><span class="co">#&gt; attr(,"method_details")$weight_method</span></span>
 <span><span class="co">#&gt; [1] "COX"</span></span>
@@ -2508,238 +2360,238 @@ best fused survival model.</li>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; attr(,"method_details")$scaling</span></span>
 <span><span class="co">#&gt; attr(,"method_details")$scaling$M</span></span>
-<span><span class="co">#&gt;                gene        mirna</span></span>
-<span><span class="co">#&gt;   [1,]  0.713985759  0.307901448</span></span>
-<span><span class="co">#&gt;   [2,] -1.634402343 -0.769896757</span></span>
-<span><span class="co">#&gt;   [3,] -0.357622185 -1.820512729</span></span>
-<span><span class="co">#&gt;   [4,] -1.598319326 -1.338561242</span></span>
-<span><span class="co">#&gt;   [5,]  1.899624849 -2.029774702</span></span>
-<span><span class="co">#&gt;   [6,]  2.206534621 -0.808569504</span></span>
-<span><span class="co">#&gt;   [7,] -1.329341479  0.319959471</span></span>
-<span><span class="co">#&gt;   [8,]  1.159980982  0.021221848</span></span>
-<span><span class="co">#&gt;   [9,] -0.412903650 -1.275740315</span></span>
-<span><span class="co">#&gt;  [10,]  1.842773883 -0.383341214</span></span>
-<span><span class="co">#&gt;  [11,]  1.139305027 -1.255815072</span></span>
-<span><span class="co">#&gt;  [12,]  0.773639773 -0.678439297</span></span>
-<span><span class="co">#&gt;  [13,]  0.762473401 -0.383556705</span></span>
-<span><span class="co">#&gt;  [14,] -0.353168342 -0.158744821</span></span>
-<span><span class="co">#&gt;  [15,] -0.796358254 -0.562148758</span></span>
-<span><span class="co">#&gt;  [16,]  1.602283974  2.514338783</span></span>
-<span><span class="co">#&gt;  [17,] -0.098990255  0.274152920</span></span>
-<span><span class="co">#&gt;  [18,] -0.178143190  0.046798602</span></span>
-<span><span class="co">#&gt;  [19,]  3.371878730 -1.338731547</span></span>
-<span><span class="co">#&gt;  [20,] -1.739954531  1.784954563</span></span>
-<span><span class="co">#&gt;  [21,]  0.111998749 -0.156931614</span></span>
-<span><span class="co">#&gt;  [22,] -0.730657827 -1.161470108</span></span>
-<span><span class="co">#&gt;  [23,]  0.151286205  0.359005868</span></span>
-<span><span class="co">#&gt;  [24,] -0.316824867 -0.650964598</span></span>
-<span><span class="co">#&gt;  [25,]  0.115070261 -1.663670295</span></span>
-<span><span class="co">#&gt;  [26,]  0.657044912  1.462419255</span></span>
-<span><span class="co">#&gt;  [27,] -1.852544961  0.168069990</span></span>
-<span><span class="co">#&gt;  [28,] -0.881429671  0.106047539</span></span>
-<span><span class="co">#&gt;  [29,] -1.240850533  0.192301014</span></span>
-<span><span class="co">#&gt;  [30,] -0.578503314 -0.444061477</span></span>
-<span><span class="co">#&gt;  [31,]  0.105167105 -0.078553866</span></span>
-<span><span class="co">#&gt;  [32,]  0.442055552 -0.070527989</span></span>
-<span><span class="co">#&gt;  [33,] -0.380481615  0.192419304</span></span>
-<span><span class="co">#&gt;  [34,]  1.118104776 -0.021972620</span></span>
-<span><span class="co">#&gt;  [35,]  0.241235721 -0.154262612</span></span>
-<span><span class="co">#&gt;  [36,]  0.960557757  1.581148341</span></span>
-<span><span class="co">#&gt;  [37,] -1.042848433  0.456191689</span></span>
-<span><span class="co">#&gt;  [38,] -0.578054540  0.965929567</span></span>
-<span><span class="co">#&gt;  [39,] -1.293950451  0.487623039</span></span>
-<span><span class="co">#&gt;  [40,] -0.644906235  0.847691756</span></span>
-<span><span class="co">#&gt;  [41,] -0.086189168  1.184425472</span></span>
-<span><span class="co">#&gt;  [42,]  0.245267448  1.114848197</span></span>
-<span><span class="co">#&gt;  [43,] -0.450793174  1.523334082</span></span>
-<span><span class="co">#&gt;  [44,] -0.250141400  0.196845077</span></span>
-<span><span class="co">#&gt;  [45,] -0.401608832 -0.949192256</span></span>
-<span><span class="co">#&gt;  [46,] -1.028910170 -2.081861864</span></span>
-<span><span class="co">#&gt;  [47,]  0.207060713 -0.594167815</span></span>
-<span><span class="co">#&gt;  [48,] -1.917310664 -1.115656480</span></span>
-<span><span class="co">#&gt;  [49,]  0.018672249 -0.835881855</span></span>
-<span><span class="co">#&gt;  [50,]  1.131729525  0.109034331</span></span>
-<span><span class="co">#&gt;  [51,]  0.313058732 -1.659640780</span></span>
-<span><span class="co">#&gt;  [52,] -0.137902143  0.404618663</span></span>
-<span><span class="co">#&gt;  [53,] -0.235251035 -0.137912273</span></span>
-<span><span class="co">#&gt;  [54,] -1.517008350 -1.450678677</span></span>
-<span><span class="co">#&gt;  [55,]  0.589915411 -0.850006168</span></span>
-<span><span class="co">#&gt;  [56,]  0.227868241 -1.664109075</span></span>
-<span><span class="co">#&gt;  [57,]  0.159295746 -0.597520059</span></span>
-<span><span class="co">#&gt;  [58,] -0.755648459 -0.122793503</span></span>
-<span><span class="co">#&gt;  [59,]  1.654130266 -0.855103344</span></span>
-<span><span class="co">#&gt;  [60,] -0.310769292  0.147188574</span></span>
-<span><span class="co">#&gt;  [61,] -0.469320070 -1.133235736</span></span>
-<span><span class="co">#&gt;  [62,] -0.005318020 -0.098611344</span></span>
-<span><span class="co">#&gt;  [63,] -0.070639686  2.300695620</span></span>
-<span><span class="co">#&gt;  [64,] -0.194681532  0.075498482</span></span>
-<span><span class="co">#&gt;  [65,] -0.473512887  0.333449481</span></span>
-<span><span class="co">#&gt;  [66,]  1.527719266 -0.032192750</span></span>
-<span><span class="co">#&gt;  [67,]  1.097748926 -0.826820792</span></span>
-<span><span class="co">#&gt;  [68,]  0.579718420  0.782392761</span></span>
-<span><span class="co">#&gt;  [69,] -0.973480022 -0.361249754</span></span>
-<span><span class="co">#&gt;  [70,] -0.658297445  0.004953460</span></span>
-<span><span class="co">#&gt;  [71,]  0.539068518  2.820297484</span></span>
-<span><span class="co">#&gt;  [72,] -1.900971094  0.458039946</span></span>
-<span><span class="co">#&gt;  [73,] -0.497934364  1.021087289</span></span>
-<span><span class="co">#&gt;  [74,] -0.212582368 -0.235104161</span></span>
-<span><span class="co">#&gt;  [75,] -0.153463884 -0.124355017</span></span>
-<span><span class="co">#&gt;  [76,]  0.735975227  0.073440759</span></span>
-<span><span class="co">#&gt;  [77,] -0.747469886  1.602133394</span></span>
-<span><span class="co">#&gt;  [78,] -0.338891321 -0.784701952</span></span>
-<span><span class="co">#&gt;  [79,] -1.090199031 -1.000286855</span></span>
-<span><span class="co">#&gt;  [80,] -0.962564860 -0.614671772</span></span>
-<span><span class="co">#&gt;  [81,] -0.757033692 -0.932926527</span></span>
-<span><span class="co">#&gt;  [82,]  1.066806109 -1.508635028</span></span>
-<span><span class="co">#&gt;  [83,] -0.645166462  1.559194480</span></span>
-<span><span class="co">#&gt;  [84,]  0.193090900 -1.266856395</span></span>
-<span><span class="co">#&gt;  [85,]  3.371878730  1.695227809</span></span>
-<span><span class="co">#&gt;  [86,] -0.758628882 -0.400853394</span></span>
-<span><span class="co">#&gt;  [87,] -1.647434953  0.875114247</span></span>
-<span><span class="co">#&gt;  [88,] -0.946284323 -0.616110742</span></span>
-<span><span class="co">#&gt;  [89,] -0.388667519 -0.051683394</span></span>
-<span><span class="co">#&gt;  [90,] -1.026020524  0.621551183</span></span>
-<span><span class="co">#&gt;  [91,]  0.684729346 -0.361637266</span></span>
-<span><span class="co">#&gt;  [92,] -0.730465313 -1.316018737</span></span>
-<span><span class="co">#&gt;  [93,] -0.336252316 -0.140348711</span></span>
-<span><span class="co">#&gt;  [94,] -0.321321075 -0.195269545</span></span>
-<span><span class="co">#&gt;  [95,]  0.754667824 -0.267698387</span></span>
-<span><span class="co">#&gt;  [96,]  0.103160909 -0.154221679</span></span>
-<span><span class="co">#&gt;  [97,]  0.197135875 -0.158247724</span></span>
-<span><span class="co">#&gt;  [98,]  0.930252668 -0.367820696</span></span>
-<span><span class="co">#&gt;  [99,]  0.418452084 -0.323487163</span></span>
-<span><span class="co">#&gt; [100,]  0.823820922 -0.180793256</span></span>
-<span><span class="co">#&gt; [101,] -0.477499777 -0.167551560</span></span>
-<span><span class="co">#&gt; [102,]  0.892883758  0.002848737</span></span>
-<span><span class="co">#&gt; [103,] -1.684064539 -1.966607095</span></span>
-<span><span class="co">#&gt; [104,] -1.811297558 -1.278485904</span></span>
-<span><span class="co">#&gt; [105,] -0.126049610 -0.139375323</span></span>
-<span><span class="co">#&gt; [106,] -0.314360613 -0.008624767</span></span>
-<span><span class="co">#&gt; [107,] -0.621082354 -0.884022991</span></span>
-<span><span class="co">#&gt; [108,] -0.381624613  2.820297484</span></span>
-<span><span class="co">#&gt; [109,]  0.374066710 -0.707765312</span></span>
-<span><span class="co">#&gt; [110,]  0.338228142 -0.012728003</span></span>
-<span><span class="co">#&gt; [111,] -0.402611901 -0.936499585</span></span>
-<span><span class="co">#&gt; [112,]  0.978603161  1.579421817</span></span>
-<span><span class="co">#&gt; [113,]  0.074921455 -1.428621005</span></span>
-<span><span class="co">#&gt; [114,] -0.893470070 -0.881376690</span></span>
-<span><span class="co">#&gt; [115,] -0.366216191 -1.003291495</span></span>
-<span><span class="co">#&gt; [116,] -0.193247754  0.329982864</span></span>
-<span><span class="co">#&gt; [117,]  0.440289622  0.666933448</span></span>
-<span><span class="co">#&gt; [118,] -0.406658382 -0.115967221</span></span>
-<span><span class="co">#&gt; [119,]  0.222408617 -0.428951292</span></span>
-<span><span class="co">#&gt; [120,]  0.430493274  0.817780542</span></span>
-<span><span class="co">#&gt; [121,] -0.110695869  0.091990756</span></span>
-<span><span class="co">#&gt; [122,] -0.482456027  0.694095947</span></span>
-<span><span class="co">#&gt; [123,] -0.725555642 -0.232769328</span></span>
-<span><span class="co">#&gt; [124,]  0.459339330 -0.373465908</span></span>
-<span><span class="co">#&gt; [125,]  0.207082702 -0.774835002</span></span>
-<span><span class="co">#&gt; [126,]  0.302557996  1.759243458</span></span>
-<span><span class="co">#&gt; [127,]  0.445174985 -1.160704497</span></span>
-<span><span class="co">#&gt; [128,]  0.765270450 -0.235667093</span></span>
-<span><span class="co">#&gt; [129,] -0.459437541 -1.547553471</span></span>
-<span><span class="co">#&gt; [130,] -0.706675745 -1.030156460</span></span>
-<span><span class="co">#&gt; [131,] -1.571000173  0.161884259</span></span>
-<span><span class="co">#&gt; [132,] -0.103715334 -0.276718910</span></span>
-<span><span class="co">#&gt; [133,] -0.433770226 -0.097834588</span></span>
-<span><span class="co">#&gt; [134,]  0.209976909 -0.431204743</span></span>
-<span><span class="co">#&gt; [135,]  0.555414839  0.651401316</span></span>
-<span><span class="co">#&gt; [136,]  0.237759527 -0.065175002</span></span>
-<span><span class="co">#&gt; [137,]  0.596853713 -0.120305355</span></span>
-<span><span class="co">#&gt; [138,] -1.960319896 -0.403482655</span></span>
-<span><span class="co">#&gt; [139,]  0.217474636  1.863961479</span></span>
-<span><span class="co">#&gt; [140,]  0.424342103  2.117028568</span></span>
-<span><span class="co">#&gt; [141,]  0.479678114 -0.596854834</span></span>
-<span><span class="co">#&gt; [142,]  0.747281264 -0.009303490</span></span>
-<span><span class="co">#&gt; [143,]  1.442513519  0.169080835</span></span>
-<span><span class="co">#&gt; [144,]  0.251123704 -0.830898402</span></span>
-<span><span class="co">#&gt; [145,] -0.653695921 -1.061174863</span></span>
-<span><span class="co">#&gt; [146,]  0.978092387  1.329773048</span></span>
-<span><span class="co">#&gt; [147,]  0.144577448  0.443126590</span></span>
-<span><span class="co">#&gt; [148,]  0.094493426  2.820297484</span></span>
-<span><span class="co">#&gt; [149,] -0.124350541  1.243693185</span></span>
-<span><span class="co">#&gt; [150,] -0.132367238  0.737282675</span></span>
-<span><span class="co">#&gt; [151,] -0.759145370  0.360490626</span></span>
-<span><span class="co">#&gt; [152,] -1.185073184 -0.187758319</span></span>
-<span><span class="co">#&gt; [153,]  0.396056868 -0.067481851</span></span>
-<span><span class="co">#&gt; [154,]  2.835087186  1.666999069</span></span>
-<span><span class="co">#&gt; [155,] -0.092455764  1.558239810</span></span>
-<span><span class="co">#&gt; [156,] -0.306862472  0.077074399</span></span>
-<span><span class="co">#&gt; [157,] -0.040695684  0.004479923</span></span>
-<span><span class="co">#&gt; [158,]  1.699929615 -1.991917794</span></span>
-<span><span class="co">#&gt; [159,] -0.031509704  0.389820059</span></span>
-<span><span class="co">#&gt; [160,]  0.018472259 -1.283286996</span></span>
-<span><span class="co">#&gt; [161,] -0.416891321  0.383893350</span></span>
-<span><span class="co">#&gt; [162,]  0.012246953 -2.081861864</span></span>
-<span><span class="co">#&gt; [163,]  1.548480113  1.646776452</span></span>
-<span><span class="co">#&gt; [164,]  1.166426034  1.443696108</span></span>
-<span><span class="co">#&gt; [165,]  0.964418604  0.897601953</span></span>
-<span><span class="co">#&gt; [166,] -1.266061051 -0.909670496</span></span>
-<span><span class="co">#&gt; [167,] -0.635558655  1.036657642</span></span>
-<span><span class="co">#&gt; [168,] -0.862307708 -0.256437185</span></span>
-<span><span class="co">#&gt; [169,]  0.327524320  0.614604325</span></span>
-<span><span class="co">#&gt; [170,] -1.603621692  0.492364859</span></span>
-<span><span class="co">#&gt; [171,]  0.434400939  0.846807708</span></span>
-<span><span class="co">#&gt; [172,] -0.442487102  0.449944605</span></span>
-<span><span class="co">#&gt; [173,] -0.532646284  0.166318078</span></span>
-<span><span class="co">#&gt; [174,] -0.276111536 -0.860150564</span></span>
-<span><span class="co">#&gt; [175,]  1.466019633  1.906683507</span></span>
-<span><span class="co">#&gt; [176,] -1.452109123  1.554867807</span></span>
-<span><span class="co">#&gt; [177,]  0.242116882  0.504369042</span></span>
-<span><span class="co">#&gt; [178,]  0.501004900 -0.923039581</span></span>
-<span><span class="co">#&gt; [179,] -1.306699220 -1.546471485</span></span>
-<span><span class="co">#&gt; [180,] -0.806228765  0.223859413</span></span>
-<span><span class="co">#&gt; [181,] -1.911461923 -1.018776235</span></span>
-<span><span class="co">#&gt; [182,]  2.245457625 -1.132268588</span></span>
-<span><span class="co">#&gt; [183,] -0.506272955 -0.132983223</span></span>
-<span><span class="co">#&gt; [184,]  1.816951513  0.165531008</span></span>
-<span><span class="co">#&gt; [185,] -0.233152853 -0.682449179</span></span>
-<span><span class="co">#&gt; [186,] -1.064127340 -0.980461869</span></span>
-<span><span class="co">#&gt; [187,] -1.960319896 -0.743936265</span></span>
-<span><span class="co">#&gt; [188,]  0.123054130  0.473052254</span></span>
-<span><span class="co">#&gt; [189,] -0.654562139 -0.335032429</span></span>
-<span><span class="co">#&gt; [190,]  0.257952679  0.331536922</span></span>
-<span><span class="co">#&gt; [191,] -0.475666224  1.004143541</span></span>
-<span><span class="co">#&gt; [192,] -1.960319896 -0.578699871</span></span>
-<span><span class="co">#&gt; [193,]  0.666785036 -2.081861864</span></span>
-<span><span class="co">#&gt; [194,] -0.002501147 -0.594104200</span></span>
-<span><span class="co">#&gt; [195,] -0.124349935  0.475929999</span></span>
-<span><span class="co">#&gt; [196,] -0.878329931 -0.912595031</span></span>
-<span><span class="co">#&gt; [197,]  1.073795205  0.139863957</span></span>
-<span><span class="co">#&gt; [198,]  0.569591694  1.101083271</span></span>
-<span><span class="co">#&gt; [199,]  0.703700464 -0.188566348</span></span>
-<span><span class="co">#&gt; [200,]  0.905187430 -0.817464128</span></span>
-<span><span class="co">#&gt; [201,]  0.278872481 -0.804257433</span></span>
-<span><span class="co">#&gt; [202,] -1.088015073 -0.019426229</span></span>
-<span><span class="co">#&gt; [203,] -0.201759953  0.422486570</span></span>
-<span><span class="co">#&gt; [204,]  0.474658639  1.467000582</span></span>
-<span><span class="co">#&gt; [205,] -1.707109827  1.619734994</span></span>
-<span><span class="co">#&gt; [206,] -0.330869665  0.245204093</span></span>
-<span><span class="co">#&gt; [207,] -1.575426981 -0.409884892</span></span>
-<span><span class="co">#&gt; [208,]  0.300022775  1.063292550</span></span>
-<span><span class="co">#&gt; [209,]  0.581764788  1.027114211</span></span>
-<span><span class="co">#&gt; [210,]  3.371878730  1.950489580</span></span>
-<span><span class="co">#&gt; [211,]  0.975497542 -0.347894140</span></span>
-<span><span class="co">#&gt; [212,]  0.096167196  0.205633544</span></span>
-<span><span class="co">#&gt; [213,] -0.391332021  0.115757947</span></span>
-<span><span class="co">#&gt; [214,]  0.848924776 -0.362555368</span></span>
-<span><span class="co">#&gt; [215,]  1.418297635  1.315431610</span></span>
-<span><span class="co">#&gt; [216,] -0.179939910 -0.217729308</span></span>
-<span><span class="co">#&gt; [217,]  0.588326233  1.273096068</span></span>
-<span><span class="co">#&gt; [218,]  1.036331987  1.022935735</span></span>
-<span><span class="co">#&gt; [219,]  3.360882018 -0.505674932</span></span>
-<span><span class="co">#&gt; [220,]  0.728378877  0.305233317</span></span>
-<span><span class="co">#&gt; [221,] -0.368428460  0.100119273</span></span>
-<span><span class="co">#&gt; [222,]  0.630089587  1.963954094</span></span>
-<span><span class="co">#&gt; [223,]  0.289143272  0.451437150</span></span>
+<span><span class="co">#&gt;               gene        mirna</span></span>
+<span><span class="co">#&gt;   [1,] -0.68886743  0.037187844</span></span>
+<span><span class="co">#&gt;   [2,]  1.75730908 -2.013123599</span></span>
+<span><span class="co">#&gt;   [3,]  0.56959409 -1.161953663</span></span>
+<span><span class="co">#&gt;   [4,]  0.21692680 -0.544366830</span></span>
+<span><span class="co">#&gt;   [5,] -0.32620246 -1.438093549</span></span>
+<span><span class="co">#&gt;   [6,] -0.61073803 -0.650535503</span></span>
+<span><span class="co">#&gt;   [7,]  1.12693777  1.551926098</span></span>
+<span><span class="co">#&gt;   [8,] -0.99369172 -0.278335775</span></span>
+<span><span class="co">#&gt;   [9,] -0.39401081 -1.591511489</span></span>
+<span><span class="co">#&gt;  [10,] -1.59733298 -0.716861200</span></span>
+<span><span class="co">#&gt;  [11,] -1.41710671 -0.112672371</span></span>
+<span><span class="co">#&gt;  [12,] -0.96340781 -0.441718264</span></span>
+<span><span class="co">#&gt;  [13,] -0.29385109  0.058672743</span></span>
+<span><span class="co">#&gt;  [14,] -0.70793404  0.902134670</span></span>
+<span><span class="co">#&gt;  [15,]  0.50493739  0.321982042</span></span>
+<span><span class="co">#&gt;  [16,] -0.87214159  2.347487020</span></span>
+<span><span class="co">#&gt;  [17,] -0.27859258  0.295930052</span></span>
+<span><span class="co">#&gt;  [18,]  0.84181810  0.341267559</span></span>
+<span><span class="co">#&gt;  [19,] -0.28863640 -0.393209293</span></span>
+<span><span class="co">#&gt;  [20,] -0.99331494 -0.421287628</span></span>
+<span><span class="co">#&gt;  [21,] -0.42231500  0.156704748</span></span>
+<span><span class="co">#&gt;  [22,]  0.41730658 -1.730415646</span></span>
+<span><span class="co">#&gt;  [23,] -1.48091642 -0.443622811</span></span>
+<span><span class="co">#&gt;  [24,]  1.30779461 -0.642891367</span></span>
+<span><span class="co">#&gt;  [25,]  1.97650411  0.258615472</span></span>
+<span><span class="co">#&gt;  [26,]  1.98646394  1.962895138</span></span>
+<span><span class="co">#&gt;  [27,]  0.90427387  0.216557724</span></span>
+<span><span class="co">#&gt;  [28,]  0.28440306  0.185584618</span></span>
+<span><span class="co">#&gt;  [29,]  2.51402153  0.792928188</span></span>
+<span><span class="co">#&gt;  [30,] -0.99905333 -0.286731003</span></span>
+<span><span class="co">#&gt;  [31,]  0.05365858 -0.934071541</span></span>
+<span><span class="co">#&gt;  [32,] -0.37669508 -0.807076660</span></span>
+<span><span class="co">#&gt;  [33,]  1.17996949 -0.279608125</span></span>
+<span><span class="co">#&gt;  [34,] -1.42006832 -0.117332429</span></span>
+<span><span class="co">#&gt;  [35,] -0.80401867 -0.057950958</span></span>
+<span><span class="co">#&gt;  [36,] -0.09528336  2.026130794</span></span>
+<span><span class="co">#&gt;  [37,] -0.85067110  0.063752049</span></span>
+<span><span class="co">#&gt;  [38,] -0.61377731  1.561826381</span></span>
+<span><span class="co">#&gt;  [39,] -0.04939895  0.415257733</span></span>
+<span><span class="co">#&gt;  [40,]  0.71819419  0.038491588</span></span>
+<span><span class="co">#&gt;  [41,] -0.46632648  0.712027638</span></span>
+<span><span class="co">#&gt;  [42,] -0.38588293 -0.317146989</span></span>
+<span><span class="co">#&gt;  [43,]  0.50053632  0.886272250</span></span>
+<span><span class="co">#&gt;  [44,] -0.19101321 -0.351165525</span></span>
+<span><span class="co">#&gt;  [45,] -0.76090368 -0.169217803</span></span>
+<span><span class="co">#&gt;  [46,]  0.72277137 -0.327193533</span></span>
+<span><span class="co">#&gt;  [47,]  2.31654411 -0.778224563</span></span>
+<span><span class="co">#&gt;  [48,]  1.45531816 -1.920767665</span></span>
+<span><span class="co">#&gt;  [49,]  0.09329054 -0.210691671</span></span>
+<span><span class="co">#&gt;  [50,] -1.27027719 -0.640902017</span></span>
+<span><span class="co">#&gt;  [51,] -0.27806438 -0.168103452</span></span>
+<span><span class="co">#&gt;  [52,] -0.77601376 -1.177707962</span></span>
+<span><span class="co">#&gt;  [53,] -0.17206125  0.261099713</span></span>
+<span><span class="co">#&gt;  [54,]  2.03421633 -0.390169143</span></span>
+<span><span class="co">#&gt;  [55,]  0.17423242  0.024050186</span></span>
+<span><span class="co">#&gt;  [56,] -0.08252695 -1.796668447</span></span>
+<span><span class="co">#&gt;  [57,] -0.53584872  0.111143735</span></span>
+<span><span class="co">#&gt;  [58,] -1.46550906 -0.666304888</span></span>
+<span><span class="co">#&gt;  [59,] -0.36994164 -1.169376858</span></span>
+<span><span class="co">#&gt;  [60,]  1.15922956 -1.673996466</span></span>
+<span><span class="co">#&gt;  [61,] -0.98279712 -0.155967545</span></span>
+<span><span class="co">#&gt;  [62,] -0.31339863 -0.629047084</span></span>
+<span><span class="co">#&gt;  [63,]  1.24966130  0.193342157</span></span>
+<span><span class="co">#&gt;  [64,]  0.33653712 -0.989719817</span></span>
+<span><span class="co">#&gt;  [65,]  0.05628425  1.026262225</span></span>
+<span><span class="co">#&gt;  [66,]  0.08014023 -0.876172275</span></span>
+<span><span class="co">#&gt;  [67,]  0.08847774 -0.653554928</span></span>
+<span><span class="co">#&gt;  [68,]  0.72337820  0.675519210</span></span>
+<span><span class="co">#&gt;  [69,]  1.39362369  1.268611976</span></span>
+<span><span class="co">#&gt;  [70,]  0.53074070  1.054364150</span></span>
+<span><span class="co">#&gt;  [71,] -0.48003999  1.138182257</span></span>
+<span><span class="co">#&gt;  [72,]  0.48063297  0.178021942</span></span>
+<span><span class="co">#&gt;  [73,] -0.87116267  0.723049965</span></span>
+<span><span class="co">#&gt;  [74,]  1.16523629 -0.134740817</span></span>
+<span><span class="co">#&gt;  [75,]  0.23988619 -0.984145482</span></span>
+<span><span class="co">#&gt;  [76,] -0.28991935  0.353446411</span></span>
+<span><span class="co">#&gt;  [77,]  0.13701857  1.845651983</span></span>
+<span><span class="co">#&gt;  [78,] -0.74076906 -2.013123599</span></span>
+<span><span class="co">#&gt;  [79,]  1.18302817  0.012502133</span></span>
+<span><span class="co">#&gt;  [80,]  0.98721227 -1.454607205</span></span>
+<span><span class="co">#&gt;  [81,]  0.32200653 -1.116075287</span></span>
+<span><span class="co">#&gt;  [82,]  0.82944282 -0.444390792</span></span>
+<span><span class="co">#&gt;  [83,] -0.29627585  1.433400855</span></span>
+<span><span class="co">#&gt;  [84,]  0.53607897 -1.110671299</span></span>
+<span><span class="co">#&gt;  [85,] -1.63040030  1.243596873</span></span>
+<span><span class="co">#&gt;  [86,]  0.56246399  1.161640909</span></span>
+<span><span class="co">#&gt;  [87,]  1.35154021  0.172380189</span></span>
+<span><span class="co">#&gt;  [88,]  1.25107746 -0.038613764</span></span>
+<span><span class="co">#&gt;  [89,]  0.28300639  0.202746894</span></span>
+<span><span class="co">#&gt;  [90,] -0.91039405  1.132097445</span></span>
+<span><span class="co">#&gt;  [91,] -0.11516057 -0.465375198</span></span>
+<span><span class="co">#&gt;  [92,] -0.74128337  0.408048136</span></span>
+<span><span class="co">#&gt;  [93,] -0.54131020 -0.607555458</span></span>
+<span><span class="co">#&gt;  [94,] -0.86970725 -0.473202439</span></span>
+<span><span class="co">#&gt;  [95,] -0.20293262  1.664415158</span></span>
+<span><span class="co">#&gt;  [96,] -0.41068056  0.205100465</span></span>
+<span><span class="co">#&gt;  [97,]  0.29665020  0.781152839</span></span>
+<span><span class="co">#&gt;  [98,] -0.37818275 -0.134516633</span></span>
+<span><span class="co">#&gt;  [99,] -0.49533439 -0.210758066</span></span>
+<span><span class="co">#&gt; [100,] -1.08362557  0.412546606</span></span>
+<span><span class="co">#&gt; [101,] -0.13363732  1.299053064</span></span>
+<span><span class="co">#&gt; [102,] -0.78908322 -0.556230564</span></span>
+<span><span class="co">#&gt; [103,] -0.25335998 -1.139674851</span></span>
+<span><span class="co">#&gt; [104,]  2.51402153 -1.913693433</span></span>
+<span><span class="co">#&gt; [105,] -0.02949905  1.040641596</span></span>
+<span><span class="co">#&gt; [106,] -0.12128211  1.131363934</span></span>
+<span><span class="co">#&gt; [107,] -0.88076315  0.251858356</span></span>
+<span><span class="co">#&gt; [108,] -0.22582042  1.512719211</span></span>
+<span><span class="co">#&gt; [109,]  0.51145714 -0.132607137</span></span>
+<span><span class="co">#&gt; [110,] -0.25607122 -0.554337074</span></span>
+<span><span class="co">#&gt; [111,] -0.09727648  0.536424974</span></span>
+<span><span class="co">#&gt; [112,] -1.42665677  1.049334806</span></span>
+<span><span class="co">#&gt; [113,]  0.40759121 -0.338587346</span></span>
+<span><span class="co">#&gt; [114,] -0.58638760  0.318560884</span></span>
+<span><span class="co">#&gt; [115,]  0.61981114 -1.381797668</span></span>
+<span><span class="co">#&gt; [116,] -0.61949378  0.166650906</span></span>
+<span><span class="co">#&gt; [117,] -0.70319242  1.368898077</span></span>
+<span><span class="co">#&gt; [118,]  0.75194479 -1.911246553</span></span>
+<span><span class="co">#&gt; [119,]  0.60472910 -1.224931620</span></span>
+<span><span class="co">#&gt; [120,]  1.01306330 -0.695917313</span></span>
+<span><span class="co">#&gt; [121,] -0.04123236 -1.182831940</span></span>
+<span><span class="co">#&gt; [122,]  1.81538393  0.662695018</span></span>
+<span><span class="co">#&gt; [123,] -1.55667620  0.103495543</span></span>
+<span><span class="co">#&gt; [124,]  0.08747350  0.643117317</span></span>
+<span><span class="co">#&gt; [125,] -0.10458681  0.591824560</span></span>
+<span><span class="co">#&gt; [126,] -0.34020795  2.651923989</span></span>
+<span><span class="co">#&gt; [127,] -1.10347573 -0.022014147</span></span>
+<span><span class="co">#&gt; [128,] -0.14832360  1.829994212</span></span>
+<span><span class="co">#&gt; [129,]  0.62352788 -0.490234029</span></span>
+<span><span class="co">#&gt; [130,]  1.76200132 -0.018068994</span></span>
+<span><span class="co">#&gt; [131,]  2.22082088 -1.260980459</span></span>
+<span><span class="co">#&gt; [132,] -0.47992757 -0.870883074</span></span>
+<span><span class="co">#&gt; [133,] -0.94711847 -1.182064335</span></span>
+<span><span class="co">#&gt; [134,] -0.23910807 -0.775191213</span></span>
+<span><span class="co">#&gt; [135,] -0.58391774  0.648400296</span></span>
+<span><span class="co">#&gt; [136,] -0.16217326  0.260461107</span></span>
+<span><span class="co">#&gt; [137,] -1.13289778  1.330559422</span></span>
+<span><span class="co">#&gt; [138,]  1.59792353 -0.051824837</span></span>
+<span><span class="co">#&gt; [139,]  0.28272569  2.651923989</span></span>
+<span><span class="co">#&gt; [140,]  0.80283855  2.651923989</span></span>
+<span><span class="co">#&gt; [141,] -1.06863215 -0.601130155</span></span>
+<span><span class="co">#&gt; [142,] -1.52955761  0.743033573</span></span>
+<span><span class="co">#&gt; [143,] -2.19664117  0.236701280</span></span>
+<span><span class="co">#&gt; [144,]  0.36197541 -0.245444033</span></span>
+<span><span class="co">#&gt; [145,]  1.39543243 -0.957261904</span></span>
+<span><span class="co">#&gt; [146,] -0.23848750  0.937760394</span></span>
+<span><span class="co">#&gt; [147,] -0.77855659 -0.833976201</span></span>
+<span><span class="co">#&gt; [148,] -0.25507713  2.508107974</span></span>
+<span><span class="co">#&gt; [149,]  0.50583795  0.276569787</span></span>
+<span><span class="co">#&gt; [150,]  1.31895925  0.608571463</span></span>
+<span><span class="co">#&gt; [151,] -0.95096947  0.540991709</span></span>
+<span><span class="co">#&gt; [152,] -0.22972457  0.002839452</span></span>
+<span><span class="co">#&gt; [153,]  0.83031624  0.357748830</span></span>
+<span><span class="co">#&gt; [154,] -0.58195819 -0.502200397</span></span>
+<span><span class="co">#&gt; [155,] -1.62677337  1.364059552</span></span>
+<span><span class="co">#&gt; [156,]  0.03337756  1.941741055</span></span>
+<span><span class="co">#&gt; [157,]  0.17146182  0.004807333</span></span>
+<span><span class="co">#&gt; [158,]  0.34122454 -2.013123599</span></span>
+<span><span class="co">#&gt; [159,]  1.51438992 -0.853226703</span></span>
+<span><span class="co">#&gt; [160,] -0.10877552 -1.219460321</span></span>
+<span><span class="co">#&gt; [161,] -0.18663791  0.201053408</span></span>
+<span><span class="co">#&gt; [162,] -0.13789055 -0.273020236</span></span>
+<span><span class="co">#&gt; [163,] -0.11233898  1.092776379</span></span>
+<span><span class="co">#&gt; [164,] -1.26764873 -0.981874211</span></span>
+<span><span class="co">#&gt; [165,]  0.91108066 -0.355414701</span></span>
+<span><span class="co">#&gt; [166,]  2.38031419  0.064908906</span></span>
+<span><span class="co">#&gt; [167,]  0.94875708  0.853467579</span></span>
+<span><span class="co">#&gt; [168,] -0.51706628 -0.680463640</span></span>
+<span><span class="co">#&gt; [169,]  1.32858419 -0.769478612</span></span>
+<span><span class="co">#&gt; [170,]  0.79534114  0.163640780</span></span>
+<span><span class="co">#&gt; [171,] -0.40561553  0.407466349</span></span>
+<span><span class="co">#&gt; [172,]  0.13815793  0.657731283</span></span>
+<span><span class="co">#&gt; [173,]  0.17466860  0.642435525</span></span>
+<span><span class="co">#&gt; [174,]  0.92894292 -1.182124828</span></span>
+<span><span class="co">#&gt; [175,] -1.27410449  0.628750963</span></span>
+<span><span class="co">#&gt; [176,]  2.51402153 -2.001591601</span></span>
+<span><span class="co">#&gt; [177,] -0.33412264  0.726450918</span></span>
+<span><span class="co">#&gt; [178,] -0.96784757 -0.695152268</span></span>
+<span><span class="co">#&gt; [179,]  1.97863167 -1.618020108</span></span>
+<span><span class="co">#&gt; [180,]  1.93073719  0.444344593</span></span>
+<span><span class="co">#&gt; [181,]  0.89079699 -1.516287437</span></span>
+<span><span class="co">#&gt; [182,] -0.22769707  0.055046227</span></span>
+<span><span class="co">#&gt; [183,] -0.61425807 -1.607801492</span></span>
+<span><span class="co">#&gt; [184,] -1.56005451 -0.560760100</span></span>
+<span><span class="co">#&gt; [185,] -1.09082307 -0.525786754</span></span>
+<span><span class="co">#&gt; [186,]  1.88045817 -0.134473943</span></span>
+<span><span class="co">#&gt; [187,] -0.89692177 -1.494372333</span></span>
+<span><span class="co">#&gt; [188,]  1.90085230  0.600817720</span></span>
+<span><span class="co">#&gt; [189,]  0.87798894 -0.339368247</span></span>
+<span><span class="co">#&gt; [190,] -0.93290748 -0.434435230</span></span>
+<span><span class="co">#&gt; [191,]  0.07330311  0.529388211</span></span>
+<span><span class="co">#&gt; [192,]  1.68725875  0.045501287</span></span>
+<span><span class="co">#&gt; [193,]  0.11652185 -1.506377032</span></span>
+<span><span class="co">#&gt; [194,] -1.13388736  1.652920332</span></span>
+<span><span class="co">#&gt; [195,] -0.62782868  0.454285912</span></span>
+<span><span class="co">#&gt; [196,]  1.31677611 -0.430392826</span></span>
+<span><span class="co">#&gt; [197,] -2.19664117 -0.434201093</span></span>
+<span><span class="co">#&gt; [198,] -1.69627598  0.184319366</span></span>
+<span><span class="co">#&gt; [199,] -0.21194802 -0.406294079</span></span>
+<span><span class="co">#&gt; [200,]  0.58460797  1.787609479</span></span>
+<span><span class="co">#&gt; [201,] -2.07984152 -1.180707577</span></span>
+<span><span class="co">#&gt; [202,] -0.87568521  0.579734674</span></span>
+<span><span class="co">#&gt; [203,]  0.65830669  0.647103072</span></span>
+<span><span class="co">#&gt; [204,]  0.34179491  1.367386379</span></span>
+<span><span class="co">#&gt; [205,] -0.18264937  2.489508620</span></span>
+<span><span class="co">#&gt; [206,]  0.64009943  1.803617604</span></span>
+<span><span class="co">#&gt; [207,]  0.39490231  0.806141081</span></span>
+<span><span class="co">#&gt; [208,] -2.19664117 -0.389412674</span></span>
+<span><span class="co">#&gt; [209,] -1.21636850 -0.158513987</span></span>
+<span><span class="co">#&gt; [210,]  0.46336014  0.555569719</span></span>
+<span><span class="co">#&gt; [211,] -0.56777993 -1.208699902</span></span>
+<span><span class="co">#&gt; [212,]  0.54251206 -0.985670701</span></span>
+<span><span class="co">#&gt; [213,] -0.07357486 -1.188125498</span></span>
+<span><span class="co">#&gt; [214,] -0.99790951 -0.210459001</span></span>
+<span><span class="co">#&gt; [215,] -0.95436363 -0.178997970</span></span>
+<span><span class="co">#&gt; [216,]  0.05003407  0.766294554</span></span>
+<span><span class="co">#&gt; [217,] -0.95721768 -0.136633523</span></span>
+<span><span class="co">#&gt; [218,] -0.49415194  0.703560725</span></span>
+<span><span class="co">#&gt; [219,] -1.35560158 -1.075778116</span></span>
+<span><span class="co">#&gt; [220,] -0.90702997  1.359074150</span></span>
+<span><span class="co">#&gt; [221,]  0.92115134  0.214249816</span></span>
+<span><span class="co">#&gt; [222,]  0.73347267 -0.729108278</span></span>
+<span><span class="co">#&gt; [223,] -1.66767692  0.106062241</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; attr(,"method_details")$scaling$center</span></span>
 <span><span class="co">#&gt;      gene     mirna </span></span>
-<span><span class="co">#&gt; 0.4621872 0.4612066 </span></span>
+<span><span class="co">#&gt; 0.4572878 0.4574415 </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; attr(,"method_details")$scaling$scale</span></span>
 <span><span class="co">#&gt;       gene      mirna </span></span>
-<span><span class="co">#&gt; 0.05573247 0.04055485 </span></span>
+<span><span class="co">#&gt; 0.08026968 0.04747281 </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; attr(,"method_details")$weight_lambda</span></span>
@@ -2751,72 +2603,72 @@ best fused survival model.</li>
 <span><span class="co">#&gt; attr(,"method_details")$weight_cap</span></span>
 <span><span class="co">#&gt; [1] 1</span></span>
 <span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">COX</span><span class="op">$</span><span class="va">train_cindex</span></span>
-<span><span class="co">#&gt; [1] 0.5012637</span></span>
+<span><span class="co">#&gt; [1] 0.5953384</span></span>
 <span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">COX</span><span class="op">$</span><span class="va">train_auc</span></span>
 <span><span class="co">#&gt;            time       AUC</span></span>
-<span><span class="co">#&gt; t=141.2   141.2 0.2524922</span></span>
-<span><span class="co">#&gt; t=169.2   169.2 0.4474640</span></span>
-<span><span class="co">#&gt; t=197     197.0 0.4541532</span></span>
-<span><span class="co">#&gt; t=238.2   238.2 0.4439747</span></span>
-<span><span class="co">#&gt; t=311.4   311.4 0.5174565</span></span>
-<span><span class="co">#&gt; t=353.4   353.4 0.5493091</span></span>
-<span><span class="co">#&gt; t=534.6   534.6 0.5364132</span></span>
-<span><span class="co">#&gt; t=612     612.0 0.4498863</span></span>
-<span><span class="co">#&gt; t=653.4   653.4 0.4219387</span></span>
-<span><span class="co">#&gt; t=848.2   848.2 0.4703624</span></span>
-<span><span class="co">#&gt; t=1052.8 1052.8 0.4910772</span></span>
-<span><span class="co">#&gt; t=1289.6 1289.6 0.5409008</span></span>
-<span><span class="co">#&gt; t=1430   1430.0 0.5608211</span></span>
-<span><span class="co">#&gt; t=1452.8 1452.8 0.5938806</span></span>
-<span><span class="co">#&gt; t=1527.2 1527.2 0.6040565</span></span>
-<span><span class="co">#&gt; t=1607.6 1607.6 0.5608115</span></span>
-<span><span class="co">#&gt; t=1678.8 1678.8 0.5453426</span></span>
-<span><span class="co">#&gt; t=1699   1699.0 0.5535557</span></span>
-<span><span class="co">#&gt; t=1805.8 1805.8 0.6060351</span></span>
-<span><span class="co">#&gt; t=2034.6 2034.6 0.5500363</span></span>
-<span><span class="co">#&gt; t=2115   2115.0 0.5393528</span></span>
-<span><span class="co">#&gt; t=2179   2179.0 0.5577341</span></span>
-<span><span class="co">#&gt; t=2207   2207.0 0.5610934</span></span>
-<span><span class="co">#&gt; t=2628.6 2628.6 0.5806591</span></span>
-<span><span class="co">#&gt; t=3222.6 3222.6 0.6170171</span></span>
+<span><span class="co">#&gt; t=141.2   141.2 0.7176009</span></span>
+<span><span class="co">#&gt; t=169.2   169.2 0.5439375</span></span>
+<span><span class="co">#&gt; t=197     197.0 0.5129190</span></span>
+<span><span class="co">#&gt; t=238.2   238.2 0.6053024</span></span>
+<span><span class="co">#&gt; t=311.4   311.4 0.6703354</span></span>
+<span><span class="co">#&gt; t=353.4   353.4 0.6586767</span></span>
+<span><span class="co">#&gt; t=534.6   534.6 0.6096245</span></span>
+<span><span class="co">#&gt; t=612     612.0 0.6803479</span></span>
+<span><span class="co">#&gt; t=653.4   653.4 0.6744197</span></span>
+<span><span class="co">#&gt; t=848.2   848.2 0.6596592</span></span>
+<span><span class="co">#&gt; t=1052.8 1052.8 0.6643457</span></span>
+<span><span class="co">#&gt; t=1289.6 1289.6 0.5953001</span></span>
+<span><span class="co">#&gt; t=1430   1430.0 0.5823140</span></span>
+<span><span class="co">#&gt; t=1452.8 1452.8 0.6069117</span></span>
+<span><span class="co">#&gt; t=1527.2 1527.2 0.6287772</span></span>
+<span><span class="co">#&gt; t=1607.6 1607.6 0.5647250</span></span>
+<span><span class="co">#&gt; t=1678.8 1678.8 0.5125578</span></span>
+<span><span class="co">#&gt; t=1699   1699.0 0.4859587</span></span>
+<span><span class="co">#&gt; t=1805.8 1805.8 0.5044871</span></span>
+<span><span class="co">#&gt; t=2034.6 2034.6 0.5340967</span></span>
+<span><span class="co">#&gt; t=2115   2115.0 0.5600539</span></span>
+<span><span class="co">#&gt; t=2179   2179.0 0.5853232</span></span>
+<span><span class="co">#&gt; t=2207   2207.0 0.5424257</span></span>
+<span><span class="co">#&gt; t=2628.6 2628.6 0.5455942</span></span>
+<span><span class="co">#&gt; t=3222.6 3222.6 0.4370765</span></span>
 <span></span>
 <span><span class="co"># Early fusion summary</span></span>
 <span><span class="co"># fit_surv_mae$train_out$early</span></span>
 <span><span class="co"># Validation metrics</span></span>
 <span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">valid_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">IBS</span><span class="op">$</span><span class="va">valid_cindex</span></span>
-<span><span class="co">#&gt; [1] 0.3373737</span></span>
+<span><span class="co">#&gt; [1] 0.4686869</span></span>
 <span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">valid_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">IBS</span><span class="op">$</span><span class="va">valid_auc</span></span>
 <span><span class="co">#&gt;        time       AUC</span></span>
-<span><span class="co">#&gt; t=548   548 0.3623188</span></span>
-<span><span class="co">#&gt; t=754   754 0.3928571</span></span>
-<span><span class="co">#&gt; t=976   976 0.3921569</span></span>
-<span><span class="co">#&gt; t=1174 1174 0.2765315</span></span>
-<span><span class="co">#&gt; t=1411 1411 0.2148379</span></span>
-<span><span class="co">#&gt; t=1556 1556 0.3305845</span></span>
-<span><span class="co">#&gt; t=1642 1642 0.2600995</span></span>
-<span><span class="co">#&gt; t=1673 1673 0.3821481</span></span>
-<span><span class="co">#&gt; t=2009 2009 0.4202234</span></span>
-<span><span class="co">#&gt; t=2207 2207 0.4362109</span></span>
-<span><span class="co">#&gt; t=2636 2636 0.4790122</span></span>
-<span><span class="co">#&gt; t=2763 2763 0.4239005</span></span>
-<span><span class="co">#&gt; t=3472 3472 0.4284972</span></span>
+<span><span class="co">#&gt; t=548   548 0.3333333</span></span>
+<span><span class="co">#&gt; t=754   754 0.2315668</span></span>
+<span><span class="co">#&gt; t=976   976 0.2570228</span></span>
+<span><span class="co">#&gt; t=1174 1174 0.4101560</span></span>
+<span><span class="co">#&gt; t=1411 1411 0.4800364</span></span>
+<span><span class="co">#&gt; t=1556 1556 0.3871738</span></span>
+<span><span class="co">#&gt; t=1642 1642 0.4889197</span></span>
+<span><span class="co">#&gt; t=1673 1673 0.4594243</span></span>
+<span><span class="co">#&gt; t=2009 2009 0.5226049</span></span>
+<span><span class="co">#&gt; t=2207 2207 0.5902152</span></span>
+<span><span class="co">#&gt; t=2636 2636 0.6603596</span></span>
+<span><span class="co">#&gt; t=2763 2763 0.7123503</span></span>
+<span><span class="co">#&gt; t=3472 3472 0.6833431</span></span>
 <span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">valid_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">COX</span><span class="op">$</span><span class="va">valid_cindex</span></span>
-<span><span class="co">#&gt; [1] 0.3050505</span></span>
+<span><span class="co">#&gt; [1] 0.569697</span></span>
 <span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">valid_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">COX</span><span class="op">$</span><span class="va">valid_auc</span></span>
 <span><span class="co">#&gt;        time       AUC</span></span>
-<span><span class="co">#&gt; t=548   548 0.3188406</span></span>
-<span><span class="co">#&gt; t=754   754 0.1958525</span></span>
-<span><span class="co">#&gt; t=976   976 0.2138455</span></span>
-<span><span class="co">#&gt; t=1174 1174 0.1656571</span></span>
-<span><span class="co">#&gt; t=1411 1411 0.1488838</span></span>
-<span><span class="co">#&gt; t=1556 1556 0.1576118</span></span>
-<span><span class="co">#&gt; t=1642 1642 0.1806833</span></span>
-<span><span class="co">#&gt; t=1673 1673 0.3054199</span></span>
-<span><span class="co">#&gt; t=2009 2009 0.3832085</span></span>
-<span><span class="co">#&gt; t=2207 2207 0.4310629</span></span>
-<span><span class="co">#&gt; t=2636 2636 0.5127684</span></span>
-<span><span class="co">#&gt; t=2763 2763 0.5294384</span></span>
-<span><span class="co">#&gt; t=3472 3472 0.5611959</span></span>
+<span><span class="co">#&gt; t=548   548 0.4637681</span></span>
+<span><span class="co">#&gt; t=754   754 0.3796083</span></span>
+<span><span class="co">#&gt; t=976   976 0.3755902</span></span>
+<span><span class="co">#&gt; t=1174 1174 0.5563367</span></span>
+<span><span class="co">#&gt; t=1411 1411 0.6586192</span></span>
+<span><span class="co">#&gt; t=1556 1556 0.5413671</span></span>
+<span><span class="co">#&gt; t=1642 1642 0.6319769</span></span>
+<span><span class="co">#&gt; t=1673 1673 0.5472812</span></span>
+<span><span class="co">#&gt; t=2009 2009 0.5602749</span></span>
+<span><span class="co">#&gt; t=2207 2207 0.5898551</span></span>
+<span><span class="co">#&gt; t=2636 2636 0.6064941</span></span>
+<span><span class="co">#&gt; t=2763 2763 0.6661304</span></span>
+<span><span class="co">#&gt; t=3472 3472 0.6439999</span></span>
 <span><span class="va">fit_surv_mae</span><span class="op">$</span><span class="va">valid_out</span><span class="op">$</span><span class="va">single</span><span class="op">$</span><span class="va">valid_cindex</span></span>
 <span><span class="co">#&gt; $gene</span></span>
 <span><span class="co">#&gt; [1] 0.6626263</span></span>
@@ -2838,7 +2690,7 @@ as true time-dependent discrimination curves. In practice, these two
 late-fusion outputs provide complementary summaries over the same
 single-layer and early-fusion backbone, making side-by-side comparison
 possible within one fit object.</p>
-<div class="sourceCode" id="cb30"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb31"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plot.obj.surv</span> <span class="op">&lt;-</span> <span class="fu">IntegratedLearner</span><span class="fu">:::</span><span class="fu"><a href="../reference/plot.learner.html">plot.learner</a></span><span class="op">(</span><span class="va">fit_surv_mae</span><span class="op">)</span></span>
 <span><span class="va">plot.obj.surv</span><span class="op">$</span><span class="va">plot</span></span></code></pre></div>
 <p><img src="IntegratedLearner_files/figure-html/chunk-19b-1.png" class="r-plt" alt="" width="768"></p>
@@ -2847,7 +2699,7 @@ possible within one fit object.</p>
 <div class="section level2">
 <h2 id="session-information">Session Information<a class="anchor" aria-label="anchor" href="#session-information"></a>
 </h2>
-<div class="sourceCode" id="cb31"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb32"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="co">#&gt; R version 4.6.1 (2026-06-24)</span></span>
 <span><span class="co">#&gt; Platform: x86_64-pc-linux-gnu</span></span>
@@ -2878,13 +2730,13 @@ possible within one fit object.</p>
 <span><span class="co">#&gt;  [5] Biobase_2.73.2              GenomicRanges_1.65.4       </span></span>
 <span><span class="co">#&gt;  [7] Seqinfo_1.3.2               IRanges_2.47.5             </span></span>
 <span><span class="co">#&gt;  [9] MatrixGenerics_1.25.0       matrixStats_1.5.0          </span></span>
-<span><span class="co">#&gt; [11] S4Vectors_0.51.10           BiocGenerics_0.59.12       </span></span>
+<span><span class="co">#&gt; [11] S4Vectors_0.51.10           BiocGenerics_0.59.13       </span></span>
 <span><span class="co">#&gt; [13] generics_0.1.4              bayesplot_1.16.0           </span></span>
 <span><span class="co">#&gt; [15] cowplot_1.2.0               caret_7.0-1                </span></span>
 <span><span class="co">#&gt; [17] lattice_0.23-1              SuperLearner_2.0-42        </span></span>
 <span><span class="co">#&gt; [19] nnls_1.6                    gam_1.22-7                 </span></span>
 <span><span class="co">#&gt; [21] foreach_1.5.2               ggplot2_4.0.3              </span></span>
-<span><span class="co">#&gt; [23] dplyr_1.2.1                 IntegratedLearner_0.99.6   </span></span>
+<span><span class="co">#&gt; [23] dplyr_1.2.1                 IntegratedLearner_0.99.7   </span></span>
 <span><span class="co">#&gt; [25] BiocStyle_2.41.0           </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; loaded via a namespace (and not attached):</span></span>
@@ -2916,10 +2768,10 @@ possible within one fit object.</p>
 <span><span class="co">#&gt; [76] pec_2025.06.24       tidyr_1.3.2          ipred_0.9-16        </span></span>
 <span><span class="co">#&gt; [79] nlme_3.1-171         cli_3.6.6            textshaping_1.0.5   </span></span>
 <span><span class="co">#&gt; [82] S4Arrays_1.13.2      lava_1.10            gtable_0.3.6        </span></span>
-<span><span class="co">#&gt; [85] sass_0.4.10          digest_0.6.39        SparseArray_1.13.4  </span></span>
-<span><span class="co">#&gt; [88] htmlwidgets_1.6.4    farver_2.1.2         htmltools_0.5.9     </span></span>
-<span><span class="co">#&gt; [91] pkgdown_2.2.1        lifecycle_1.0.5      hardhat_1.4.3       </span></span>
-<span><span class="co">#&gt; [94] timeROC_0.4.1        MASS_7.3-66</span></span></code></pre></div>
+<span><span class="co">#&gt; [85] sass_0.4.10          digest_0.6.39        progressr_1.1.0     </span></span>
+<span><span class="co">#&gt; [88] SparseArray_1.13.5   htmlwidgets_1.6.4    farver_2.1.2        </span></span>
+<span><span class="co">#&gt; [91] htmltools_0.5.9      pkgdown_2.2.1        lifecycle_1.0.5     </span></span>
+<span><span class="co">#&gt; [94] hardhat_1.4.3        timeROC_0.4.1        MASS_7.3-66</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a>

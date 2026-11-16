@@ -33,7 +33,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.6</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.7</span>
       </span>
     </div>
 
@@ -82,13 +82,13 @@
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
-<p>Once the dependencies are installed, <code>IntegratedLearner</code> can be loaded using the following command:</p>
+<p><code>IntegratedLearner</code> was accepted into Bioconductor. It is initially available through Bioconductor devel once the nightly build succeeds. In a Bioconductor devel environment, install it with:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"BiocManager"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"BiocManager"</span><span class="op">)</span></span>
 <span><span class="op">}</span></span>
 <span><span class="fu">BiocManager</span><span class="fu">::</span><span class="fu"><a href="https://bioconductor.github.io/BiocManager/reference/install.html" class="external-link">install</a></span><span class="op">(</span><span class="st">"IntegratedLearner"</span><span class="op">)</span></span></code></pre></div>
-<p>For the development version, use:</p>
+<p>To install directly from GitHub, use:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">BiocManager</span><span class="fu">::</span><span class="fu"><a href="https://bioconductor.github.io/BiocManager/reference/install.html" class="external-link">install</a></span><span class="op">(</span><span class="st">"himelmallick/IntegratedLearner"</span><span class="op">)</span></span></code></pre></div>
 </div>
@@ -233,6 +233,7 @@
 <span>  family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">binomial</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p>Custom metadata names are optional. If omitted, defaults remain <code>outcome_col = "Y"</code> and <code>subject_id_col = "subjectID"</code> (backward compatible). ### Arguments</p>
+<p>Call <code><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed()</a></code> before fitting to make the run reproducible. To display fit progress, wrap the call in <code><a href="https://progressr.futureverse.org/reference/with_progress.html" class="external-link">progressr::with_progress()</a></code>. Print the fitted object with <code>print(fit)</code> to see its summary.</p>
 <ul>
 <li>
 <code>MAE_train</code> / <code>MAE_valid</code>: primary <code>MultiAssayExperiment</code> inputs for training and optional validation.</li>
@@ -250,8 +251,6 @@
 <code>na.rm</code>: Logical; drop features containing missing values after extraction/prep.</li>
 <li>
 <code>folds</code>: Integer. Number of folds for cross-validation. Default is <code>5</code>.</li>
-<li>
-<code>seed</code>: Integer seed for reproducibility. Default is <code>1234</code>.</li>
 <li>
 <code>base_learner</code>: Binary/continuous uses IntegratedLearner <code>sl_*</code> wrappers by default (standard SuperLearner <code>SL.*</code> learners are also supported); multiclass uses native multiclass learners; survival uses supported <code>surv.*</code> learners. Not used when <code>run_intermediate = TRUE</code>.</li>
 <li>
@@ -286,8 +285,6 @@
 <code>drop_poor_performing_layers</code>: If <code>TRUE</code>, layers with poor single-layer performance are removed from early and late fusion only (<code>AUC &lt; 0.5</code> for binary, <code>R2 &lt; 0.5</code> for continuous, <code>C-index &lt; 0.5</code> for survival). Single-layer outputs are still retained. Ignored when <code>run_intermediate = TRUE</code>.</li>
 <li>
 <code>family</code>: <code><a href="https://rdrr.io/r/stats/family.html" class="external-link">gaussian()</a></code> (continuous), <code><a href="https://rdrr.io/r/stats/family.html" class="external-link">binomial()</a></code> (binary or multiclass), or survival family/metadata.</li>
-<li>
-<code>verbose</code>: Logical progress flag.</li>
 <li>
 <code>...</code>: Additional backend parameters. For survival, includes options such as <code>do_early_fusion</code> and learner-specific hyperparameters (or <code>model_args</code>).</li>
 </ul>
@@ -417,11 +414,6 @@
 </h2>
 <p>We are happy to troubleshoot any issues with the package. Please contact the maintainer via email or <a href="https://github.com/himelmallick/IntegratedLearner/issues" class="external-link">open an issue</a> in the GitHub repository.</p>
 </div>
-<div class="section level2">
-<h2 id="future-release">Future Release<a class="anchor" aria-label="anchor" href="#future-release"></a>
-</h2>
-<p>We are currently in the process of submitting <strong><code>IntegratedLearner</code></strong> to <a href="https://www.bioconductor.org/" class="external-link">Bioconductor</a>. Likewise, please keep an eye out for a future release of <strong><code>IntegratedLearner</code></strong> as an R/Bioconductor package while this repository remains the development version of the package.</p>
-</div>
 </div>
   </div>
 
@@ -429,6 +421,7 @@
     <div class="links">
 <h2 data-toc-skip>Links</h2>
 <ul class="list-unstyled">
+<li><a href="https://www.bioconductor.org/packages/IntegratedLearner" class="external-link">View on Bioconductor</a></li>
 <li><a href="https://github.com/himelmallick/IntegratedLearner/" class="external-link">Browse source code</a></li>
 <li><a href="https://github.com/himelmallick/IntegratedLearner/issues" class="external-link">Report a bug</a></li>
 </ul>

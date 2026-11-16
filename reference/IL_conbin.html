@@ -19,7 +19,7 @@ the core IntegratedLearner engine for non-survival outcomes."><!-- mathjax --><s
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">IntegratedLearner</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.6</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.99.7</span>
       </span>
     </div>
 
@@ -67,7 +67,6 @@ the core IntegratedLearner engine for <strong>non-survival outcomes</strong>.</p
 <span>  feature_table_valid <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  sample_metadata_valid <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  folds <span class="op">=</span> <span class="fl">5</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">1234</span>,</span>
 <span>  base_learner <span class="op">=</span> <span class="st">"sl_bart"</span>,</span>
 <span>  base_screener <span class="op">=</span> <span class="st">"All"</span>,</span>
 <span>  run_screening <span class="op">=</span> <span class="cn">FALSE</span>,</span>
@@ -83,8 +82,6 @@ the core IntegratedLearner engine for <strong>non-survival outcomes</strong>.</p
 <span>  cooperative_s <span class="op">=</span> <span class="st">"lambda.min"</span>,</span>
 <span>  cooperative_type_measure <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  drop_poor_performing_layers <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  print_learner <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  refit.stack <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  family <span class="op">=</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">gaussian</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  <span class="va">...</span></span>
@@ -136,10 +133,6 @@ validation set when available. Must have the exact same structure as
 <dt id="arg-folds">folds<a class="anchor" aria-label="anchor" href="#arg-folds"></a></dt>
 <dd><p>How many folds in the V-fold nested cross-validation? Default
 is 5.</p></dd>
-
-
-<dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
-<dd><p>Specify the seed for reproducibility. Default is 1234.</p></dd>
 
 
 <dt id="arg-base-learner">base_learner<a class="anchor" aria-label="anchor" href="#arg-base-learner"></a></dt>
@@ -225,14 +218,6 @@ R\(^2\) &lt; 0.5 for continuous outcomes. Single-layer outputs are still
 retained and reported.</p></dd>
 
 
-<dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
-<dd><p>logical; TRUE for printing SuperLearner progress. Default FALSE.</p></dd>
-
-
-<dt id="arg-print-learner">print_learner<a class="anchor" aria-label="anchor" href="#arg-print-learner"></a></dt>
-<dd><p>logical; Should a detailed summary be printed? Default TRUE.</p></dd>
-
-
 <dt id="arg-refit-stack">refit.stack<a class="anchor" aria-label="anchor" href="#arg-refit-stack"></a></dt>
 <dd><p>logical; For late fusion, refit predictions on the entire
 data are returned if specified. Default FALSE.</p></dd>
@@ -277,6 +262,14 @@ framework.</p>
 <code>IL_conbin()</code> directly when they already have multi-layer feature tables
 and metadata in matrix/data.frame form.</p>
     </div>
+    <div id="progress-summaries-and-reproducibility">
+    <h2>Progress, summaries, and reproducibility</h2>
+
+
+<p>Call <code><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed()</a></code> before fitting to reproduce the data splits and stochastic
+fitting steps. To display progress, wrap the call in
+<code><a href="https://progressr.futureverse.org/reference/with_progress.html" class="external-link">progressr::with_progress()</a></code>. Use <code>print(fit)</code> to show a fitted model summary.</p>
+    </div>
     <div id="see-also">
     <h2>See also</h2>
     <div class="dont-index"><p><code><a href="IntegratedLearner.html">IntegratedLearner</a></code>, IL_survival()</p></div>
@@ -308,9 +301,13 @@ and metadata in matrix/data.frame form.</p>
 <span class="r-in"><span>  sample_metadata <span class="op">=</span> <span class="va">sample_metadata</span>,</span></span>
 <span class="r-in"><span>  feature_metadata <span class="op">=</span> <span class="va">feature_metadata</span>,</span></span>
 <span class="r-in"><span>  folds <span class="op">=</span> <span class="fl">3</span>, base_learner <span class="op">=</span> <span class="st">"SL.mean"</span>, run_stacked <span class="op">=</span> <span class="cn">FALSE</span>,</span></span>
-<span class="r-in"><span>  run_concat <span class="op">=</span> <span class="cn">FALSE</span>, print_learner <span class="op">=</span> <span class="cn">FALSE</span>, family <span class="op">=</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">gaussian</a></span><span class="op">(</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  run_concat <span class="op">=</span> <span class="cn">FALSE</span>, family <span class="op">=</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">gaussian</a></span><span class="op">(</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Loading required package: nnls</span>
+<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>All algorithms have zero weight</span>
+<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>All metalearner coefficients are zero, predictions will all be equal to 0</span>
+<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>All algorithms have zero weight</span>
+<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>All metalearner coefficients are zero, predictions will all be equal to 0</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  [1] "model_fits"                         "SL_fits"                           </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  [3] "X_train_layers"                     "Y_train"                           </span>
