@@ -1,0 +1,56 @@
+url: https://himelmallick.github.io/IntegratedLearner/
+
+template:
+  bootstrap: 5
+  bootswatch: flatly
+  bslib:
+    primary: "#0E2A47"
+    base_font: {google: "Inter"}
+    heading_font: {google: "Inter"}
+    code_font: {google: "JetBrains Mono"}
+
+navbar:
+  bg: primary
+  type: dark
+  structure:
+    left: [intro, reference, news]
+    right: [search, github]
+
+home:
+  title: "IntegratedLearner: Integrated Multi-Omics Learning"
+  description: >
+    Multi-omics prediction with early and late fusion for continuous, binary,
+    multiclass and survival outcomes.
+
+reference:
+  - title: "Fit and use a model"
+    desc: >
+      `IntegratedLearner()` is the main entry point. Fitted models work with
+      the standard `predict()`, `update()`, `plot()` and `print()` generics.
+    contents:
+      - IntegratedLearner
+      - predict.learner
+      - update.learner
+      - plot.learner
+  - title: "Outcome-specific engines"
+    desc: "Lower-level fitting functions, kept for compatibility."
+    contents:
+      - IL_conbin
+      - IL_multiclass
+      - ILsurv
+  - title: "Base learners"
+    desc: "SuperLearner wrappers that can be used as layer-level learners."
+    contents:
+      - sl_bart
+      - predict.sl_bart
+      - sl_enet
+      - sl_glmnet2
+      - sl_lasso
+      - sl_horseshoe
+  - title: "Stacking (meta-learners)"
+    desc: "Combine layer-specific predictions in late fusion."
+    contents:
+      - sl_nnls_auc
+      - predict.sl_nnls_auc
+      - NNLS
+      - auc_obj

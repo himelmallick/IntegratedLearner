@@ -1,8 +1,11 @@
-# IntegratedLearner - Integrated machine learning for multi-omics prediction and classification
+# IntegratedLearner <img src="man/figures/logo.png" align="right" height="139" alt="" />
+
+**Integrated machine learning for multi-omics prediction and classification**
 
 The repository houses the **`IntegratedLearner`** R package for multi-omics prediction and classification. Binary, multiclass, continuous, and survival outcomes are supported through a single high-level interface.
 
 Optional dependency for BART workflows:
+
 - `sl_bart` and BART uncertainty utilities rely on `bartMachine` and a working Java setup.
 - If Java/BART are unavailable, use another continuous/binary learner (`SL.randomForest` is a standard SuperLearner alternative) or a native multiclass learner for multiclass outcomes.
 
@@ -17,8 +20,8 @@ Seven small MAE tutorial fixtures live in `inst/extdata` and total about **258 K
 Each assay has at most **25 variable features**; paired cohorts share feature IDs
 and order. All samples and outcomes are retained. Read the RDS files directly
 using `readRDS(system.file("extdata", "PRISM_MAE.rds", package = "IntegratedLearner"))`;
-see the [fixture inventory](inst/extdata/README.md) and
-[selection recipe](inst/scripts/build_mae_vignette_data.R). The former `data()`
+see the [fixture inventory](https://github.com/himelmallick/IntegratedLearner/blob/master/inst/extdata/README.md) and
+[selection recipe](https://github.com/himelmallick/IntegratedLearner/blob/master/inst/scripts/build_mae_vignette_data.R). The former `data()`
 objects, raw tables, and duplicate PCL datasets have been removed. PCL inputs
 remain supported using user-supplied data.
 
@@ -90,6 +93,7 @@ Naming conventions:
 * Multiclass learners use native IDs without either prefix, such as `randomforest`, `ranger`, `xgboost`, `glmnet`, `mbart`, and `multinom`.
 
 Feature workflow (when enabled):
+
 1. Filtering happens first (`filter_method`, `filter_pct`) on the training feature table.
 2. Screening happens second (`run_screening = TRUE`, `screen_pct`) within CV folds and again for final model fit.
 
@@ -231,6 +235,7 @@ with `print(fit)` to see its summary.
 * `...`: Additional backend parameters. For survival, includes options such as `do_early_fusion` and learner-specific hyperparameters (or `model_args`).
 
 Automatic outcome coercion:
+
 * `gaussian()`: outcome is coerced to numeric (errors if conversion fails).
 * binary `binomial()`: two classes are mapped internally to `{0,1}`.
 * multiclass `binomial()`: class labels are retained.
@@ -250,7 +255,7 @@ Supported fusion modules:
 
 #### The IntegratedLearner workflow
 
-![Flow Chart](images/Flowchart.png)
+![Flow Chart](man/figures/Flowchart.png)
 
 #### Value
 

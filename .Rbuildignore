@@ -4,3 +4,7 @@
 ^\.github$
 ^Public Dataset Analysis$
 ^Simulation Results$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^hexsticker$

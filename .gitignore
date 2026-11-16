@@ -54,3 +54,6 @@ Public Dataset Analysis/
 *.knit.md
 
 /.quarto/
+
+# pkgdown site (built and deployed by GitHub Actions)
+/docs/
