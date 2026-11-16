@@ -11,8 +11,6 @@
   feature_metadata_valid,
   outcome_col = NULL,
   subject_id_col = NULL,
-  seed = 1234,
-  verbose = FALSE,
   ...
 )
 }
@@ -32,10 +30,6 @@ If \code{NULL}, uses \code{object$column_map$outcome_col} (or \code{"Y"}).}
 \code{sample_metadata_valid}. If \code{NULL}, uses
 \code{object$column_map$subject_id_col} (or \code{"subjectID"}).}
 
-\item{seed}{Seed for reproducibility. Default is 1234.}
-
-\item{verbose}{Should a summary of fits/ results be printed. Default is FALSE}
-
 \item{...}{Additional arguments (unused)}
 }
 \value{
@@ -46,6 +40,13 @@ outcomes and corresponding performance summaries.
 \description{
 Allow update of IntegratedLearner if only a subset of omics layers are available in test set. If all layers and features match, it calls predict.learner()
 }
+\section{Progress, summaries, and reproducibility}{
+
+Call \code{set.seed()} before fitting to reproduce the data splits and stochastic
+fitting steps. To display progress, wrap the call in
+\code{progressr::with_progress()}. Use \code{print(fit)} to show a fitted model summary.
+}
+
 \examples{
 set.seed(1)
 sample_ids <- paste0("S", seq_len(18))
@@ -77,7 +78,7 @@ fit <- IntegratedLearner(
   ),
   folds = 2, base_learner = "SL.mean",
   run_stacked = FALSE, run_concat = FALSE,
-  print_learner = FALSE, family = stats::binomial()
+  family = stats::binomial()
 )
 upd <- update(
   object = fit,

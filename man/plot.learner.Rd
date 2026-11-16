@@ -64,7 +64,7 @@ fit <- IntegratedLearner(
   assay.type = rep("abundance", 2),
   folds = 2, base_learner = "SL.mean",
   run_stacked = FALSE, run_concat = FALSE,
-  print_learner = FALSE, family = stats::binomial()
+  family = stats::binomial()
 )
 plt <- plot(fit)
 names(plt)

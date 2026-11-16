@@ -46,7 +46,6 @@
 #'   \code{sample_metadata}.
 #' @param folds How many folds in the V-fold nested cross-validation? Default
 #'   is 5.
-#' @param seed Specify the seed for reproducibility. Default is 1234.
 #' @param base_learner Base learner for late fusion and early fusion. Default:
 #'   \code{sl_bart}.
 #' @param base_screener Deprecated for this backend; currently ignored and kept
@@ -85,8 +84,6 @@
 #'   early and late fusion only. The threshold is AUC < 0.5 for binary and
 #'   R\eqn{^2} < 0.5 for continuous outcomes. Single-layer outputs are still
 #'   retained and reported.
-#' @param verbose logical; TRUE for printing SuperLearner progress. Default FALSE.
-#' @param print_learner logical; Should a detailed summary be printed? Default TRUE.
 #' @param refit.stack logical; For late fusion, refit predictions on the entire
 #'   data are returned if specified. Default FALSE.
 #' @param family Allows \code{gaussian()} for continuous and \code{binomial()}
@@ -104,6 +101,7 @@
 #'   \code{cooperative_feature_importance_signed}, and
 #'   \code{cooperative_feature_importance_signed_by_layer}.
 #'
+#' @inheritSection IntegratedLearner Progress, summaries, and reproducibility
 #' @examples
 #' set.seed(1)
 #' n <- 20
@@ -125,7 +123,7 @@
 #'   sample_metadata = sample_metadata,
 #'   feature_metadata = feature_metadata,
 #'   folds = 3, base_learner = "SL.mean", run_stacked = FALSE,
-#'   run_concat = FALSE, print_learner = FALSE, family = stats::gaussian()
+#'   run_concat = FALSE, family = stats::gaussian()
 #' )
 #' names(fit)
 #'
@@ -138,14 +136,16 @@
 
 IL_conbin <- function(
   feature_table, sample_metadata, feature_metadata, feature_table_valid = NULL,
-  sample_metadata_valid = NULL, folds = 5, seed = 1234, base_learner = "sl_bart",
+  sample_metadata_valid = NULL, folds = 5, base_learner = "sl_bart",
   base_screener = "All", run_screening = FALSE, screen_pct = NULL, filter_method = NULL,
   filter_pct = NULL, prevalence_pct = NULL, meta_learner = "sl_nnls_auc", run_concat = TRUE,
   run_stacked = TRUE, run_intermediate = FALSE,
   cooperative_rho = c(0, 0.1, 0.25, 0.5, 1), cooperative_s = "lambda.min",
-  cooperative_type_measure = NULL, drop_poor_performing_layers = FALSE, verbose = FALSE,
-  print_learner = TRUE, refit.stack = FALSE, family = stats::gaussian(), ...
+  cooperative_type_measure = NULL, drop_poor_performing_layers = FALSE,
+  refit.stack = FALSE, family = stats::gaussian(), ...
 ) {
+  check_removed_fit_controls(...names())
+  seed <- draw_fit_seed()
   ############## Track time #
 
   start.time <- Sys.time()
@@ -185,8 +185,7 @@ IL_conbin <- function(
       sample_metadata_valid = sample_metadata_valid, folds = folds, seed = seed,
       family = family, cooperative_rho = cooperative_rho, cooperative_s = cooperative_s,
       cooperative_type_measure = cooperative_type_measure, filter_method = filter_method,
-      filter_pct = filter_pct, prevalence_pct = prevalence_pct, verbose = verbose,
-      print_learner = print_learner
+      filter_pct = filter_pct, prevalence_pct = prevalence_pct
     ))
   }
 
@@ -196,7 +195,7 @@ IL_conbin <- function(
   filtered <- filter_features_by_method(
     feature_table = feature_table, feature_metadata = feature_metadata,
     feature_table_valid = feature_table_valid, filter_method = filter_method,
-    filter_pct = filter_pct, prevalence_pct = prevalence_pct, verbose = verbose
+    filter_pct = filter_pct, prevalence_pct = prevalence_pct
   )
   feature_table <- filtered$feature_table
   feature_metadata <- filtered$feature_metadata
@@ -217,8 +216,7 @@ IL_conbin <- function(
   if (isTRUE(screening$enabled)) {
     screen_fun_name <- "screen.il.glmnet"
     assign(screen_fun_name, make_glmnet_screen_screener(
-      keep_pct = screening$screen_pct,
-      seed = seed
+      keep_pct = screening$screen_pct
     ), envir = sl_env)
     base_library <- list(c(base_learner, screen_fun_name))
   }
@@ -299,10 +297,10 @@ IL_conbin <- function(
   ################################################################## individual
   ################################################################## layers #
 
+  progress <- progressr::progressor(
+    length(name_layers) + as.integer(as.logical(run_stacked)) + as.integer(as.logical(run_concat))
+  )
   for (i in seq_along(name_layers)) {
-    if (isTRUE(verbose)) {
-      message("Running base model for layer ", i, "...")
-    }
 
     ################################## Prepate single-omic input data #
 
@@ -317,7 +315,7 @@ IL_conbin <- function(
 
     SL_fit_layers[[i]] <- SuperLearner::SuperLearner(
       Y = Y, X = X, cvControl = cvControl,
-      verbose = verbose, SL.library = base_library, family = family, env = sl_env
+      SL.library = base_library, family = family, env = sl_env
     )
 
     ################################################### Append the
@@ -371,6 +369,7 @@ IL_conbin <- function(
       )
       rm(dat_slice_valid, include_list)
     }
+    progress(paste("Fitted layer", name_layers[i]))
   }
 
   ############################## Prepate stacked input data #
@@ -415,9 +414,6 @@ IL_conbin <- function(
   cooperative_prediction_train <- NULL
   cooperative_prediction_valid <- NULL
   if (isTRUE(run_intermediate)) {
-    if (isTRUE(verbose)) {
-      message("Running cooperative multiview model...")
-    }
     cooperative_x_train <- build_multiview_x_list(
       feature_table = feature_table,
       feature_metadata = feature_metadata,
@@ -426,7 +422,7 @@ IL_conbin <- function(
     cooperative_fit <- fit_cooperative_multiview(
       x_list = cooperative_x_train, y = Y, family_name = family_name,
       fold_id = fold_id, rho = cooperative_rho, type_measure = cooperative_type_measure,
-      s = cooperative_s, seed = cooperative_seed(seed), trace.it = as.integer(isTRUE(verbose))
+      s = cooperative_s, seed = cooperative_seed(seed)
     )
     cooperative_prediction_train <- prevalidated_cooperative_vector(cooperative_fit)
     if (!is.null(feature_table_valid)) {
@@ -444,15 +440,12 @@ IL_conbin <- function(
   #################### Stack all models #
 
   if (run_stacked) {
-    if (isTRUE(verbose)) {
-      message("Running stacked model...")
-    }
 
     ################################### Run user-specified meta learner #
 
     SL_fit_stacked <- SuperLearner::SuperLearner(
       Y = Y, X = combo_fusion, cvControl = cvControl,
-      verbose = verbose, SL.library = meta_learner, family = family, env = sl_env
+      SL.library = meta_learner, family = family, env = sl_env
     )
 
 
@@ -495,15 +488,13 @@ IL_conbin <- function(
         validPrediction = stacked_prediction_valid
       )
     }
+    progress("Fitted stacked model")
   }
 
   ####################################### Run concatenated model if specified
   ####################################### #
 
   if (run_concat) {
-    if (isTRUE(verbose)) {
-      message("Running concatenated model...")
-    }
     ################################### Prepate concatenated input data #
 
     fulldat <- slice_feature_table(feature_table, fusion_feature_ids)
@@ -512,7 +503,7 @@ IL_conbin <- function(
 
     SL_fit_concat <- SuperLearner::SuperLearner(
       Y = Y, X = fulldat, cvControl = cvControl,
-      verbose = verbose, SL.library = base_library, family = family, env = sl_env
+      SL.library = base_library, family = family, env = sl_env
     )
 
     # Extract the fit object from superlearner
@@ -552,6 +543,7 @@ IL_conbin <- function(
         validPrediction = concat_prediction_valid
       )
     }
+    progress("Fitted concatenated model")
   }
 
   ###################### Save model results #
@@ -668,8 +660,5 @@ IL_conbin <- function(
   class(res) <- unique(c("learner", class(res)))
   ########## Return #
 
-  if (isTRUE(print_learner)) {
-    print.learner(res)
-  }
   return(res)
 }

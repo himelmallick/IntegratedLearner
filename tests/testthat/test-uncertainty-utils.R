@@ -152,3 +152,38 @@ test_that("credint.learner multiclass path validates requested class early", {
     fixed = TRUE
   )
 })
+
+test_that("multiclass credible interval bounds follow the ordered posterior draws", {
+  draws <- cbind(c(0.5, 0.8, 0.9, 0.7), c(0.2, 0.1, 0.4, 0.3))
+  prob_draws <- cbind(draws[, 1], 1 - draws[, 1], draws[, 2], 1 - draws[, 2])
+  testthat::local_mocked_bindings(
+    predict = function(object, ...) list(prob.test = object$draws),
+    .package = "stats"
+  )
+  fit <- list(
+    family = "multinomial",
+    class_levels = c("A", "B"),
+    X_train_layers = list(omics = data.frame(x = c(1, 2), row.names = c("S1", "S2"))),
+    Y_train = c("A", "B"),
+    model_fits = list(model_layers = list(omics = list(learner_id = "mbart", model = list())))
+  )
+  probs <- c(lower_outer = 0.1, upper_outer = 0.9, lower_inner = 0.25, upper_inner = 0.75)
+
+  for (ids in list(1:2, 1L)) {
+    subset_fit <- fit
+    subset_fit$X_train_layers$omics <- fit$X_train_layers$omics[ids, , drop = FALSE]
+    subset_fit$Y_train <- fit$Y_train[ids]
+    cols <- rep(ids, each = 2) * 2L - c(1L, 0L)
+    subset_fit$model_fits$model_layers$omics$model$draws <- prob_draws[, cols, drop = FALSE]
+    plot_data <- IntegratedLearner:::credint.learner(subset_fit,
+      class = "A", prob_inner = 0.5, prob_outer = 0.8
+    )$data
+
+    ordered <- draws[, rev(ids), drop = FALSE]
+    expect_equal(unname(plot_data$mean), unname(colMeans(ordered)))
+    for (bound in names(probs)) {
+      expected <- apply(ordered, 2, stats::quantile, probs = probs[[bound]], names = FALSE)
+      expect_equal(plot_data[[bound]], expected)
+    }
+  }
+})

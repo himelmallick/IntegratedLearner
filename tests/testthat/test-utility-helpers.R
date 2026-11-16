@@ -264,10 +264,23 @@ test_that("learner wrappers and print method return expected structures", {
   expect_equal(length(sl_nnls_b$pred), 4)
 
   pcl <- make_toy_pcl(n_samples = 20, n_features = 8, seed = 55, binary = TRUE)
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2026, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl,
-    folds = 2, seed = 2026, base_learner = "SL.glm", run_stacked = TRUE,
-    run_concat = TRUE, print_learner = FALSE, verbose = FALSE, family = stats::binomial()
-  ))
+    folds = 2, base_learner = "SL.glm", run_stacked = TRUE,
+    run_concat = TRUE, family = stats::binomial()
+  )))
   expect_true(length(capture.output(print(fit))) > 0)
+})
+test_that("numeric text is interpreted consistently for outcomes and feature percentages", {
+  coerce <- IntegratedLearner:::coerce_outcome_by_family
+  screen <- IntegratedLearner:::resolve_screening_args
+  filter <- IntegratedLearner:::resolve_feature_filter_args
+
+  expect_equal(coerce(data.frame(Y = factor(c(" 2.5e1 ", "-.5"))), "gaussian")$sample_metadata$Y,
+    c(25, -0.5))
+  expect_equal(screen(run_screening = TRUE, screen_pct = " 2.5e1 ")$screen_pct, 25)
+  expect_equal(filter(filter_method = "variance", filter_pct = " 2.5e1 ")$filter_pct, 25)
+  expect_error(coerce(data.frame(Y = c("25", "TRUE")), "gaussian"), "could not be converted")
+  expect_error(screen(run_screening = TRUE, screen_pct = "TRUE"), "must be numeric")
+  expect_error(filter(filter_method = "variance", filter_pct = "Inf"), "must be numeric")
 })

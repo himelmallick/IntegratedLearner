@@ -13,11 +13,9 @@ ILsurv(
   valid_sample_metadata = NULL,
   base_learner = "surv.coxph",
   folds = 5,
-  seed = 123,
   run_screening = FALSE,
   screen_pct = NULL,
   drop_poor_performing_layers = FALSE,
-  verbose = FALSE,
   do_early_fusion = TRUE,
   t_vec = NULL,
   t_vec_probs = c(0.05, 0.25, 0.5, 0.75, 0.95),
@@ -44,11 +42,9 @@ IL_survival(
   valid_sample_metadata = NULL,
   base_learner = "surv.coxph",
   folds = 5,
-  seed = 123,
   run_screening = FALSE,
   screen_pct = NULL,
   drop_poor_performing_layers = FALSE,
-  verbose = FALSE,
   do_early_fusion = TRUE,
   t_vec = NULL,
   t_vec_probs = c(0.05, 0.25, 0.5, 0.75, 0.95),
@@ -98,8 +94,6 @@ and \code{event}.}
 \item{folds}{How many folds in the V-fold nested cross-validation? Default
 is 5.}
 
-\item{seed}{Specify the seed for reproducibility. Default is 1234.}
-
 \item{run_screening}{Logical; if \code{TRUE}, run supervised screening
 within each training fold (and again on full training data) before fitting
 base models.}
@@ -112,8 +106,6 @@ single-layer performance below the screening threshold are removed from
 early and late fusion only. The threshold is AUC < 0.5 for binary and
 R\eqn{^2} < 0.5 for continuous outcomes. Single-layer outputs are still
 retained and reported.}
-
-\item{verbose}{logical; TRUE for printing SuperLearner progress. Default FALSE.}
 
 \item{do_early_fusion}{Logical; run early fusion model.}
 
@@ -196,6 +188,13 @@ frozen training calibration. Reported training probability-error metrics
 remain internal summaries because calibration and fusion fitting use
 training outcomes; they are not fully nested evaluation estimates.
 }
+\section{Progress, summaries, and reproducibility}{
+
+Call \code{set.seed()} before fitting to reproduce the data splits and stochastic
+fitting steps. To display progress, wrap the call in
+\code{progressr::with_progress()}. Use \code{print(fit)} to show a fitted model summary.
+}
+
 \examples{
 set.seed(1)
 n <- 20

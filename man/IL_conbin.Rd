@@ -11,7 +11,6 @@ IL_conbin(
   feature_table_valid = NULL,
   sample_metadata_valid = NULL,
   folds = 5,
-  seed = 1234,
   base_learner = "sl_bart",
   base_screener = "All",
   run_screening = FALSE,
@@ -27,8 +26,6 @@ IL_conbin(
   cooperative_s = "lambda.min",
   cooperative_type_measure = NULL,
   drop_poor_performing_layers = FALSE,
-  verbose = FALSE,
-  print_learner = TRUE,
   refit.stack = FALSE,
   family = stats::gaussian(),
   ...
@@ -65,8 +62,6 @@ validation set when available. Must have the exact same structure as
 
 \item{folds}{How many folds in the V-fold nested cross-validation? Default
 is 5.}
-
-\item{seed}{Specify the seed for reproducibility. Default is 1234.}
 
 \item{base_learner}{Base learner for late fusion and early fusion. Default:
 \code{sl_bart}.}
@@ -121,10 +116,6 @@ early and late fusion only. The threshold is AUC < 0.5 for binary and
 R\eqn{^2} < 0.5 for continuous outcomes. Single-layer outputs are still
 retained and reported.}
 
-\item{verbose}{logical; TRUE for printing SuperLearner progress. Default FALSE.}
-
-\item{print_learner}{logical; Should a detailed summary be printed? Default TRUE.}
-
 \item{refit.stack}{logical; For late fusion, refit predictions on the entire
 data are returned if specified. Default FALSE.}
 
@@ -168,6 +159,13 @@ Although \code{IL_conbin()} is typically called internally by
 \code{IL_conbin()} directly when they already have multi-layer feature tables
 and metadata in matrix/data.frame form.
 }
+\section{Progress, summaries, and reproducibility}{
+
+Call \code{set.seed()} before fitting to reproduce the data splits and stochastic
+fitting steps. To display progress, wrap the call in
+\code{progressr::with_progress()}. Use \code{print(fit)} to show a fitted model summary.
+}
+
 \examples{
 set.seed(1)
 n <- 20
@@ -189,7 +187,7 @@ fit <- IL_conbin(
   sample_metadata = sample_metadata,
   feature_metadata = feature_metadata,
   folds = 3, base_learner = "SL.mean", run_stacked = FALSE,
-  run_concat = FALSE, print_learner = FALSE, family = stats::gaussian()
+  run_concat = FALSE, family = stats::gaussian()
 )
 names(fit)
 

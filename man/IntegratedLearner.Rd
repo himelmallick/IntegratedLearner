@@ -15,7 +15,6 @@ IntegratedLearner(
   subject_id_col = "subjectID",
   na.rm = FALSE,
   folds = 5,
-  seed = 1234,
   base_learner = "sl_bart",
   base_screener = "All",
   run_screening = FALSE,
@@ -31,8 +30,6 @@ IntegratedLearner(
   cooperative_s = "lambda.min",
   cooperative_type_measure = NULL,
   drop_poor_performing_layers = FALSE,
-  verbose = FALSE,
-  print_learner = TRUE,
   refit.stack = FALSE,
   family = stats::gaussian(),
   run_majority = TRUE,
@@ -78,10 +75,7 @@ metadata. Defaults to \code{"subjectID"} for backward compatibility.}
 dropped after extraction.}
 
 \item{folds}{How many folds in the V-fold nested cross-validation?
-Default is 10.}
-
-\item{seed}{Specify the arbitrary seed value for reproducibility.
-Default is 1234.}
+Default is 5.}
 
 \item{base_learner}{Base learner for late fusion and early fusion.
 Check out the
@@ -144,12 +138,6 @@ The thresholds are AUC < 0.5 for binary, R\eqn{^2} < 0.5 for continuous,
 and C-index < 0.5 for survival outcomes. Single-layer outputs are still
 retained and reported.}
 
-\item{verbose}{logical; TRUE for \code{SuperLearner} printing progress
-(helpful for debugging). Default is FALSE.}
-
-\item{print_learner}{logical; Should a detailed summary be printed?
-Default is TRUE.}
-
 \item{refit.stack}{logical; For late fusion, post-refit predictions on the
 entire data are returned if specified. Default is FALSE.}
 
@@ -209,6 +197,13 @@ time-to-event outcomes, depending on the specified \code{family}. Legacy
 PCL-style inputs remain available for backward compatibility, but the
 primary user-facing workflow is MAE-based.
 }
+\section{Progress, summaries, and reproducibility}{
+
+Call \code{set.seed()} before fitting to reproduce the data splits and stochastic
+fitting steps. To display progress, wrap the call in
+\code{progressr::with_progress()}. Use \code{print(fit)} to show a fitted model summary.
+}
+
 \examples{
 PRISM_MAE <- readRDS(system.file(
   "extdata", "PRISM_MAE.rds", package = "IntegratedLearner", mustWork = TRUE
@@ -224,7 +219,7 @@ fit <- IntegratedLearner(
   experiment = names(MultiAssayExperiment::experiments(mae))[1:2],
   assay.type = rep("abundance", 2),
   folds = 2, base_learner = "SL.mean",
-  run_stacked = FALSE, run_concat = FALSE, print_learner = FALSE,
+  run_stacked = FALSE, run_concat = FALSE,
   family = stats::binomial()
 )
 names(fit)

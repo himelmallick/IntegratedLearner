@@ -11,7 +11,6 @@ IL_multiclass(
   feature_table_valid = NULL,
   sample_metadata_valid = NULL,
   folds = 5,
-  seed = 1234,
   base_learner = "glmnet",
   base_screener = "All",
   run_screening = FALSE,
@@ -26,8 +25,6 @@ IL_multiclass(
   cooperative_rho = c(0, 0.1, 0.25, 0.5, 1),
   cooperative_s = "lambda.min",
   cooperative_type_measure = NULL,
-  verbose = FALSE,
-  print_learner = TRUE,
   family = stats::binomial(),
   eps = 1e-15,
   run_majority = TRUE,
@@ -66,8 +63,6 @@ validation set when available. Must have the exact same structure as
 
 \item{folds}{Number of subject-level folds for out-of-fold predictions.
 Default 5. Fully nested evaluation of the fusion pipeline is separate.}
-
-\item{seed}{Specify the seed for reproducibility. Default is 1234.}
 
 \item{base_learner}{Native multiclass base learner. Default \code{"glmnet"}.}
 
@@ -114,10 +109,6 @@ cooperative model. Defaults to \code{"lambda.min"}.}
 
 \item{cooperative_type_measure}{Optional \pkg{multiview} CV loss/score. If
 \code{NULL}, an outcome-appropriate default is used.}
-
-\item{verbose}{logical; TRUE for printing SuperLearner progress. Default FALSE.}
-
-\item{print_learner}{logical; Should a detailed summary be printed? Default TRUE.}
 
 \item{family}{Allows \code{gaussian()} for continuous and \code{binomial()}
 for binary outcomes. Survival outcomes must be handled via
@@ -183,6 +174,13 @@ across classes, ranked highest first. These associations use the training
 features after optional filtering, including features excluded by screening;
 they are shared across fusion methods and are not model-specific attributions.
 }
+\section{Progress, summaries, and reproducibility}{
+
+Call \code{set.seed()} before fitting to reproduce the data splits and stochastic
+fitting steps. To display progress, wrap the call in
+\code{progressr::with_progress()}. Use \code{print(fit)} to show a fitted model summary.
+}
+
 \examples{
 set.seed(1)
 n <- 24
@@ -205,8 +203,7 @@ fit <- IL_multiclass(
   sample_metadata = sample_metadata,
   feature_metadata = feature_metadata,
   folds = 3, base_learner = "multinom", meta_learner = "multinom",
-  run_stacked = FALSE, run_concat = FALSE,
-  print_learner = FALSE
+  run_stacked = FALSE, run_concat = FALSE
 )
 fit$family
 fit$late_methods

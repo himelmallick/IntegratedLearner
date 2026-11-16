@@ -55,9 +55,7 @@
 #' @param na.rm Logical; if \code{TRUE}, features with missing values are
 #'   dropped after extraction.
 #' @param folds How many folds in the V-fold nested cross-validation?
-#'   Default is 10.
-#' @param seed Specify the arbitrary seed value for reproducibility.
-#'   Default is 1234.
+#'   Default is 5.
 #' @param base_learner Base learner for late fusion and early fusion.
 #'   Check out the
 #'   \href{https://CRAN.R-project.org/package=SuperLearner}{SuperLearner package page}
@@ -109,10 +107,6 @@
 #'   The thresholds are AUC < 0.5 for binary, R\eqn{^2} < 0.5 for continuous,
 #'   and C-index < 0.5 for survival outcomes. Single-layer outputs are still
 #'   retained and reported.
-#' @param verbose logical; TRUE for \code{SuperLearner} printing progress
-#'   (helpful for debugging). Default is FALSE.
-#' @param print_learner logical; Should a detailed summary be printed?
-#'   Default is TRUE.
 #' @param refit.stack logical; For late fusion, post-refit predictions on the
 #'   entire data are returned if specified. Default is FALSE.
 #' @param family Currently allows \code{`gaussian()`} for continuous,
@@ -134,6 +128,11 @@
 #' probabilities, predicted classes, and metrics; learned averaging also reports
 #' layer weights. Existing flat multiclass outputs remain available.
 #'
+#' @section Progress, summaries, and reproducibility:
+#' Call `set.seed()` before fitting to reproduce the data splits and stochastic
+#' fitting steps. To display progress, wrap the call in
+#' `progressr::with_progress()`. Use `print(fit)` to show a fitted model summary.
+#'
 #' @examples
 #' PRISM_MAE <- readRDS(system.file(
 #'   "extdata", "PRISM_MAE.rds", package = "IntegratedLearner", mustWork = TRUE
@@ -149,7 +148,7 @@
 #'   experiment = names(MultiAssayExperiment::experiments(mae))[1:2],
 #'   assay.type = rep("abundance", 2),
 #'   folds = 2, base_learner = "SL.mean",
-#'   run_stacked = FALSE, run_concat = FALSE, print_learner = FALSE,
+#'   run_stacked = FALSE, run_concat = FALSE,
 #'   family = stats::binomial()
 #' )
 #' names(fit)
@@ -160,21 +159,21 @@
 #' @importClassesFrom MultiAssayExperiment MultiAssayExperiment
 #' @importFrom stats setNames
 #' @importFrom ranger ranger
-#' @importFrom utils type.convert
 #' @export
 IntegratedLearner <- function(
   MAE_train = NULL, MAE_valid = NULL, PCL_train = NULL,
   PCL_valid = NULL, experiment = NULL, assay.type = NULL, outcome_col = "Y",
   subject_id_col = "subjectID", na.rm = FALSE, folds = 5,
-  seed = 1234, base_learner = "sl_bart", base_screener = "All", run_screening = FALSE,
+  base_learner = "sl_bart", base_screener = "All", run_screening = FALSE,
   screen_pct = NULL, filter_method = NULL, filter_pct = NULL, prevalence_pct = NULL,
   meta_learner = "sl_nnls_auc", run_concat = TRUE, run_stacked = TRUE,
   run_intermediate = FALSE, cooperative_rho = c(0, 0.1, 0.25, 0.5, 1),
   cooperative_s = "lambda.min", cooperative_type_measure = NULL,
-  drop_poor_performing_layers = FALSE, verbose = FALSE, print_learner = TRUE,
+  drop_poor_performing_layers = FALSE,
   refit.stack = FALSE, family = stats::gaussian(),
   run_majority = TRUE, run_weighted = TRUE, ...
 ) {
+  check_removed_fit_controls(...names())
   if (!is_a_string(outcome_col)) {
     stop("'outcome_col' must be a single character value.", call. = FALSE)
   }
@@ -195,7 +194,7 @@ IntegratedLearner <- function(
   if (mode == "MAE") {
     prepared <- prepare_from_MAE(
       mae_train = MAE_train, mae_valid = MAE_valid,
-      experiment = experiment, assay.type = assay.type, na.rm = na.rm, verbose = verbose,
+      experiment = experiment, assay.type = assay.type, na.rm = na.rm,
       outcome_col = outcome_col, subject_id_col = subject_id_col
     )
   } else {
@@ -267,8 +266,7 @@ IntegratedLearner <- function(
     filtered_surv <- filter_features_by_method(
       feature_table = feature_table,
       feature_metadata = feature_metadata, feature_table_valid = feature_table_valid,
-      filter_method = filter_method, filter_pct = filter_pct, prevalence_pct = prevalence_pct,
-      verbose = verbose
+      filter_method = filter_method, filter_pct = filter_pct, prevalence_pct = prevalence_pct
     )
     feature_table <- filtered_surv$feature_table
     feature_metadata <- filtered_surv$feature_metadata
@@ -284,17 +282,17 @@ IntegratedLearner <- function(
       res <- fit_intermediate_survival(
         feature_table = feature_table, sample_metadata = sample_metadata,
         feature_metadata = feature_metadata, valid_feature_table = feature_table_valid,
-        valid_sample_metadata = sample_metadata_valid, folds = folds, seed = seed,
+        valid_sample_metadata = sample_metadata_valid, folds = folds,
         cooperative_rho = cooperative_rho, cooperative_s = cooperative_s,
-        cooperative_type_measure = cooperative_type_measure, verbose = verbose
+        cooperative_type_measure = cooperative_type_measure
       )
     } else {
       res <- ILsurv(
         feature_table = feature_table, sample_metadata = sample_metadata,
         feature_metadata = feature_metadata, valid_feature_table = feature_table_valid,
         valid_sample_metadata = sample_metadata_valid, base_learner = base_learner,
-        folds = folds, seed = seed, run_screening = run_screening, screen_pct = screen_pct,
-        verbose = verbose, drop_poor_performing_layers = drop_poor_performing_layers, ...
+        folds = folds, run_screening = run_screening, screen_pct = screen_pct,
+        drop_poor_performing_layers = drop_poor_performing_layers, ...
       )
     }
     res$family <- "survival"
@@ -313,11 +311,11 @@ IntegratedLearner <- function(
     res <- IL_multiclass(
       feature_table = feature_table, sample_metadata = sample_metadata,
       feature_metadata = feature_metadata, feature_table_valid = feature_table_valid,
-      sample_metadata_valid = sample_metadata_valid, folds = folds, seed = seed,
+      sample_metadata_valid = sample_metadata_valid, folds = folds,
       base_learner = base_learner, base_screener = base_screener, run_screening = run_screening,
       screen_pct = screen_pct, filter_method = filter_method, filter_pct = filter_pct,
       prevalence_pct = prevalence_pct, meta_learner = meta_learner, run_concat = run_concat,
-      run_stacked = run_stacked, verbose = verbose, print_learner = print_learner,
+      run_stacked = run_stacked,
       run_majority = run_majority, run_weighted = run_weighted,
       family = family, run_intermediate = run_intermediate,
       cooperative_rho = cooperative_rho, cooperative_s = cooperative_s,
@@ -333,23 +331,22 @@ IntegratedLearner <- function(
     res <- fit_intermediate_conbin(
       feature_table = feature_table, sample_metadata = sample_metadata,
       feature_metadata = feature_metadata, feature_table_valid = feature_table_valid,
-      sample_metadata_valid = sample_metadata_valid, folds = folds, seed = seed,
+      sample_metadata_valid = sample_metadata_valid, folds = folds,
       family = family, cooperative_rho = cooperative_rho, cooperative_s = cooperative_s,
       cooperative_type_measure = cooperative_type_measure, filter_method = filter_method,
-      filter_pct = filter_pct, prevalence_pct = prevalence_pct, verbose = verbose,
-      print_learner = print_learner
+      filter_pct = filter_pct, prevalence_pct = prevalence_pct
     )
   } else {
     res <- IL_conbin(
       feature_table = feature_table, sample_metadata = sample_metadata,
       feature_metadata = feature_metadata, feature_table_valid = feature_table_valid,
-      sample_metadata_valid = sample_metadata_valid, folds = folds, seed = seed,
+      sample_metadata_valid = sample_metadata_valid, folds = folds,
       base_learner = base_learner, base_screener = base_screener, run_screening = run_screening,
       screen_pct = screen_pct, filter_method = filter_method, filter_pct = filter_pct,
       prevalence_pct = prevalence_pct, meta_learner = meta_learner, run_concat = run_concat,
       run_stacked = run_stacked,
       drop_poor_performing_layers = drop_poor_performing_layers,
-      verbose = verbose, print_learner = print_learner, refit.stack = refit.stack, family = family, ...
+      refit.stack = refit.stack, family = family, ...
     )
   }
 

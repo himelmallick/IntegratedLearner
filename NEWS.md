@@ -1,3 +1,19 @@
+# IntegratedLearner 0.99.7
+
+## Fitting controls and maintenance
+
+- Fitting entry points use `set.seed()` for reproducibility,
+  `progressr::with_progress()` for progress, and `print(fit)` for summaries.
+  Remove the old `seed`, `verbose`, and `print_learner` arguments from fitting
+  calls. The same seed now reproduces results within this API; it may produce
+  different cross-validation splits from an older release.
+- Multiclass credible intervals compute all four bounds in one quantile call
+  per observation. Shared helpers now live in files grouped by responsibility,
+  and outcome validation and feature selection share a numeric parser.
+- Multiclass random forests use training class proportions when all predictors
+  are constant. This can happen when a stacking fold receives identical
+  probabilities from every layer model.
+
 # IntegratedLearner 0.99.6
 
 ## Survival IBS fusion
@@ -26,7 +42,7 @@
   independence of probabilities, direct IBS scoring, and cooperative survival
   calibration. Updated the help, README, vignette, and manuscript accordingly.
   Rerun affected earlier survival probability-error analyses before reporting
-  results; the package version remains 0.99.6 for these corrections.
+  results.
 
 # IntegratedLearner 0.99.5
 

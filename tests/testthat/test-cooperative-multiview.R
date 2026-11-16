@@ -41,17 +41,15 @@ test_that("IntegratedLearner adds cooperative predictions for gaussian outcomes"
 
   pcl <- make_toy_pcl(n_samples = 36, n_features = 12, seed = 301, binary = FALSE)
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2026, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl,
     folds = 3,
-    seed = 2026,
     base_learner = "not_a_real_base_learner",
     meta_learner = "not_a_real_meta_learner",
     run_intermediate = TRUE,
     cooperative_rho = c(0, 0.25),
-    print_learner = FALSE,
     family = stats::gaussian()
-  ))
+  )))
 
   expect_true(isTRUE(fit$run_intermediate))
   expect_identical(colnames(fit$yhat.train), "cooperative")
@@ -76,18 +74,16 @@ test_that("IntegratedLearner adds cooperative predictions for binary outcomes", 
 
   pcl <- make_toy_pcl(n_samples = 36, n_features = 12, seed = 302, binary = TRUE)
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2026, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl,
     PCL_valid = pcl,
     folds = 3,
-    seed = 2026,
     base_learner = "not_a_real_base_learner",
     meta_learner = "not_a_real_meta_learner",
     run_intermediate = TRUE,
     cooperative_rho = c(0, 0.25),
-    print_learner = FALSE,
     family = stats::binomial()
-  ))
+  )))
 
   expect_identical(colnames(fit$yhat.train), "cooperative")
   expect_identical(colnames(fit$yhat.test), "cooperative")
@@ -112,19 +108,17 @@ test_that("IntegratedLearner ignores cooperative learning for multiclass outcome
   pcl <- make_cooperative_toy_multiclass_pcl(n_samples = 36, n_features = 12, seed = 303)
 
   expect_message(
-    fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+    fit <- suppressWarnings(withr::with_seed(2026, IntegratedLearner::IntegratedLearner(
       PCL_train = pcl,
       PCL_valid = pcl,
       folds = 3,
-      seed = 2026,
       base_learner = "SL.glmnet",
       run_stacked = FALSE,
       run_concat = FALSE,
       run_intermediate = TRUE,
       cooperative_rho = c(0, 0.25),
-      print_learner = FALSE,
       family = stats::binomial()
-    )),
+    ))),
     "not supported for multiclass outcomes"
   )
 
@@ -144,15 +138,13 @@ test_that("ILsurv adds cooperative survival risk output", {
     n_mirna_features = 6, seed = 304
   )
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2026, IntegratedLearner::IntegratedLearner(
     PCL_train = tcga$train,
     PCL_valid = tcga$valid,
     folds = 3,
-    seed = 2026,
     run_intermediate = TRUE,
-    cooperative_rho = c(0, 0.25),
-    verbose = FALSE
-  ))
+    cooperative_rho = c(0, 0.25)
+  )))
 
   expect_true(isTRUE(fit$run_intermediate))
   expect_null(fit$base_learner)

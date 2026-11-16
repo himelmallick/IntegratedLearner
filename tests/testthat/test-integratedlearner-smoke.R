@@ -4,11 +4,11 @@ test_that("IntegratedLearner runs on toy PCL data (binomial)", {
 
   pcl <- make_toy_pcl(n_samples = 24, n_features = 12, seed = 10, binary = TRUE)
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2026, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl,
-    folds = 2, seed = 2026, base_learner = "SL.glm", run_stacked = FALSE, run_concat = FALSE,
-    print_learner = FALSE, verbose = FALSE, family = stats::binomial()
-  ))
+    folds = 2, base_learner = "SL.glm", run_stacked = FALSE, run_concat = FALSE,
+    family = stats::binomial()
+  )))
 
   expect_identical(fit$input_mode, "PCL")
   expect_identical(fit$family, "binomial")
@@ -65,11 +65,11 @@ test_that("IntegratedLearner runs on a PRISM subset with validation set", {
   pcl_train <- subset_pcl(pcl_small, feature_ids = keep_features, sample_ids = train_ids)
   pcl_valid <- subset_pcl(pcl_small, feature_ids = keep_features, sample_ids = valid_ids)
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2026, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl_train,
-    PCL_valid = pcl_valid, folds = 2, seed = 2026, base_learner = "SL.glm", run_stacked = FALSE,
-    run_concat = FALSE, print_learner = FALSE, verbose = FALSE, family = stats::binomial()
-  ))
+    PCL_valid = pcl_valid, folds = 2, base_learner = "SL.glm", run_stacked = FALSE,
+    run_concat = FALSE, family = stats::binomial()
+  )))
 
   expect_true(isTRUE(fit$test))
   expect_true(is.matrix(fit$yhat.test) || is.data.frame(fit$yhat.test))
@@ -86,19 +86,16 @@ test_that("IntegratedLearner supports custom outcome and subject columns in PCL 
   colnames(pcl$sample_metadata)[colnames(pcl$sample_metadata) == "Y"] <- "disease_status"
   colnames(pcl$sample_metadata)[colnames(pcl$sample_metadata) == "subjectID"] <- "participant_id"
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2026, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl,
     outcome_col = "disease_status",
     subject_id_col = "participant_id",
     folds = 2,
-    seed = 2026,
     base_learner = "SL.glm",
     run_stacked = FALSE,
     run_concat = FALSE,
-    print_learner = FALSE,
-    verbose = FALSE,
     family = stats::binomial()
-  ))
+  )))
 
   expect_identical(fit$input_mode, "PCL")
   expect_identical(fit$column_map$outcome_col, "disease_status")
@@ -113,18 +110,49 @@ test_that("IntegratedLearner auto-coerces gaussian outcomes to numeric", {
   pcl <- make_toy_pcl(n_samples = 24, n_features = 12, seed = 102, binary = FALSE)
   pcl$sample_metadata$Y <- as.character(round(pcl$sample_metadata$Y, 3))
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2026, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl,
     folds = 2,
-    seed = 2026,
     base_learner = "SL.glm",
     run_stacked = FALSE,
     run_concat = FALSE,
-    print_learner = FALSE,
-    verbose = FALSE,
     family = stats::gaussian()
-  ))
+  )))
 
   expect_true(is.numeric(fit$Y_train))
   expect_true(all(is.finite(fit$Y_train)))
+})
+test_that("fitting uses the caller's seed and reports progress on request", {
+  pcl <- make_toy_pcl(n_samples = 24, n_features = 12, binary = FALSE)
+  run_fit <- function() IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl, folds = 3, base_learner = "SL.glm",
+    run_stacked = FALSE, run_concat = FALSE
+  )
+
+  set.seed(82)
+  expect_output(fit <- run_fit(), NA)
+  set.seed(82)
+  updates <- character()
+  again <- progressr::with_progress(
+    withCallingHandlers(run_fit(), progression = function(p) {
+      if (identical(p$type, "update")) updates <<- c(updates, p$message)
+    }),
+    handlers = progressr::handler_void(), enable = TRUE
+  )
+  expect_identical(fit$cvControl$validRows, again$cvControl$validRows)
+  expect_equal(fit$yhat.train, again$yhat.train)
+  expect_identical(updates, paste("Fitted layer", unique(pcl$feature_metadata$featureType)))
+  expect_output(print(fit), "Time for model fit")
+
+  set.seed(83)
+  expect_false(identical(run_fit()$cvControl$validRows, fit$cvControl$validRows))
+})
+
+test_that("removed fit options point callers to their replacements", {
+  for (fit in list(IntegratedLearner::IntegratedLearner, IntegratedLearner::IL_conbin,
+    IntegratedLearner::IL_multiclass, IntegratedLearner::ILsurv)) {
+    expect_error(fit(seed = 1), "call set.seed()", fixed = TRUE)
+    expect_error(fit(verbose = TRUE), "progressr::with_progress()", fixed = TRUE)
+    expect_error(fit(print_learner = FALSE), "call print()", fixed = TRUE)
+  }
 })

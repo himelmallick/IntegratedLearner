@@ -92,6 +92,23 @@ promptly, and we may ask for changes before merging.
 * Do not commit large data files. Tutorial data belongs in `inst/extdata/` as small MAE RDS files;
   do not duplicate it as raw tables or PCL objects.
 
+## Finding your way around `R/`
+
+`IntegratedLearner.R` prepares the inputs and dispatches by outcome.
+`IL_conbin.R` fits continuous and binary outcomes, `IL_multiclass.R` fits
+multiclass outcomes, `IL_survival.R` fits time-to-event outcomes, and
+`IL_cooperative.R` implements cooperative learning.
+
+| If you are changing... | Start in... |
+| --- | --- |
+| MAE or PCL input preparation, outcome conversion, or input checks | `IL_PrepareInputs.R`, `IL_Outcomes.R`, or `IL_validate.R` |
+| Feature selection or filtering | `IL_Features.R` |
+| SuperLearner adapters | `IL_SuperLearner.R` |
+| Fold setup or fit controls | `IL_FitSupport.R` |
+| Shared fusion results, metrics, or layer prediction | `IL_Fusion.R` or `IL_PredictLayers.R` |
+| Numeric parsing shared by outcomes and feature options | `IL_Numeric.R` |
+| Fit summaries | `IL_Print.R` |
+
 ## Adding a new learner
 
 New learners are a welcome contribution. Please:

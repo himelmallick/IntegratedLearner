@@ -63,12 +63,7 @@ validate_IL_inputs <- function(
       # Backwards-compatible warning for binary settings not coded as
       # 0/1.
       if (length(unique(y_chr)) == 2L) {
-        y_num_parsed <- type.convert(as.character(Y), as.is = TRUE)
-        y_num <- if (is.numeric(y_num_parsed)) {
-          as.numeric(y_num_parsed)
-        } else {
-          rep(NA_real_, length(Y))
-        }
+        y_num <- parse_numeric_values(Y)
         if (all(is.finite(y_num)) && !all(y_num %in% c(0, 1))) {
           warning("Binomial outcome is not coded as {0,1}")
         }

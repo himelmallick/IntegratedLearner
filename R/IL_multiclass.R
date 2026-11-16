@@ -58,6 +58,7 @@
 #'   probabilities, predicted classes, fitted single-layer and fusion models,
 #'   and training/validation multiclass performance summaries when available.
 #'
+#' @inheritSection IntegratedLearner Progress, summaries, and reproducibility
 #' @examples
 #' set.seed(1)
 #' n <- 24
@@ -80,8 +81,7 @@
 #'   sample_metadata = sample_metadata,
 #'   feature_metadata = feature_metadata,
 #'   folds = 3, base_learner = "multinom", meta_learner = "multinom",
-#'   run_stacked = FALSE, run_concat = FALSE,
-#'   print_learner = FALSE
+#'   run_stacked = FALSE, run_concat = FALSE
 #' )
 #' fit$family
 #' fit$late_methods
@@ -90,14 +90,16 @@
 #' @export
 IL_multiclass <- function(
   feature_table, sample_metadata, feature_metadata, feature_table_valid = NULL,
-  sample_metadata_valid = NULL, folds = 5, seed = 1234, base_learner = "glmnet",
+  sample_metadata_valid = NULL, folds = 5, base_learner = "glmnet",
   base_screener = "All", run_screening = FALSE, screen_pct = NULL, filter_method = NULL,
   filter_pct = NULL, prevalence_pct = NULL, meta_learner = "glmnet", run_concat = TRUE,
   run_stacked = TRUE, run_intermediate = FALSE,
   cooperative_rho = c(0, 0.1, 0.25, 0.5, 1), cooperative_s = "lambda.min",
-  cooperative_type_measure = NULL, verbose = FALSE, print_learner = TRUE, family = stats::binomial(),
+  cooperative_type_measure = NULL, family = stats::binomial(),
   eps = 1e-15, run_majority = TRUE, run_weighted = TRUE, ...
 ) {
+  check_removed_fit_controls(...names())
+  seed <- draw_fit_seed()
   start.time <- Sys.time()
 
   for (flag in c("run_majority", "run_weighted")) {
@@ -117,7 +119,7 @@ IL_multiclass <- function(
   filtered <- filter_features_by_method(
     feature_table = feature_table, feature_metadata = feature_metadata,
     feature_table_valid = feature_table_valid, filter_method = filter_method,
-    filter_pct = filter_pct, prevalence_pct = prevalence_pct, verbose = verbose
+    filter_pct = filter_pct, prevalence_pct = prevalence_pct
   )
   feature_table <- filtered$feature_table
   feature_metadata <- filtered$feature_metadata
@@ -188,10 +190,10 @@ IL_multiclass <- function(
 
   dots <- list(...)
 
+  progress <- progressr::progressor(
+    length(name_layers) + as.integer(as.logical(run_stacked)) + as.integer(as.logical(run_concat))
+  )
   for (i in seq_along(name_layers)) {
-    if (isTRUE(verbose)) {
-      message("Running multiclass base model for layer ", i, "...")
-    }
 
     include_list <- feature_metadata |>
       dplyr::filter(featureType == name_layers[i])
@@ -230,6 +232,7 @@ IL_multiclass <- function(
         newX = dat_slice_valid, class_levels = class_levels, eps = eps
       )
     }
+    progress(paste("Fitted layer", name_layers[i]))
   }
 
   stacked_oof_prob <- NULL
@@ -237,9 +240,6 @@ IL_multiclass <- function(
   stacked_full_model <- NULL
 
   if (isTRUE(run_stacked)) {
-    if (isTRUE(verbose)) {
-      message("Running multiclass stacked model...")
-    }
 
     combo_oof <- stack_prob_features(layer_oof_probs)
 
@@ -262,6 +262,7 @@ IL_multiclass <- function(
         newX = combo_valid, class_levels = class_levels, eps = eps
       )
     }
+    progress("Fitted stacked model")
   }
 
   concat_oof_prob <- NULL
@@ -272,9 +273,6 @@ IL_multiclass <- function(
   concat_valid_matrix <- NULL
 
   if (isTRUE(run_concat)) {
-    if (isTRUE(verbose)) {
-      message("Running multiclass concatenated model...")
-    }
 
     fulldat_all <- slice_feature_table(feature_table, rownames(feature_table))
     concat_screen <- fit_multiclass_screener(
@@ -305,6 +303,7 @@ IL_multiclass <- function(
         newX = fulldat_valid, class_levels = class_levels, eps = eps
       )
     }
+    progress("Fitted concatenated model")
   }
 
   cooperative_fit <- NULL
@@ -455,9 +454,6 @@ IL_multiclass <- function(
   ), units = "mins")
   class(res) <- unique(c("learner", class(res)))
 
-  if (isTRUE(print_learner)) {
-    print.learner(res)
-  }
   res
 }
 
@@ -1121,7 +1117,13 @@ fit_multiclass_model_impl <- function(
     )
     fit <- do.call(ranger::ranger, utils::modifyList(defaults, model_args))
   } else if (identical(learner_id, "randomforest")) {
-
+    if (all(vapply(X_df, function(x) length(unique(x)) <= 1L, logical(1)))) {
+      # The native forest can stall when no predictor can split a tree.
+      return(list(
+        learner_id = learner_id, class_levels = model_class_levels,
+        feature_names = colnames(X_df), prior = default_multiclass_prior(y_fac, model_class_levels)
+      ))
+    }
     defaults <- list(x = X_df, y = y_fac, ntree = 500)
     fit <- do.call(randomForest::randomForest, utils::modifyList(defaults, model_args))
   } else if (identical(learner_id, "xgboost")) {
@@ -1204,7 +1206,12 @@ predict_multiclass_model_impl <- function(fit_obj, newX, class_levels = NULL, ep
     class_levels <- fit_obj$class_levels
   }
 
-  if (identical(fit_obj$learner_id, "glmnet")) {
+  if (!is.null(fit_obj$prior)) {
+    prob <- matrix(rep(fit_obj$prior, each = nrow(X_df)),
+      nrow = nrow(X_df), ncol = length(fit_obj$prior),
+      dimnames = list(rownames(X_df), fit_obj$class_levels)
+    )
+  } else if (identical(fit_obj$learner_id, "glmnet")) {
     raw <- stats::predict(fit_obj$model,
       newx = as.matrix(X_df), s = "lambda.min",
       type = "response"

@@ -15,12 +15,12 @@ make_survival_calibration_data <- function() {
 }
 
 fit_calibration_fixture <- function(data, validation, cooperative = FALSE) {
-  IntegratedLearner::ILsurv(
+  withr::with_seed(306, IntegratedLearner::ILsurv(
     feature_table = data$x[, data$train, drop = FALSE],
     sample_metadata = data$metadata[data$train, , drop = FALSE], feature_metadata = data$features,
     valid_feature_table = data$x[, data$valid, drop = FALSE], valid_sample_metadata = validation,
-    folds = 3, seed = 306, run_intermediate = cooperative, cooperative_rho = 0
-  )
+    folds = 3, run_intermediate = cooperative, cooperative_rho = 0
+  ))
 }
 
 test_that("calibration predicts from a frozen training fit, including after serialization", {

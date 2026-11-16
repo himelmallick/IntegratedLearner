@@ -35,11 +35,11 @@ test_that("IntegratedLearner multiclass path runs with native multiclass backend
 
   pcl <- make_toy_multiclass_pcl(n_samples = 30, n_features = 12, seed = 2026)
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2026, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl,
-    folds = 2, seed = 2026, base_learner = "SL.glmnet", run_stacked = TRUE,
-    run_concat = TRUE, print_learner = FALSE, family = stats::binomial()
-  ))
+    folds = 2, base_learner = "SL.glmnet", run_stacked = TRUE,
+    run_concat = TRUE, family = stats::binomial()
+  )))
 
   expect_identical(fit$family, "multinomial")
   expect_true(is.list(fit$prob.train))
@@ -64,18 +64,17 @@ test_that("final multiclass stack trains on out-of-fold layer probabilities", {
   testthat::local_mocked_bindings(
     fit_multiclass_model_impl = function(X, y, learner_id = "glmnet",
                                          seed = 1234, model_args = list()) {
-      if (seed == 2041L + 7000L) meta_training_X <<- X
+      # With concatenation disabled, the last model fitted is the deployed stack.
+      meta_training_X <<- X
       fit_impl(X, y, learner_id, seed, model_args)
     },
     .package = "IntegratedLearner"
   )
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
-    PCL_train = pcl, folds = 3, seed = seed,
-    base_learner = "glmnet", meta_learner = "glmnet",
-    run_stacked = TRUE, run_concat = FALSE, print_learner = FALSE,
-    family = stats::binomial()
-  ))
+  fit <- suppressWarnings(withr::with_seed(seed, IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl, folds = 3, base_learner = "glmnet", meta_learner = "glmnet",
+    run_stacked = TRUE, run_concat = FALSE, family = stats::binomial()
+  )))
 
   expected <- IntegratedLearner:::stack_prob_features(
     fit$prob.train[names(fit$model_fits$model_layers)]
@@ -88,11 +87,11 @@ test_that("predict.learner returns multiclass probabilities and metrics", {
 
   pcl <- make_toy_multiclass_pcl(n_samples = 33, n_features = 12, seed = 2027)
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2027, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl,
-    folds = 2, seed = 2027, base_learner = "SL.glmnet", run_stacked = TRUE, run_concat = TRUE,
-    print_learner = FALSE, family = stats::binomial()
-  ))
+    folds = 2, base_learner = "SL.glmnet", run_stacked = TRUE, run_concat = TRUE,
+    family = stats::binomial()
+  )))
 
   pred <- IntegratedLearner:::predict.learner(
     object = fit, feature_table_valid = pcl$feature_table,
@@ -123,12 +122,11 @@ test_that("plot.learner returns multiclass ROC payloads", {
 
   pcl <- make_toy_multiclass_pcl(n_samples = 30, n_features = 12, seed = 2039)
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2039, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl,
-    folds = 2, seed = 2039, base_learner = "SL.glmnet",
-    run_stacked = TRUE, run_concat = TRUE, print_learner = FALSE,
-    family = stats::binomial()
-  ))
+    folds = 2, base_learner = "SL.glmnet",
+    run_stacked = TRUE, run_concat = TRUE, family = stats::binomial()
+  )))
 
   out <- suppressWarnings(IntegratedLearner:::plot.learner(fit))
   expect_true(is.list(out))
@@ -142,11 +140,11 @@ test_that("update.learner is blocked with explicit message for multiclass fits",
 
   pcl <- make_toy_multiclass_pcl(n_samples = 27, n_features = 10, seed = 2028)
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2028, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl,
-    folds = 2, seed = 2028, base_learner = "SL.glmnet", run_stacked = TRUE,
-    run_concat = FALSE, print_learner = FALSE, family = stats::binomial()
-  ))
+    folds = 2, base_learner = "SL.glmnet", run_stacked = TRUE,
+    run_concat = FALSE, family = stats::binomial()
+  )))
 
   expect_error(
     stats::update(
@@ -197,11 +195,11 @@ test_that("IntegratedLearner multiclass supports xgboost backend", {
 
   pcl <- make_toy_multiclass_pcl(n_samples = 30, n_features = 12, seed = 2029)
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2029, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl,
-    folds = 2, seed = 2029, base_learner = "xgboost", meta_learner = "xgboost",
-    run_stacked = TRUE, run_concat = FALSE, print_learner = FALSE, family = stats::binomial()
-  ))
+    folds = 2, base_learner = "xgboost", meta_learner = "xgboost",
+    run_stacked = TRUE, run_concat = FALSE, family = stats::binomial()
+  )))
 
   expect_identical(fit$base_learner_used, "xgboost")
   expect_identical(fit$meta_learner_used, "xgboost")
@@ -214,11 +212,11 @@ test_that("IntegratedLearner multiclass supports randomForest backend", {
 
   pcl <- make_toy_multiclass_pcl(n_samples = 30, n_features = 12, seed = 2031)
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2031, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl,
-    folds = 2, seed = 2031, base_learner = "randomforest", meta_learner = "randomforest",
-    run_stacked = TRUE, run_concat = FALSE, print_learner = FALSE, family = stats::binomial()
-  ))
+    folds = 2, base_learner = "randomforest", meta_learner = "randomforest",
+    run_stacked = TRUE, run_concat = FALSE, family = stats::binomial()
+  )))
 
   expect_identical(fit$base_learner_used, "randomforest")
   expect_identical(fit$meta_learner_used, "randomforest")
@@ -226,17 +224,26 @@ test_that("IntegratedLearner multiclass supports randomForest backend", {
   expect_true(all(c("accuracy", "balanced_accuracy", "logloss") %in% colnames(fit$metrics.train)))
 })
 
+test_that("a multiclass random forest with constant predictors uses training class proportions", {
+  X <- data.frame(x = rep(1, 6), z = rep(0, 6))
+  y <- factor(c("A", "A", "A", "B", "B", "C"))
+  fit <- IntegratedLearner:::fit_multiclass_model_impl(X, y, learner_id = "randomforest")
+  prob <- IntegratedLearner:::predict_multiclass_model_impl(fit, X[1:2, , drop = FALSE])
+  expect_identical(colnames(prob), levels(y))
+  expect_equal(unname(prob), rbind(c(3, 2, 1), c(3, 2, 1)) / 6)
+})
+
 test_that("IntegratedLearner multiclass supports mbart backend", {
   skip_if_not_installed("BART")
 
   pcl <- make_toy_multiclass_pcl(n_samples = 24, n_features = 10, seed = 2033)
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2033, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl,
-    folds = 2, seed = 2033, base_learner = "mbart", meta_learner = "glmnet",
-    run_stacked = FALSE, run_concat = FALSE, print_learner = FALSE, family = stats::binomial(),
+    folds = 2, base_learner = "mbart", meta_learner = "glmnet",
+    run_stacked = FALSE, run_concat = FALSE, family = stats::binomial(),
     ntree = 10, ndpost = 20, nskip = 10, keepevery = 1
-  ))
+  )))
 
   expect_identical(fit$base_learner_used, "mbart")
   expect_true(is.data.frame(fit$metrics.train))
@@ -313,12 +320,12 @@ test_that("credint.learner supports multiclass mbart fits", {
 
   pcl <- make_toy_multiclass_pcl(n_samples = 24, n_features = 10, seed = 2042)
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2042, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl,
-    folds = 2, seed = 2042, base_learner = "mbart", meta_learner = "glmnet",
-    run_stacked = FALSE, run_concat = FALSE, print_learner = FALSE, family = stats::binomial(),
+    folds = 2, base_learner = "mbart", meta_learner = "glmnet",
+    run_stacked = FALSE, run_concat = FALSE, family = stats::binomial(),
     ntree = 10, ndpost = 20, nskip = 10, keepevery = 1
-  ))
+  )))
 
   p <- suppressWarnings(IntegratedLearner:::credint.learner(
     fit = fit, test = FALSE,
@@ -335,12 +342,12 @@ test_that("credint.learner supports multiclass mbart concatenated uncertainty", 
 
   pcl <- make_toy_multiclass_pcl(n_samples = 60, n_features = 10, seed = 2043)
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2043, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl,
-    folds = 2, seed = 2043, base_learner = "mbart", meta_learner = "glmnet",
-    run_stacked = FALSE, run_concat = TRUE, print_learner = FALSE, family = stats::binomial(),
+    folds = 2, base_learner = "mbart", meta_learner = "glmnet",
+    run_stacked = FALSE, run_concat = TRUE, family = stats::binomial(),
     ntree = 10, ndpost = 20, nskip = 10, keepevery = 1
-  ))
+  )))
 
   fit_bad_names <- fit
   old_feat <- fit_bad_names$model_fits$model_concat$feature_names
@@ -360,12 +367,12 @@ test_that("multiclass screening keeps top X% features", {
   pcl <- make_toy_multiclass_pcl(n_samples = 36, n_features = 24, seed = 2044)
   full_by_layer <- table(pcl$feature_metadata$featureType)
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2044, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl,
-    folds = 3, seed = 2044, base_learner = "glmnet", meta_learner = "glmnet",
+    folds = 3, base_learner = "glmnet", meta_learner = "glmnet",
     run_screening = TRUE, screen_pct = 25, run_stacked = FALSE, run_concat = TRUE,
-    print_learner = FALSE, family = stats::binomial()
-  ))
+    family = stats::binomial()
+  )))
 
   expect_true(isTRUE(fit$screening_used))
   expect_identical(fit$base_screener_used, "glmnet")
@@ -391,12 +398,12 @@ test_that("multiclass prevalence_pct keeps top X% features by prevalence", {
   pcl$feature_table[5, ] <- 0
   pcl$feature_table[5, 1:2] <- 1
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2045, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl,
-    folds = 3, seed = 2045, base_learner = "glmnet", meta_learner = "glmnet",
-    run_stacked = FALSE, run_concat = TRUE, print_learner = FALSE, family = stats::binomial(),
+    folds = 3, base_learner = "glmnet", meta_learner = "glmnet",
+    run_stacked = FALSE, run_concat = TRUE, family = stats::binomial(),
     prevalence_pct = 20
-  ))
+  )))
 
   expect_equal(fit$prevalence_pct, 20)
   expect_true(!("F001" %in% fit$feature.names))
@@ -419,12 +426,12 @@ test_that("multiclass filter_method='prevalence' with filter_pct keeps top X% fe
   pcl$feature_table[5, ] <- 0
   pcl$feature_table[5, 1:2] <- 1
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2046, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl,
-    folds = 3, seed = 2046, base_learner = "glmnet", meta_learner = "glmnet",
-    run_stacked = FALSE, run_concat = TRUE, print_learner = FALSE, family = stats::binomial(),
+    folds = 3, base_learner = "glmnet", meta_learner = "glmnet",
+    run_stacked = FALSE, run_concat = TRUE, family = stats::binomial(),
     filter_method = "prevalence", filter_pct = 20
-  ))
+  )))
 
   expect_identical(fit$filter_method, "prevalence")
   expect_equal(fit$filter_pct, 20)
@@ -448,12 +455,12 @@ test_that("multiclass filter_method='variance' keeps top X% features by caret va
   pcl$feature_table[1:4, ] <- 0
   pcl$feature_table[5, ] <- 1
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2047, IntegratedLearner::IntegratedLearner(
     PCL_train = pcl,
-    folds = 3, seed = 2047, base_learner = "glmnet", meta_learner = "glmnet",
-    run_stacked = FALSE, run_concat = TRUE, print_learner = FALSE, family = stats::binomial(),
+    folds = 3, base_learner = "glmnet", meta_learner = "glmnet",
+    run_stacked = FALSE, run_concat = TRUE, family = stats::binomial(),
     filter_method = "variance", filter_pct = 20
-  ))
+  )))
 
   expect_identical(fit$filter_method, "variance")
   expect_equal(fit$filter_pct, 20)

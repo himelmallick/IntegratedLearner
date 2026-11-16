@@ -176,20 +176,20 @@ credint.learner <- function(fit,
 
     alpha_outer <- (1 - prob_outer) / 2
     alpha_inner <- (1 - prob_inner) / 2
-    lower_outer <- apply(cls_draws, 2, stats::quantile, probs = alpha_outer, na.rm = TRUE)
-    upper_outer <- apply(cls_draws, 2, stats::quantile, probs = 1 - alpha_outer, na.rm = TRUE)
-    lower_inner <- apply(cls_draws, 2, stats::quantile, probs = alpha_inner, na.rm = TRUE)
-    upper_inner <- apply(cls_draws, 2, stats::quantile, probs = 1 - alpha_inner, na.rm = TRUE)
+    bounds <- apply(cls_draws, 2, stats::quantile,
+      probs = c(alpha_outer, 1 - alpha_outer, alpha_inner, 1 - alpha_inner),
+      na.rm = TRUE, names = FALSE
+    )
     post_mean <- colMeans(cls_draws)
 
     n_plot <- length(ord_names)
     plot_df <- data.frame(
       obs = seq_len(n_plot),
       mean = post_mean[ord_names],
-      lower_outer = lower_outer[ord_names],
-      upper_outer = upper_outer[ord_names],
-      lower_inner = lower_inner[ord_names],
-      upper_inner = upper_inner[ord_names],
+      lower_outer = bounds[1, ],
+      upper_outer = bounds[2, ],
+      lower_inner = bounds[3, ],
+      upper_inner = bounds[4, ],
       truth = point_x,
       stringsAsFactors = FALSE
     )

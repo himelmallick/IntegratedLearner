@@ -27,4 +27,3 @@ importFrom(stats,
   setNames,
   update
 )
-importFrom(utils,type.convert)

@@ -9,11 +9,10 @@ test_that("IntegratedLearner survival mode works with TCGA fixture and validatio
     n_mirna_features = 8, seed = 2026
   )
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2026, IntegratedLearner::IntegratedLearner(
     PCL_train = tcga$train,
-    PCL_valid = tcga$valid, folds = 2, seed = 2026, base_learner = "surv.coxph",
-    verbose = FALSE
-  ))
+    PCL_valid = tcga$valid, folds = 2, base_learner = "surv.coxph"
+  )))
 
   expect_identical(fit$family, "survival")
   expect_identical(fit$input_mode, "PCL")
@@ -61,10 +60,10 @@ test_that("IntegratedLearner survival IBS branch returns train metrics without v
     n_mirna_features = 8, seed = 2027
   )
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2027, IntegratedLearner::IntegratedLearner(
     PCL_train = tcga$train,
-    folds = 2, seed = 2027, base_learner = "surv.coxph", verbose = FALSE
-  ))
+    folds = 2, base_learner = "surv.coxph"
+  )))
 
   expect_identical(fit$family, "survival")
   expect_null(fit$valid_out)
@@ -87,11 +86,11 @@ test_that("IntegratedLearner survival fit records fusion-layer screening metadat
     n_mirna_features = 6, seed = 2034
   )
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2034, IntegratedLearner::IntegratedLearner(
     PCL_train = tcga$train,
-    folds = 2, seed = 2034, base_learner = "surv.coxph",
-    drop_poor_performing_layers = TRUE, verbose = FALSE
-  ))
+    folds = 2, base_learner = "surv.coxph",
+    drop_poor_performing_layers = TRUE
+  )))
 
   expect_true(isTRUE(fit$drop_poor_performing_layers))
   expect_true(is.character(fit$fusion_layers_retained))
@@ -125,11 +124,10 @@ test_that("plot.learner returns survival AUC and KM payloads", {
     n_mirna_features = 6, seed = 2030
   )
 
-  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+  fit <- suppressWarnings(withr::with_seed(2030, IntegratedLearner::IntegratedLearner(
     PCL_train = tcga$train,
-    PCL_valid = tcga$valid, folds = 2, seed = 2030,
-    base_learner = "surv.coxph", verbose = FALSE
-  ))
+    PCL_valid = tcga$valid, folds = 2, base_learner = "surv.coxph"
+  )))
 
   out <- suppressWarnings(IntegratedLearner:::plot.learner(fit))
   expect_true(is.list(out))

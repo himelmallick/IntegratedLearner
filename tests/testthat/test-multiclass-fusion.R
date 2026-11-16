@@ -76,10 +76,9 @@ make_multiclass_fusion_pcl <- function() {
 test_that("fusion integrates with fitting, cross-fitting, prediction and serialization", {
   skip_if_not_installed("nnet")
   pcl <- make_multiclass_fusion_pcl()
-  fit <- IntegratedLearner::IntegratedLearner(
-    PCL_train = pcl, PCL_valid = pcl, folds = 3, seed = 2042,
-    base_learner = "multinom", run_stacked = FALSE, run_concat = FALSE,
-    family = stats::binomial(), print_learner = FALSE)
+  fit <- withr::with_seed(2042, IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl, PCL_valid = pcl, folds = 3, base_learner = "multinom", run_stacked = FALSE, run_concat = FALSE,
+    family = stats::binomial()))
   methods <- c("majority", "weighted_average")
   expect_true(all(methods %in% names(fit$prob.train)))
   expect_true(all(methods %in% fit$metrics.train$model))
@@ -120,17 +119,17 @@ test_that("fusion flags can be disabled independently", {
   skip_if_not_installed("nnet")
   pcl <- make_multiclass_fusion_pcl()
   for (majority in c(FALSE, TRUE)) {
-    fit <- IntegratedLearner::IntegratedLearner(
-      PCL_train = pcl, folds = 3, seed = 2042, base_learner = "multinom",
+    fit <- withr::with_seed(2042, IntegratedLearner::IntegratedLearner(
+      PCL_train = pcl, folds = 3, base_learner = "multinom",
       run_stacked = FALSE, run_concat = FALSE, run_majority = majority,
-      run_weighted = !majority, family = stats::binomial(), print_learner = FALSE)
+      run_weighted = !majority, family = stats::binomial()))
     expect_identical("majority" %in% names(fit$prob.train), majority)
     expect_identical("weighted_average" %in% names(fit$prob.train), !majority)
   }
-  fit <- IntegratedLearner::IntegratedLearner(
-    PCL_train = pcl, folds = 3, seed = 2042, base_learner = "multinom",
+  fit <- withr::with_seed(2042, IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl, folds = 3, base_learner = "multinom",
     run_stacked = FALSE, run_concat = FALSE, run_majority = FALSE,
-    run_weighted = FALSE, family = stats::binomial(), print_learner = FALSE)
+    run_weighted = FALSE, family = stats::binomial()))
   expect_setequal(names(fit$prob.train), c("rna", "protein"))
   expect_null(fit$model_fits$model_weighted)
 })
@@ -139,10 +138,9 @@ test_that("a single layer supports both fusion methods", {
   skip_if_not_installed("nnet")
   pcl <- make_multiclass_fusion_pcl()
   pcl$feature_metadata$featureType <- "rna"
-  fit <- IntegratedLearner::IntegratedLearner(
-    PCL_train = pcl, PCL_valid = pcl, folds = 3, seed = 2042,
-    base_learner = "multinom", run_stacked = FALSE, run_concat = FALSE,
-    family = stats::binomial(), print_learner = FALSE)
+  fit <- withr::with_seed(2042, IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl, PCL_valid = pcl, folds = 3, base_learner = "multinom", run_stacked = FALSE, run_concat = FALSE,
+    family = stats::binomial()))
   expect_equal(fit$model_fits$model_weighted$weights, c(rna = 1))
   expect_equal(fit$prob.train$weighted_average, fit$prob.train$rna)
   expect_equal(fit$prob.test$weighted_average, fit$prob.test$rna)
@@ -159,10 +157,9 @@ test_that("fusion flags require single logical values", {
 test_that("all multiclass methods have survival-style grouped outputs", {
   skip_if_not_installed("nnet")
   pcl <- make_multiclass_fusion_pcl()
-  fit <- IntegratedLearner::IntegratedLearner(
-    PCL_train = pcl, PCL_valid = pcl, folds = 3, seed = 2042,
-    base_learner = "multinom", meta_learner = "multinom",
-    family = stats::binomial(), print_learner = FALSE)
+  fit <- withr::with_seed(2042, IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl, PCL_valid = pcl, folds = 3, base_learner = "multinom", meta_learner = "multinom",
+    family = stats::binomial()))
   methods <- c("stacked", "majority", "weighted_average")
   expect_identical(fit$late_methods, methods)
   for (split in c("train", "valid")) {
@@ -205,10 +202,10 @@ test_that("all multiclass methods have survival-style grouped outputs", {
 test_that("grouped outputs respect disabled methods and missing validation", {
   skip_if_not_installed("nnet")
   pcl <- make_multiclass_fusion_pcl()
-  fit <- IntegratedLearner::IntegratedLearner(
-    PCL_train = pcl, folds = 3, seed = 2042, base_learner = "multinom",
+  fit <- withr::with_seed(2042, IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl, folds = 3, base_learner = "multinom",
     run_stacked = FALSE, run_concat = FALSE, run_majority = FALSE, run_weighted = FALSE,
-    family = stats::binomial(), print_learner = FALSE)
+    family = stats::binomial()))
   expect_null(fit$valid_out)
   expect_true("valid_out" %in% names(fit))
   expect_null(fit$train_out$early)

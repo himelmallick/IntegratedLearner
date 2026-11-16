@@ -239,19 +239,17 @@ predict_cooperative_vector <- function(fit_obj, x_list) {
 # cooperative tuning, and result metadata stay shared across outcome families.
 fit_intermediate_model <- function(
   feature_table, feature_metadata, y, family_name, fold_id, seed,
-  cooperative_rho, cooperative_s, cooperative_type_measure, verbose
+  cooperative_rho, cooperative_s, cooperative_type_measure
 ) {
   layers <- extract_layer_names(feature_metadata)
   x_train <- build_multiview_x_list(feature_table, feature_metadata, layers)
-  if (isTRUE(verbose)) {
-    message("Running standalone cooperative multiview model (", family_name, ")...")
-  }
+  progress <- progressr::progressor(1L)
   model <- fit_cooperative_multiview(
     x_list = x_train, y = y, family_name = family_name, fold_id = fold_id,
     rho = cooperative_rho, type_measure = cooperative_type_measure,
-    s = cooperative_s, seed = cooperative_seed(seed),
-    trace.it = as.integer(isTRUE(verbose))
+    s = cooperative_s, seed = cooperative_seed(seed)
   )
+  progress("Fitted cooperative multiview model")
   list(model = model, x_train = x_train, layers = layers)
 }
 
@@ -283,10 +281,10 @@ intermediate_result_metadata <- function(model, layers, feature_names, importanc
 
 fit_intermediate_conbin <- function(
   feature_table, sample_metadata, feature_metadata, feature_table_valid = NULL,
-  sample_metadata_valid = NULL, folds = 5, seed = 1234, family = stats::gaussian(),
+  sample_metadata_valid = NULL, folds = 5, seed = draw_fit_seed(), family = stats::gaussian(),
   cooperative_rho = c(0, 0.1, 0.25, 0.5, 1), cooperative_s = "lambda.min",
   cooperative_type_measure = NULL, filter_method = NULL, filter_pct = NULL,
-  prevalence_pct = NULL, verbose = FALSE, print_learner = TRUE
+  prevalence_pct = NULL
 ) {
   start.time <- Sys.time()
   family_name <- safe_family_name(family)
@@ -294,7 +292,7 @@ fit_intermediate_conbin <- function(
   filtered <- filter_features_by_method(
     feature_table = feature_table, feature_metadata = feature_metadata,
     feature_table_valid = feature_table_valid, filter_method = filter_method,
-    filter_pct = filter_pct, prevalence_pct = prevalence_pct, verbose = verbose
+    filter_pct = filter_pct, prevalence_pct = prevalence_pct
   )
   feature_table <- filtered$feature_table
   feature_metadata <- filtered$feature_metadata
@@ -308,7 +306,7 @@ fit_intermediate_conbin <- function(
   y_train <- sample_metadata$Y
   shared <- fit_intermediate_model(
     feature_table, feature_metadata, y_train, family_name, cv_partition$fold_id,
-    seed, cooperative_rho, cooperative_s, cooperative_type_measure, verbose
+    seed, cooperative_rho, cooperative_s, cooperative_type_measure
   )
   x_train <- shared$x_train
   layer_names <- shared$layers
@@ -380,17 +378,14 @@ fit_intermediate_conbin <- function(
   )
   res[names(metadata)] <- metadata
   class(res) <- unique(c("cooperative_learner", "learner", class(res)))
-  if (isTRUE(print_learner)) {
-    print(res)
-  }
   res
 }
 
 fit_intermediate_survival <- function(
   feature_table, sample_metadata, feature_metadata, valid_feature_table = NULL,
-  valid_sample_metadata = NULL, folds = 5, seed = 123,
+  valid_sample_metadata = NULL, folds = 5, seed = draw_fit_seed(),
   cooperative_rho = c(0, 0.1, 0.25, 0.5, 1), cooperative_s = "lambda.min",
-  cooperative_type_measure = NULL, verbose = FALSE
+  cooperative_type_measure = NULL
 ) {
   start.time <- Sys.time()
   times <- as.numeric(sample_metadata$time)
@@ -398,7 +393,7 @@ fit_intermediate_survival <- function(
   fold_id <- make_stratified_folds(times, events, folds = folds, seed = seed)
   shared <- fit_intermediate_model(
     feature_table, feature_metadata, survival::Surv(times, events), "survival",
-    fold_id, seed, cooperative_rho, cooperative_s, cooperative_type_measure, verbose
+    fold_id, seed, cooperative_rho, cooperative_s, cooperative_type_measure
   )
   layers <- shared$layers
   cooperative_fit <- shared$model

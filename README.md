@@ -24,7 +24,9 @@ remain supported using user-supplied data.
 
 ## Installation
 
-Once the dependencies are installed, `IntegratedLearner` can be loaded using the following command:
+`IntegratedLearner` was accepted into Bioconductor. It is initially available
+through Bioconductor devel once the nightly build succeeds. In a Bioconductor
+devel environment, install it with:
 
 ```r
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
@@ -33,7 +35,7 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) {
 BiocManager::install("IntegratedLearner")
 ```
 
-For the development version, use:
+To install directly from GitHub, use:
 
 ```r
 BiocManager::install("himelmallick/IntegratedLearner")
@@ -197,6 +199,10 @@ IntegratedLearner(
 Custom metadata names are optional. If omitted, defaults remain `outcome_col = "Y"` and `subject_id_col = "subjectID"` (backward compatible).
 ### Arguments
 
+Call `set.seed()` before fitting to make the run reproducible. To display fit
+progress, wrap the call in `progressr::with_progress()`. Print the fitted object
+with `print(fit)` to see its summary.
+
 * `MAE_train` / `MAE_valid`: primary `MultiAssayExperiment` inputs for training and optional validation.
 * `PCL_train` / `PCL_valid`: legacy list inputs (`feature_table`, `sample_metadata`, `feature_metadata`) retained for backward compatibility.
 * `experiment`: Selected MAE experiment names/indices (optional; defaults to all in `MAE_train`).
@@ -205,7 +211,6 @@ Custom metadata names are optional. If omitted, defaults remain `outcome_col = "
 * `subject_id_col`: Subject identifier column name in `sample_metadata` / `colData`. Default is `"subjectID"`.
 * `na.rm`: Logical; drop features containing missing values after extraction/prep.
 * `folds`: Integer. Number of folds for cross-validation. Default is `5`.
-* `seed`: Integer seed for reproducibility. Default is `1234`.
 * `base_learner`: Binary/continuous uses IntegratedLearner `sl_*` wrappers by default (standard SuperLearner `SL.*` learners are also supported); multiclass uses native multiclass learners; survival uses supported `surv.*` learners. Not used when `run_intermediate = TRUE`.
 * `base_screener`: Deprecated. Kept for backward compatibility.
 * `filter_method`: Optional feature filtering method (`"prevalence"` or `"variance"`).
@@ -223,7 +228,6 @@ Custom metadata names are optional. If omitted, defaults remain `outcome_col = "
 * `cooperative_type_measure`: Optional `multiview` CV loss/score. If `NULL`, IL uses an outcome-appropriate default.
 * `drop_poor_performing_layers`: If `TRUE`, layers with poor single-layer performance are removed from early and late fusion only (`AUC < 0.5` for binary, `R2 < 0.5` for continuous, `C-index < 0.5` for survival). Single-layer outputs are still retained. Ignored when `run_intermediate = TRUE`.
 * `family`: `gaussian()` (continuous), `binomial()` (binary or multiclass), or survival family/metadata.
-* `verbose`: Logical progress flag.
 * `...`: Additional backend parameters. For survival, includes options such as `do_early_fusion` and learner-specific hyperparameters (or `model_args`).
 
 Automatic outcome coercion:
@@ -351,9 +355,3 @@ Issues
 ------
 
 We are happy to troubleshoot any issues with the package. Please contact the maintainer via email or [open an issue](https://github.com/himelmallick/IntegratedLearner/issues) in the GitHub repository.
-
-Future Release
---------------
-
-We are currently in the process of submitting
-**`IntegratedLearner`** to [Bioconductor](https://www.bioconductor.org/). Likewise, please keep an eye out for a future release of **`IntegratedLearner`** as an R/Bioconductor package while this repository remains the development version of the package.

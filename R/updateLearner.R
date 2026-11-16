@@ -11,8 +11,6 @@
 #' @param subject_id_col Optional subject ID column name in
 #'   \code{sample_metadata_valid}. If \code{NULL}, uses
 #'   \code{object$column_map$subject_id_col} (or \code{"subjectID"}).
-#' @param seed Seed for reproducibility. Default is 1234.
-#' @param verbose Should a summary of fits/ results be printed. Default is FALSE
 #' @param ... Additional arguments (unused)
 #'
 #' @return An updated IntegratedLearner prediction object with
@@ -50,7 +48,7 @@
 #'   ),
 #'   folds = 2, base_learner = "SL.mean",
 #'   run_stacked = FALSE, run_concat = FALSE,
-#'   print_learner = FALSE, family = stats::binomial()
+#'   family = stats::binomial()
 #' )
 #' upd <- update(
 #'   object = fit,
@@ -59,14 +57,15 @@
 #'   feature_metadata_valid = feature_metadata_valid
 #' )
 #' names(upd)
+#' @inheritSection IntegratedLearner Progress, summaries, and reproducibility
 #' @importFrom stats update
 #' @method update learner
 #' @export
 update.learner <- function(
   object, feature_table_valid, sample_metadata_valid = NULL,
-  feature_metadata_valid, outcome_col = NULL, subject_id_col = NULL, seed = 1234,
-  verbose = FALSE, ...
+  feature_metadata_valid, outcome_col = NULL, subject_id_col = NULL, ...
 ) {
+  check_removed_fit_controls(...names())
   fit <- object
 
   if (identical(fit$family, "multinomial")) {
@@ -164,6 +163,7 @@ update.learner <- function(
   fusion_layers_common <- intersect(name_layers_common, fusion_layers_target)
   run_stacked_update <- isTRUE(fit$run_stacked) && length(fusion_layers_common) > 0L
   run_concat_update <- isTRUE(fit$run_concat) && length(fusion_layers_common) > 0L
+  progress <- progressr::progressor(as.integer(run_stacked_update) + as.integer(run_concat_update))
 
   if ((isTRUE(fit$run_stacked) || isTRUE(fit$run_concat)) && length(fusion_layers_common) == 0L) {
     message("No retained fusion layers are available in the validation subset; returning single-layer predictions only.")
@@ -171,16 +171,12 @@ update.learner <- function(
 
   # ---- refit stacked ----
   if (run_stacked_update) {
-    if (verbose) {
-      message("Running new stacked model...")
-    }
-
     combo_fusion <- combo[, fusion_layers_common, drop = FALSE]
     combo_valid_fusion <- combo_valid[, fusion_layers_common, drop = FALSE]
 
     SL_fit_stacked <- SuperLearner::SuperLearner(
       Y = fit$Y_train, X = combo_fusion,
-      cvControl = fit$cvControl, verbose = verbose, SL.library = fit$meta_learner,
+      cvControl = fit$cvControl, SL.library = fit$meta_learner,
       family = family, env = sl_env
     )
 
@@ -205,14 +201,11 @@ update.learner <- function(
     fit$model_fits$model_stacked <- model_stacked
     fit$SL_fits$SL_fit_stacked <- SL_fit_stacked
     fit$yhat.train$stacked <- SL_fit_stacked$Z
+    progress("Refitted stacked model")
   }
 
   # ---- refit concat ----
   if (run_concat_update) {
-    if (verbose) {
-      message("Running new concatenated model...")
-    }
-
     feature_table_train <- Reduce(cbind.data.frame, fit$X_train_layers[fusion_layers_common])
     concat_feature_ids <- feature_metadata_valid$featureID[feature_metadata_valid$featureType %in%
       fusion_layers_common]
@@ -223,7 +216,7 @@ update.learner <- function(
 
     SL_fit_concat <- SuperLearner::SuperLearner(
       Y = fit$Y_train, X = fulldat,
-      cvControl = fit$cvControl, verbose = verbose, SL.library = fit$base_learner,
+      cvControl = fit$cvControl, SL.library = fit$base_learner,
       family = family, env = sl_env
     )
 
@@ -249,6 +242,7 @@ update.learner <- function(
     fit$model_fits$model_concat <- model_concat
     fit$SL_fits$SL_fit_concat <- SL_fit_concat
     fit$yhat.train$concatenated <- SL_fit_concat$Z
+    progress("Refitted concatenated model")
   }
 
   # ---- rebuild yhat.train columns ----
@@ -297,6 +291,5 @@ update.learner <- function(
   )
 
   fit$feature.names <- rownames(feature_table_valid)
-  print.learner(fit)
   fit
 }
