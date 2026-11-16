@@ -17,12 +17,12 @@ Source:
 
 Arora N, Porwal A, Mallick H (2026). *IntegratedLearner: Integrated
 Multi-Omics Learning for Survival and Other Outcomes*. R package version
-0.99.7, <https://himelmallick.github.io/IntegratedLearner/>.
+0.99.8, <https://himelmallick.github.io/IntegratedLearner/>.
 
 @Manual{,\
   title = {IntegratedLearner: Integrated Multi-Omics Learning for Survival and Other Outcomes},\
   author = {Nalin Arora and Anupreet Porwal and Himel Mallick},\
   year = {2026},\
-  note = {R package version 0.99.7},\
+  note = {R package version 0.99.8},\
   url = {https://himelmallick.github.io/IntegratedLearner/},\
 }

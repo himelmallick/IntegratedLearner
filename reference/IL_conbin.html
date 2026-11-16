@@ -11,7 +11,7 @@ the core IntegratedLearner engine for non-survival outcomes."><meta property="og
 
     <a class="navbar-brand me-2" href="../index.html">IntegratedLearner</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -228,7 +228,13 @@ feature-importance scores from the selected <span class="pkg">multiview</span> m
 returned in <code>cooperative_feature_importance</code>,
 <code>cooperative_feature_importance_by_layer</code>,
 <code>cooperative_feature_importance_signed</code>, and
-<code>cooperative_feature_importance_signed_by_layer</code>.</p>
+<code>cooperative_feature_importance_signed_by_layer</code>.
+Supported base learners also return native feature importance in
+<code>train_out$early$combined_importance</code> and
+<code>train_out$late$stacked$feature_importance_by_layer</code> when the
+corresponding fusion method is enabled. The <code>sl_nnls_auc</code> stack
+additionally returns <code>layer_weights</code> and <code>combined_importance</code>
+under <code>train_out$late$stacked</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -306,9 +312,10 @@ fitting steps. To display progress, wrap the call in
 <span class="r-out co"><span class="r-pr">#&gt;</span> [19] "fusion_layer_scores"                "fusion_layer_metric"               </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [21] "fusion_layer_threshold"             "family"                            </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [23] "feature.names"                      "test"                              </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [25] "R2.train"                           "feature_importance_signed"         </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [27] "feature_importance_signed_by_layer" "folds"                             </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [29] "cvControl"                          "time"                              </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [25] "train_out"                          "R2.train"                          </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [27] "feature_importance_signed"          "feature_importance_signed_by_layer"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [29] "folds"                              "cvControl"                         </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [31] "time"                              </span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

@@ -180,7 +180,13 @@ feature-importance scores from the selected multiview model are returned
 in `cooperative_feature_importance`,
 `cooperative_feature_importance_by_layer`,
 `cooperative_feature_importance_signed`, and
-`cooperative_feature_importance_signed_by_layer`.
+`cooperative_feature_importance_signed_by_layer`. Supported base
+learners also return native feature importance in
+`train_out$early$combined_importance` and
+`train_out$late$stacked$feature_importance_by_layer` when the
+corresponding fusion method is enabled. The `sl_nnls_auc` stack
+additionally returns `layer_weights` and `combined_importance` under
+`train_out$late$stacked`.
 
 ## Details
 
@@ -263,7 +269,8 @@ names(fit)
 #> [19] "fusion_layer_scores"                "fusion_layer_metric"               
 #> [21] "fusion_layer_threshold"             "family"                            
 #> [23] "feature.names"                      "test"                              
-#> [25] "R2.train"                           "feature_importance_signed"         
-#> [27] "feature_importance_signed_by_layer" "folds"                             
-#> [29] "cvControl"                          "time"                              
+#> [25] "train_out"                          "R2.train"                          
+#> [27] "feature_importance_signed"          "feature_importance_signed_by_layer"
+#> [29] "folds"                              "cvControl"                         
+#> [31] "time"                              
 ```

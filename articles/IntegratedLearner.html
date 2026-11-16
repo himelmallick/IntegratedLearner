@@ -27,7 +27,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">IntegratedLearner</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -653,12 +653,12 @@ standard Bioconductor accessors for inspection, and then fits
 <span><span class="co">#&gt; [19] "fusion_layer_scores"                "fusion_layer_metric"               </span></span>
 <span><span class="co">#&gt; [21] "fusion_layer_threshold"             "family"                            </span></span>
 <span><span class="co">#&gt; [23] "feature.names"                      "test"                              </span></span>
-<span><span class="co">#&gt; [25] "AUC.train"                          "accuracy.train"                    </span></span>
-<span><span class="co">#&gt; [27] "balanced_accuracy.train"            "metrics.train"                     </span></span>
-<span><span class="co">#&gt; [29] "feature_importance_signed"          "feature_importance_signed_by_layer"</span></span>
-<span><span class="co">#&gt; [31] "folds"                              "cvControl"                         </span></span>
-<span><span class="co">#&gt; [33] "time"                               "input_mode"                        </span></span>
-<span><span class="co">#&gt; [35] "column_map"</span></span></code></pre></div>
+<span><span class="co">#&gt; [25] "train_out"                          "AUC.train"                         </span></span>
+<span><span class="co">#&gt; [27] "accuracy.train"                     "balanced_accuracy.train"           </span></span>
+<span><span class="co">#&gt; [29] "metrics.train"                      "feature_importance_signed"         </span></span>
+<span><span class="co">#&gt; [31] "feature_importance_signed_by_layer" "folds"                             </span></span>
+<span><span class="co">#&gt; [33] "cvControl"                          "time"                              </span></span>
+<span><span class="co">#&gt; [35] "input_mode"                         "column_map"</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="parameter-reference-conbin-multiclass-and-survival">Parameter Reference (Conbin, Multiclass, and Survival)<a class="anchor" aria-label="anchor" href="#parameter-reference-conbin-multiclass-and-survival"></a>
@@ -1455,17 +1455,36 @@ metrics and risk scores. <code>single</code>, <code>early</code>, and
 </tr></thead>
 <tbody>
 <tr class="odd">
-<td>Conbin signed global feature importance</td>
-<td><code>fit$feature_importance_signed</code></td>
-<td>Returned for standard continuous/binary fits; named numeric vector
-sorted by effect magnitude/sign.</td>
+<td>Binary and continuous early-fusion importance</td>
+<td><code>fit$train_out$early$combined_importance</code></td>
+<td>Native scores from the fitted concatenated model when
+<code>run_concat = TRUE</code>.</td>
 </tr>
 <tr class="even">
-<td>Conbin signed per-layer importance</td>
-<td><code>fit$feature_importance_signed_by_layer</code></td>
-<td>List split by <code>featureType</code>.</td>
+<td>Binary and continuous late-fusion importance</td>
+<td><code>fit$train_out$late$stacked$feature_importance_by_layer</code></td>
+<td>Native scores from the fitted base model for each retained layer
+when <code>run_stacked = TRUE</code>.</td>
 </tr>
 <tr class="odd">
+<td>Binary and continuous weighted late-fusion importance</td>
+<td><code>fit$train_out$late$stacked$combined_importance</code></td>
+<td>Native feature scores multiplied by the normalized layer weights for
+<code>sl_nnls_auc</code>, with <code>layer::feature</code> names.</td>
+</tr>
+<tr class="even">
+<td>Conbin signed global feature importance</td>
+<td><code>fit$feature_importance_signed</code></td>
+<td>Signed one-feature-at-a-time regression coefficients for standard
+binary and continuous fits, ranked by absolute value.</td>
+</tr>
+<tr class="odd">
+<td>Conbin signed per-layer importance</td>
+<td><code>fit$feature_importance_signed_by_layer</code></td>
+<td>The same univariate coefficients grouped by
+<code>featureType</code>.</td>
+</tr>
+<tr class="even">
 <td>Cooperative absolute importance</td>
 <td>
 <code>fit$cooperative_feature_importance</code> and
@@ -1474,7 +1493,7 @@ sorted by effect magnitude/sign.</td>
 <td>Absolute selected-model <code>multiview</code> coefficients;
 available when <code>run_intermediate = TRUE</code>.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Cooperative signed importance</td>
 <td>
 <code>fit$cooperative_feature_importance_signed</code> and
@@ -1483,30 +1502,30 @@ available when <code>run_intermediate = TRUE</code>.</td>
 <td>Signed selected-model <code>multiview</code> coefficients; available
 when <code>run_intermediate = TRUE</code>.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Multiclass global feature importance (unsigned)</td>
 <td><code>fit$feature_importance_global</code></td>
 <td>Named vector of mean absolute class-association scores, ranked
 highest first.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Multiclass signed importance by class</td>
 <td><code>fit$feature_importance_signed_by_class</code></td>
 <td>Feature-by-class matrix of signed class-association scores.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Multiclass signed importance by layer and class</td>
 <td><code>fit$feature_importance_signed_by_layer_by_class</code></td>
 <td>List of feature-by-class matrices, one per omics layer; features
 ranked by mean absolute score across classes.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Survival signed per-layer importance</td>
 <td><code>fit$train_out$single$feature_importance_signed_by_layer</code></td>
 <td>List of unweighted signed feature-importance scores from each
 single-layer survival base model.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Cooperative survival importance</td>
 <td>
 <code>fit$train_out$cooperative$feature_importance</code> and
@@ -1515,7 +1534,7 @@ single-layer survival base model.</td>
 <td>Absolute selected-model <code>multiview</code> Cox coefficients;
 available when <code>run_intermediate = TRUE</code>.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Cooperative survival signed importance</td>
 <td>
 <code>fit$train_out$cooperative$feature_importance_signed</code> and
@@ -1524,12 +1543,12 @@ available when <code>run_intermediate = TRUE</code>.</td>
 <td>Signed selected-model <code>multiview</code> Cox coefficients;
 available when <code>run_intermediate = TRUE</code>.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Survival early-fusion combined importance</td>
 <td><code>fit$train_out$early$combined_importance</code></td>
 <td>Available when <code>do_early_fusion = TRUE</code>.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Survival late-fusion combined importance</td>
 <td>
 <code>fit$train_out$late$IBS$combined_importance</code> or
@@ -1538,7 +1557,7 @@ available when <code>run_intermediate = TRUE</code>.</td>
 <td>Weighted signed importance; names are prefixed like
 <code>layer::feature</code>.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>BART-specific layer importance (optional)</td>
 <td><code>bartMachine::investigate_var_importance(fit$model_fits$model_layers[[layer]], plot = FALSE)</code></td>
 <td>Only for BART-based conbin fits
@@ -1546,6 +1565,58 @@ available when <code>run_intermediate = TRUE</code>.</td>
 </tr>
 </tbody>
 </table>
+<p>Native fusion importance for binary and continuous outcomes supports
+a single <code>base_learner</code> from the following list.</p>
+<table class="table">
+<colgroup>
+<col width="50%">
+<col width="50%">
+</colgroup>
+<thead><tr class="header">
+<th><code>base_learner</code></th>
+<th>Importance from the fitted model</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>SL.xgboost</code></td>
+<td>Split gain</td>
+</tr>
+<tr class="even">
+<td>
+<code>SL.glmnet</code>, <code>sl_lasso</code>,
+<code>sl_glmnet2</code>, <code>sl_enet</code>
+</td>
+<td>Absolute coefficients at the selected penalty</td>
+</tr>
+<tr class="odd">
+<td><code>SL.ranger</code></td>
+<td>Impurity decrease, enabled by IntegratedLearner at fitting time</td>
+</tr>
+<tr class="even">
+<td><code>SL.randomForest</code></td>
+<td>Mean decrease in impurity</td>
+</tr>
+<tr class="odd">
+<td><code>SL.gbm</code></td>
+<td>Relative influence at the selected number of trees</td>
+</tr>
+<tr class="even">
+<td><code>sl_bart</code></td>
+<td>Posterior split inclusion proportions</td>
+</tr>
+<tr class="odd">
+<td><code>SL.glm</code></td>
+<td>Absolute logistic or linear regression coefficients</td>
+</tr>
+</tbody>
+</table>
+<p>With feature screening, each vector covers the features retained by
+its fitted model. The default <code>sl_nnls_auc</code> stack returns
+<code>layer_weights</code> alongside its weighted feature vector. If you
+choose another meta-learner from the table,
+<code>fit$train_out$late$stacked$layer_importance</code> reports the
+stack’s native importance for the layer predictions. The weighted
+feature vector is exclusive to <code>sl_nnls_auc</code>.</p>
 </div>
 <div class="section level3">
 <h3 id="quick-access-snippets">Quick Access Snippets<a class="anchor" aria-label="anchor" href="#quick-access-snippets"></a>
@@ -1553,6 +1624,9 @@ available when <code>run_intermediate = TRUE</code>.</td>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># ---- Conbin: weights + top features ----</span></span>
 <span><span class="va">fit</span><span class="op">$</span><span class="va">weights</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">early</span><span class="op">$</span><span class="va">combined_importance</span>, <span class="fl">20</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">stacked</span><span class="op">$</span><span class="va">feature_importance_by_layer</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span>, <span class="fl">20</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">train_out</span><span class="op">$</span><span class="va">late</span><span class="op">$</span><span class="va">stacked</span><span class="op">$</span><span class="va">combined_importance</span>, <span class="fl">20</span><span class="op">)</span></span>
 <span><span class="va">fit</span><span class="op">$</span><span class="va">cooperative_rho</span></span>
 <span><span class="va">fit</span><span class="op">$</span><span class="va">cooperative_rho_scores</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">yhat.train</span><span class="op">[</span>, <span class="st">"cooperative"</span><span class="op">]</span>, <span class="fl">10</span><span class="op">)</span></span>
@@ -2724,7 +2798,7 @@ possible within one fit object.</p>
 <span><span class="co">#&gt; [17] lattice_0.23-1              SuperLearner_2.0-42        </span></span>
 <span><span class="co">#&gt; [19] nnls_1.6                    gam_1.22-7                 </span></span>
 <span><span class="co">#&gt; [21] foreach_1.5.2               ggplot2_4.0.3              </span></span>
-<span><span class="co">#&gt; [23] dplyr_1.2.1                 IntegratedLearner_0.99.7   </span></span>
+<span><span class="co">#&gt; [23] dplyr_1.2.1                 IntegratedLearner_0.99.8   </span></span>
 <span><span class="co">#&gt; [25] BiocStyle_2.41.0           </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; loaded via a namespace (and not attached):</span></span>

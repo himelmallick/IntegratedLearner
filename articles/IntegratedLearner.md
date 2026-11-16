@@ -569,12 +569,12 @@ standard Bioconductor accessors for inspection, and then fits
 `#> [19] "fusion_layer_scores"                "fusion_layer_metric"               `\
 `#> [21] "fusion_layer_threshold"             "family"                            `\
 `#> [23] "feature.names"                      "test"                              `\
-`#> [25] "AUC.train"                          "accuracy.train"                    `\
-`#> [27] "balanced_accuracy.train"            "metrics.train"                     `\
-`#> [29] "feature_importance_signed"          "feature_importance_signed_by_layer"`\
-`#> [31] "folds"                              "cvControl"                         `\
-`#> [33] "time"                               "input_mode"                        `\
-`#> [35] "column_map"`
+`#> [25] "train_out"                          "AUC.train"                         `\
+`#> [27] "accuracy.train"                     "balanced_accuracy.train"           `\
+`#> [29] "metrics.train"                      "feature_importance_signed"         `\
+`#> [31] "feature_importance_signed_by_layer" "folds"                             `\
+`#> [33] "cvControl"                          "time"                              `\
+`#> [35] "input_mode"                         "column_map"`
 
 ## Parameter Reference (Conbin, Multiclass, and Survival)
 
@@ -747,8 +747,11 @@ layer-level and final voting ties use the first class in
 
 | Importance type | Where to access | Notes |
 |----|----|----|
-| Conbin signed global feature importance | `fit$feature_importance_signed` | Returned for standard continuous/binary fits; named numeric vector sorted by effect magnitude/sign. |
-| Conbin signed per-layer importance | `fit$feature_importance_signed_by_layer` | List split by `featureType`. |
+| Binary and continuous early-fusion importance | `fit$train_out$early$combined_importance` | Native scores from the fitted concatenated model when `run_concat = TRUE`. |
+| Binary and continuous late-fusion importance | `fit$train_out$late$stacked$feature_importance_by_layer` | Native scores from the fitted base model for each retained layer when `run_stacked = TRUE`. |
+| Binary and continuous weighted late-fusion importance | `fit$train_out$late$stacked$combined_importance` | Native feature scores multiplied by the normalized layer weights for `sl_nnls_auc`, with `layer::feature` names. |
+| Conbin signed global feature importance | `fit$feature_importance_signed` | Signed one-feature-at-a-time regression coefficients for standard binary and continuous fits, ranked by absolute value. |
+| Conbin signed per-layer importance | `fit$feature_importance_signed_by_layer` | The same univariate coefficients grouped by `featureType`. |
 | Cooperative absolute importance | `fit$cooperative_feature_importance` and `fit$cooperative_feature_importance_by_layer` | Absolute selected-model `multiview` coefficients; available when `run_intermediate = TRUE`. |
 | Cooperative signed importance | `fit$cooperative_feature_importance_signed` and `fit$cooperative_feature_importance_signed_by_layer` | Signed selected-model `multiview` coefficients; available when `run_intermediate = TRUE`. |
 | Multiclass global feature importance (unsigned) | `fit$feature_importance_global` | Named vector of mean absolute class-association scores, ranked highest first. |
@@ -761,11 +764,35 @@ layer-level and final voting ties use the first class in
 | Survival late-fusion combined importance | `fit$train_out$late$IBS$combined_importance` or `fit$train_out$late$COX$combined_importance` | Weighted signed importance; names are prefixed like `layer::feature`. |
 | BART-specific layer importance (optional) | `bartMachine::investigate_var_importance(fit$model_fits$model_layers[[layer]], plot = FALSE)` | Only for BART-based conbin fits (`base_learner = "sl_bart"`). |
 
+Native fusion importance for binary and continuous outcomes supports a
+single `base_learner` from the following list.
+
+| `base_learner` | Importance from the fitted model |
+|----|----|
+| `SL.xgboost` | Split gain |
+| `SL.glmnet`, `sl_lasso`, `sl_glmnet2`, `sl_enet` | Absolute coefficients at the selected penalty |
+| `SL.ranger` | Impurity decrease, enabled by IntegratedLearner at fitting time |
+| `SL.randomForest` | Mean decrease in impurity |
+| `SL.gbm` | Relative influence at the selected number of trees |
+| `sl_bart` | Posterior split inclusion proportions |
+| `SL.glm` | Absolute logistic or linear regression coefficients |
+
+With feature screening, each vector covers the features retained by its
+fitted model. The default `sl_nnls_auc` stack returns `layer_weights`
+alongside its weighted feature vector. If you choose another
+meta-learner from the table,
+`fit$train_out$late$stacked$layer_importance` reports the stack’s native
+importance for the layer predictions. The weighted feature vector is
+exclusive to `sl_nnls_auc`.
+
 ### Quick Access Snippets
 
 \
 `# ---- Conbin: weights + top features ----`\
 `fit``$``weights`\
+[`head`](https://rdrr.io/r/utils/head.html)`(``fit``$``train_out``$``early``$``combined_importance``, ``20``)`\
+[`head`](https://rdrr.io/r/utils/head.html)`(``fit``$``train_out``$``late``$``stacked``$``feature_importance_by_layer``[[``1``]``]``, ``20``)`\
+[`head`](https://rdrr.io/r/utils/head.html)`(``fit``$``train_out``$``late``$``stacked``$``combined_importance``, ``20``)`\
 `fit``$``cooperative_rho`\
 `fit``$``cooperative_rho_scores`\
 [`head`](https://rdrr.io/r/utils/head.html)`(``fit``$``yhat.train``[``, ``"cooperative"``]``, ``10``)`\
@@ -1927,7 +1954,7 @@ possible within one fit object.
 `#> [17] lattice_0.23-1              SuperLearner_2.0-42        `\
 `#> [19] nnls_1.6                    gam_1.22-7                 `\
 `#> [21] foreach_1.5.2               ggplot2_4.0.3              `\
-`#> [23] dplyr_1.2.1                 IntegratedLearner_0.99.7   `\
+`#> [23] dplyr_1.2.1                 IntegratedLearner_0.99.8   `\
 `#> [25] BiocStyle_2.41.0           `\
 `#> `\
 `#> loaded via a namespace (and not attached):`\

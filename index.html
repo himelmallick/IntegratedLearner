@@ -32,7 +32,7 @@
 
     <a class="navbar-brand me-2" href="index.html">IntegratedLearner</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -338,10 +338,52 @@
 <li>
 <code>AUC.train</code>/<code>AUC.test</code> (binomial) or <code>R2.train</code>/<code>R2.test</code> (gaussian).</li>
 <li>
-<code>feature_importance_signed</code>: Global signed feature importance.</li>
-<li>
-<code>feature_importance_signed_by_layer</code>: Per-layer signed feature importance.</li>
+<code>feature_importance_signed</code> and <code>feature_importance_signed_by_layer</code>: Signed one-feature-at-a-time regression coefficients, globally and by layer.</li>
 </ul>
+<p><strong>Native fusion importance for binary and continuous outcomes</strong></p>
+<p>For binary and continuous outcomes, native feature importance is available for concatenated and stacked models using one of these base learners.</p>
+<table class="table">
+<colgroup>
+<col width="50%">
+<col width="50%">
+</colgroup>
+<thead><tr>
+<th><code>base_learner</code></th>
+<th>Importance from the fitted model</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>SL.xgboost</code></td>
+<td>Split gain</td>
+</tr>
+<tr>
+<td>
+<code>SL.glmnet</code>, <code>sl_lasso</code>, <code>sl_glmnet2</code>, <code>sl_enet</code>
+</td>
+<td>Absolute coefficients at the selected penalty</td>
+</tr>
+<tr>
+<td><code>SL.ranger</code></td>
+<td>Impurity decrease</td>
+</tr>
+<tr>
+<td><code>SL.randomForest</code></td>
+<td>Mean decrease in impurity</td>
+</tr>
+<tr>
+<td><code>SL.gbm</code></td>
+<td>Relative influence at the selected number of trees</td>
+</tr>
+<tr>
+<td><code>sl_bart</code></td>
+<td>Posterior split inclusion proportions</td>
+</tr>
+<tr>
+<td><code>SL.glm</code></td>
+<td>Absolute logistic or linear regression coefficients</td>
+</tr>
+</tbody>
+</table>
 <p>For multiclass fits (<code>IL_multiclass</code> path):</p>
 <ul>
 <li>

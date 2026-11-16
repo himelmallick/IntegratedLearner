@@ -36,5 +36,5 @@ Authors:
 
 ``` r
 packageVersion("IntegratedLearner")
-#> [1] ‘0.99.7’
+#> [1] ‘0.99.8’
 ```
