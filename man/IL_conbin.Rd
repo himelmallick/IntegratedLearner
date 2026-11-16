@@ -135,6 +135,12 @@ returned in \code{cooperative_feature_importance},
 \code{cooperative_feature_importance_by_layer},
 \code{cooperative_feature_importance_signed}, and
 \code{cooperative_feature_importance_signed_by_layer}.
+Supported base learners also return native feature importance in
+\code{train_out$early$combined_importance} and
+\code{train_out$late$stacked$feature_importance_by_layer} when the
+corresponding fusion method is enabled. The \code{sl_nnls_auc} stack
+additionally returns \code{layer_weights} and \code{combined_importance}
+under \code{train_out$late$stacked}.
 }
 \description{
 Performs integrated machine learning to predict a \strong{binary or continuous}

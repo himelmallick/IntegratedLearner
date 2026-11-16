@@ -1,3 +1,9 @@
+# IntegratedLearner 0.99.8
+
+- Added native early- and late-fusion feature importance for binary and
+  continuous fits using supported SuperLearner learners. The default
+  `sl_nnls_auc` stack also returns layer-weighted feature scores.
+
 # IntegratedLearner 0.99.7
 
 ## Fitting controls and maintenance

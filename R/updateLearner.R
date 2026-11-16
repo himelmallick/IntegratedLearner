@@ -281,6 +281,7 @@ update.learner <- function(
   } else if (!run_stacked_update) {
     fit$weights <- NULL
   }
+  fit$train_out <- conbin_fusion_importance(fit)
 
   # ---- performance ----
   fit <- add_family_metrics(

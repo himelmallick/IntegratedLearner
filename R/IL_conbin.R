@@ -100,6 +100,12 @@
 #'   \code{cooperative_feature_importance_by_layer},
 #'   \code{cooperative_feature_importance_signed}, and
 #'   \code{cooperative_feature_importance_signed_by_layer}.
+#'   Supported base learners also return native feature importance in
+#'   \code{train_out$early$combined_importance} and
+#'   \code{train_out$late$stacked$feature_importance_by_layer} when the
+#'   corresponding fusion method is enabled. The \code{sl_nnls_auc} stack
+#'   additionally returns \code{layer_weights} and \code{combined_importance}
+#'   under \code{train_out$late$stacked}.
 #'
 #' @inheritSection IntegratedLearner Progress, summaries, and reproducibility
 #' @examples
@@ -634,6 +640,7 @@ IL_conbin <- function(
     res$weights <- res$model_fits$model_stacked$solution
     names(res$weights) <- colnames(combo_fusion)
   }
+  res$train_out <- conbin_fusion_importance(res)
 
   res <- add_family_metrics(
     result = res,

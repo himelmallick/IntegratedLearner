@@ -275,6 +275,55 @@ assemble_conbin_outputs <- function(
   res
 }
 
+conbin_fusion_importance <- function(fit) {
+  extract <- function(sl_fit, learner) {
+    tryCatch(
+      extract_conbin_model_importance(sl_fit, learner),
+      error = function(e) {
+        warning("Could not extract feature importance for ", learner, ": ",
+          conditionMessage(e), call. = FALSE
+        )
+        NULL
+      }
+    )
+  }
+  early <- NULL
+  late <- list()
+  if (isTRUE(fit$run_concat)) {
+    importance <- extract(fit$SL_fits$SL_fit_concat, fit$base_learner)
+    if (!is.null(importance)) {
+      early <- list(combined_importance = importance)
+    }
+  }
+  if (isTRUE(fit$run_stacked)) {
+    layers <- fit$fusion_layers_retained
+    layer_fits <- fit$SL_fits$SL_fit_layers[layers]
+    by_layer <- lapply(layer_fits, extract, learner = fit$base_learner)
+    if (any(lengths(by_layer) > 0L)) {
+      stacked <- list(feature_importance_by_layer = by_layer)
+      if (identical(fit$meta_learner, "sl_nnls_auc")) {
+        # The continuous stack stores raw NNLS coefficients and normalizes them for prediction.
+        weights <- fit$weights[layers]
+        if (length(weights) == length(layers) &&
+          all(is.finite(weights)) && all(lengths(by_layer) > 0L)) {
+          if (sum(weights) > 0) {
+            weights <- weights / sum(weights)
+          }
+          weighted <- Map(function(layer, scores, weight) {
+            stats::setNames(scores * weight, paste(layer, names(scores), sep = "::"))
+          }, layers, by_layer, weights)
+          stacked$layer_weights <- weights
+          stacked$combined_importance <- sort(unlist(unname(weighted)), decreasing = TRUE)
+        }
+      } else {
+        stacked$layer_importance <- extract(fit$SL_fits$SL_fit_stacked, fit$meta_learner)
+      }
+      late$stacked <- stacked
+    }
+  }
+  list(early = early, late = late)
+}
+
 append_fusion_predictions <- function(
   base_predictions,
   stacked_prediction = NULL,

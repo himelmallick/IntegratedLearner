@@ -269,8 +269,21 @@ For continuous/binary fits (`IL_conbin` path):
 * `model_fits$model_cooperative`, `yhat.train[, "cooperative"]`, and `yhat.test[, "cooperative"]`: standalone cooperative `multiview` model and predictions when `run_intermediate = TRUE`.
 * `cooperative_feature_importance`, `cooperative_feature_importance_by_layer`, `cooperative_feature_importance_signed`, and `cooperative_feature_importance_signed_by_layer`: coefficient-based feature-importance scores from the selected cooperative `multiview` model when `run_intermediate = TRUE`.
 * `AUC.train`/`AUC.test` (binomial) or `R2.train`/`R2.test` (gaussian).
-* `feature_importance_signed`: Global signed feature importance.
-* `feature_importance_signed_by_layer`: Per-layer signed feature importance.
+* `feature_importance_signed` and `feature_importance_signed_by_layer`: Signed one-feature-at-a-time regression coefficients, globally and by layer.
+
+**Native fusion importance for binary and continuous outcomes**
+
+For binary and continuous outcomes, native feature importance is available for concatenated and stacked models using one of these base learners.
+
+| `base_learner` | Importance from the fitted model |
+|---|---|
+| `SL.xgboost` | Split gain |
+| `SL.glmnet`, `sl_lasso`, `sl_glmnet2`, `sl_enet` | Absolute coefficients at the selected penalty |
+| `SL.ranger` | Impurity decrease |
+| `SL.randomForest` | Mean decrease in impurity |
+| `SL.gbm` | Relative influence at the selected number of trees |
+| `sl_bart` | Posterior split inclusion proportions |
+| `SL.glm` | Absolute logistic or linear regression coefficients |
 
 For multiclass fits (`IL_multiclass` path):
 

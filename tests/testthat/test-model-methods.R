@@ -28,6 +28,44 @@ test_that("IntegratedLearner binomial stacked + concat returns expected structur
 
   expect_true(is.numeric(fit$feature_importance_signed))
   expect_true(is.list(fit$feature_importance_signed_by_layer))
+
+  early <- fit$train_out$early$combined_importance
+  expected <- abs(stats::coef(fit$model_fits$model_concat)[-1L])
+  expect_equal(early, sort(expected, decreasing = TRUE))
+
+  late <- fit$train_out$late$stacked
+  for (layer in names(late$feature_importance_by_layer)) {
+    scores <- late$feature_importance_by_layer[[layer]]
+    qualified <- paste(layer, names(scores), sep = "::")
+    expect_equal(unname(late$combined_importance[qualified]),
+      unname(scores * fit$weights[[layer]])
+    )
+  }
+})
+
+test_that("screened XGBoost and ranger expose native scores in binary fusion", {
+  pcl <- make_toy_pcl(n_samples = 180, n_features = 8, seed = 46, binary = TRUE)
+  fit <- suppressWarnings(IntegratedLearner::IntegratedLearner(
+    PCL_train = pcl, family = stats::binomial(), folds = 2,
+    base_learner = "SL.xgboost", meta_learner = "SL.ranger",
+    run_screening = TRUE, screen_pct = 25, run_concat = TRUE, run_stacked = TRUE
+  ))
+
+  early <- fit$train_out$early$combined_importance
+  expect_length(early, 2)
+  expected <- xgboost::xgb.importance(model = fit$model_fits$model_concat)
+  expect_gt(nrow(expected), 0L)
+  expect_equal(unname(early[expected$Feature]), expected$Gain)
+
+  late <- fit$train_out$late$stacked
+  expect_named(late$feature_importance_by_layer, fit$fusion_layers_retained)
+  expect_equal(lengths(late$feature_importance_by_layer),
+    stats::setNames(rep(1L, length(fit$fusion_layers_retained)), fit$fusion_layers_retained)
+  )
+  expect_equal(late$layer_importance,
+    sort(fit$model_fits$model_stacked$variable.importance, decreasing = TRUE)
+  )
+  expect_null(late$combined_importance)
 })
 
 test_that("IntegratedLearner gaussian path computes R2 train and validation", {
@@ -271,6 +309,8 @@ test_that("update.learner covers stacked/concat, messages, and validation branch
   ))
   expect_true(all(c("omicsA", "stacked", "concatenated") %in% colnames(upd_partial$yhat.test)))
   expect_identical(names(upd_partial$weights), "omicsA")
+  expect_setequal(names(upd_partial$train_out$early$combined_importance), layer_a_features)
+  expect_named(upd_partial$train_out$late$stacked$feature_importance_by_layer, "omicsA")
 
   fit_msg <- fit
   fit_msg$fusion_layers_retained <- "omicsB"
@@ -318,6 +358,9 @@ test_that("update.learner covers stacked/concat, messages, and validation branch
   ))
   expect_true(is.numeric(out_g$R2.train))
   expect_true(is.numeric(out_g$R2.test))
+  late_g <- fit_g$train_out$late$stacked
+  expect_equal(late_g$layer_weights, fit_g$weights / sum(fit_g$weights))
+  expect_setequal(names(out_g$train_out$early$combined_importance), layer_g)
 })
 
 test_that("plot.learner returns plotting payloads for binomial and gaussian fits", {

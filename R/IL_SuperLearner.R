@@ -21,7 +21,40 @@ make_sl_env <- function() {
     assign(nm, get(nm, envir = il_ns, inherits = FALSE), envir = env)
   }
 
+  # The upstream wrapper does not pass an importance argument to ranger.
+  env$SL.ranger <- fit_ranger_with_importance
+  # Keep gbm's internal cross-validation local to each SuperLearner fit.
+  env$SL.gbm <- fit_gbm_local
+
   env
+}
+
+fit_gbm_local <- function(..., n.cores = 1L) {
+  SuperLearner::SL.gbm(..., n.cores = n.cores)
+}
+
+fit_ranger_with_importance <- function(
+  Y, X, newX, family, obsWeights, num.trees = 500,
+  mtry = floor(sqrt(ncol(X))), write.forest = TRUE,
+  probability = family$family == "binomial",
+  min.node.size = if (family$family == "gaussian") 5 else 1,
+  replace = TRUE, sample.fraction = if (replace) 1 else 0.632,
+  num.threads = 1, verbose = TRUE, ...
+) {
+  binary <- identical(family$family, "binomial")
+  if (binary) {
+    Y <- as.factor(Y)
+  }
+  model <- ranger::ranger(
+    x = X, y = Y, num.trees = num.trees, mtry = mtry,
+    min.node.size = min.node.size, replace = replace,
+    sample.fraction = sample.fraction, case.weights = obsWeights,
+    write.forest = write.forest, probability = probability,
+    num.threads = num.threads, verbose = verbose, importance = "impurity"
+  )
+  fit <- structure(list(object = model, verbose = verbose), class = "SL.ranger")
+  pred <- stats::predict(fit, newdata = newX, family = family, num.threads = num.threads)
+  list(pred = pred, fit = fit)
 }
 
 normalize_il_learner_id <- function(x, role = c("base_learner", "meta_learner")) {
@@ -70,6 +103,57 @@ attach_sl_validation_payload <- function(sl_fit, validX, validPrediction, validY
   sl_fit$validPrediction <- validPrediction
   colnames(sl_fit$validPrediction) <- "validPrediction"
   sl_fit
+}
+
+extract_conbin_model_importance <- function(sl_fit, learner) {
+  if (is.null(sl_fit) || length(learner) != 1L || length(sl_fit$fitLibrary) != 1L) {
+    return(NULL)
+  }
+
+  learner_fit <- sl_fit$fitLibrary[[1L]]
+  model <- learner_fit$object
+  if (is.null(model)) {
+    return(NULL)
+  }
+  screen_row <- sl_fit$SL.library$library[1L, 2L]
+  feature_names <- colnames(sl_fit$X)[sl_fit$whichScreen[screen_row, ]]
+  if (learner %in% c("SL.glmnet", "sl_lasso", "sl_glmnet2", "sl_enet")) {
+    lambda <- if (isTRUE(learner_fit$useMin)) "lambda.min" else "lambda.1se"
+    coefficients <- as.matrix(stats::coef(model, s = lambda))
+    importance <- stats::setNames(coefficients[-1L, 1L], rownames(coefficients)[-1L])
+  } else {
+    importance <- switch(learner,
+      SL.xgboost = {
+        # Keep a single screened feature name encoded as an array in XGBoost.
+        tab <- xgboost::xgb.importance(model = model, feature_names = I(feature_names))
+        stats::setNames(as.numeric(tab$Gain), as.character(tab$Feature))
+      },
+      SL.ranger = model$variable.importance,
+      SL.randomForest = {
+        tab <- randomForest::importance(model, type = 2)
+        stats::setNames(tab[, 1L], rownames(tab))
+      },
+      SL.gbm = {
+        tab <- gbm::summary.gbm(model, n.trees = learner_fit$n.trees, plotit = FALSE)
+        stats::setNames(tab$rel.inf, as.character(tab$var))
+      },
+      sl_bart = bartMachine::get_var_props_over_chain(model, type = "splits"),
+      SL.glm = stats::coef(model)[-1L],
+      NULL
+    )
+  }
+  if (is.null(importance)) {
+    return(NULL)
+  }
+
+  # Formula-based learners can backtick non-syntactic feature names.
+  ids <- as.character(names(importance))
+  quoted <- !ids %in% feature_names & startsWith(ids, "`") & endsWith(ids, "`")
+  ids[quoted] <- substr(ids[quoted], 2L, nchar(ids[quoted]) - 1L)
+  available <- ids %in% feature_names & is.finite(importance)
+  result <- stats::setNames(numeric(length(feature_names)), feature_names)
+  result[ids[available]] <- abs(importance[available])
+  sort(result, decreasing = TRUE)
 }
 
 # BART wrapper with serialized fits (adapted from ck37r).
